@@ -12,6 +12,7 @@ import {
   emptyProduct,
 } from "@/components/ProductFormModal";
 import { SuppliersOverview } from "@/components/SuppliersOverview";
+import { useI18n } from "@/hooks/useI18n";
 
 export default function LieferantenPage() {
   const {
@@ -22,6 +23,7 @@ export default function LieferantenPage() {
     upsertProduct,
     resetDemo,
   } = useStore();
+  const { t } = useI18n();
   const [supplierModal, setSupplierModal] = useState<{
     open: boolean;
     draft: Supplier | null;
@@ -29,7 +31,7 @@ export default function LieferantenPage() {
   }>({ open: false, draft: null, isEdit: false });
   const [productDraft, setProductDraft] = useState<Product | null>(null);
 
-  if (!ready) return <p className="text-[13px] text-muted">Laden…</p>;
+  if (!ready) return <p className="text-[13px] text-muted">{t("common.loading")}</p>;
 
   function openCreateSupplier() {
     setSupplierModal({ open: true, draft: emptySupplier(), isEdit: false });

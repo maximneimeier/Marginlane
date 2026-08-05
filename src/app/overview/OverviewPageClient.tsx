@@ -1,0 +1,483 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useStore } from "@/context/StoreContext";
+import {
+  buildOverview,
+  defaultOverviewRange,
+  rangeForPreset,
+  type BreakdownRow,
+  type DatePreset,
+  type DateRange,
+} from "@/lib/overview";
+import { formatEuro, formatPercent } from "@/lib/format";
+import { useI18n } from "@/hooks/useI18n";
+import { OverviewWaterfallChart } from "@/components/OverviewWaterfallChart";
+import { OverviewSankeyChart } from "@/components/OverviewSankeyChart";
+import { ProductFilterDropdown } from "@/components/ProductFilterDropdown";
+import { Card, Field, PageHeader, Select, TextInput } from "@/components/ui";
+
+type BreakdownMode = "product" | "supplier";
+
+export default function OverviewPage() {
+  const { ready, data } = useStore();
+  const { t, locale } = useI18n();
+
+  const [preset, setPreset] = useState<DatePreset>("this_year");
+  const [range, setRange] = useState<DateRange>(() => defaultOverviewRange());
+  /** `null` = all products, `[]` = none, otherwise selected IDs */
+  const [selectedProductIds, setSelectedProductIds] = useState<string[] | null>(
+    null,
+  );
+  const [breakdownMode, setBreakdownMode] = useState<BreakdownMode>("product");
+
+  const products = useMemo(
+    () => [...data.products].sort((a, b) => a.name.localeCompare(b.name)),
+    [data.products],
+  );
+
+  const report = useMemo(
+    () => buildOverview(data, range, { productIds: selectedProductIds }),
+    [data, range, selectedProductIds],
+  );
+
+  if (!ready) {
+    return <p className="text-[13px] text-muted">{t("common.loading")}</p>;
+  }
+
+  function applyPreset(next: DatePreset) {
+    setPreset(next);
+    if (next !== "custom") {
+      setRange(rangeForPreset(next));
+    }
+  }
+
+  function updateRange(partial: Partial<DateRange>) {
+    setPreset("custom");
+    setRange((prev) => ({ ...prev, ...partial }));
+  }
+
+  const allProductsSelected = selectedProductIds === null;
+
+  const breakdown =
+    breakdownMode === "product" ? report.byProduct : report.bySupplier;
+  const maxAbsDb3 = Math.max(...breakdown.map((r) => Math.abs(r.db3)), 1);
+  const maxCash = Math.max(
+    ...report.cashFlow.flatMap((p) => [p.inflow, p.outflow]),
+    1,
+  );
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title={t("overviewPage.title")}
+        description={t("overviewPage.description")}
+      />
+
+      <Card className="!p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div className="grid flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Field label={t("overviewPage.from")}>
+              <TextInput
+                type="date"
+                value={range.from}
+                onChange={(e) => updateRange({ from: e.target.value })}
+              />
+            </Field>
+            <Field label={t("overviewPage.to")}>
+              <TextInput
+                type="date"
+                value={range.to}
+                onChange={(e) => updateRange({ to: e.target.value })}
+              />
+            </Field>
+            <Field label={t("overviewPage.preset")}>
+              <Select
+                value={preset}
+                onChange={(e) => applyPreset(e.target.value as DatePreset)}
+              >
+                <option value="this_year">{t("overviewPage.preset.thisYear")}</option>
+                <option value="last_quarter">
+                  {t("overviewPage.preset.lastQuarter")}
+                </option>
+                <option value="last_12_months">
+                  {t("overviewPage.preset.last12")}
+                </option>
+                <option value="custom">{t("overviewPage.preset.custom")}</option>
+              </Select>
+            </Field>
+            <Field label={t("overviewPage.products")}>
+              <ProductFilterDropdown
+                products={products}
+                value={selectedProductIds}
+                onChange={setSelectedProductIds}
+              />
+            </Field>
+          </div>
+          <p className="shrink-0 text-[12px] text-muted lg:pb-2">
+            {t("overviewPage.batchCount", { count: report.kpis.batchCount })}
+            {!allProductsSelected
+              ? selectedProductIds.length === 0
+                ? ` · ${t("overviewPage.productsHintNone")}`
+                : ` · ${t("overviewPage.productsHintSelected", {
+                    count: selectedProductIds.length,
+                  })}`
+              : null}
+          </p>
+        </div>
+      </Card>
+
+      {report.kpis.uncategorized > 0 ? (
+        <div className="rounded-[10px] border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[13px] text-amber-950">
+          {t("overviewPage.uncategorizedWarning", {
+            amount: formatEuro(report.kpis.uncategorized, locale),
+          })}
+        </div>
+      ) : null}
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <Kpi
+          label={t("overviewPage.kpi.revenue")}
+          value={formatEuro(report.kpis.revenue, locale)}
+        />
+        <Kpi
+          label={t("overviewPage.kpi.db1")}
+          value={formatEuro(report.kpis.db1, locale)}
+          hint={t("overviewPage.kpi.db1Hint")}
+        />
+        <Kpi
+          label={t("overviewPage.kpi.db2")}
+          value={formatEuro(report.kpis.db2, locale)}
+          hint={t("overviewPage.kpi.db2Hint")}
+        />
+        <Kpi
+          label={t("overviewPage.kpi.db3")}
+          value={formatEuro(report.kpis.db3, locale)}
+          hint={t("overviewPage.kpi.db3Hint")}
+          emphasize
+          positive={report.kpis.db3 >= 0}
+        />
+        <Kpi
+          label={t("overviewPage.kpi.margin")}
+          value={formatPercent(report.kpis.marginPercent, locale)}
+          hint={t("overviewPage.kpi.marginHint")}
+          positive={report.kpis.marginPercent >= 0}
+        />
+      </div>
+
+      <Card>
+        <h2 className="text-[14px] font-medium text-foreground">
+          {t("overviewPage.waterfallTitle")}
+        </h2>
+        <p className="mt-1 text-[12px] text-muted">
+          {t("overviewPage.waterfallHint")}
+        </p>
+        {report.kpis.batchCount === 0 ? (
+          <p className="mt-4 text-[13px] text-muted">{t("overviewPage.empty")}</p>
+        ) : (
+          <div className="mt-5">
+            <OverviewWaterfallChart steps={report.waterfall} />
+          </div>
+        )}
+      </Card>
+
+      <Card>
+        <h2 className="text-[14px] font-medium text-foreground">
+          {t("overviewPage.sankeyTitle")}
+        </h2>
+        <p className="mt-1 text-[12px] text-muted">
+          {t("overviewPage.sankeyHint")}
+        </p>
+        {report.kpis.batchCount === 0 ? (
+          <p className="mt-4 text-[13px] text-muted">{t("overviewPage.empty")}</p>
+        ) : (
+          <OverviewSankeyChart kpis={report.kpis} />
+        )}
+      </Card>
+
+      <Card>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-[14px] font-medium text-foreground">
+              {t("overviewPage.breakdownTitle")}
+            </h2>
+            <p className="mt-1 text-[12px] text-muted">
+              {t("overviewPage.breakdownHint")}
+            </p>
+          </div>
+          <div className="flex gap-1 rounded-[8px] border border-line bg-surface-faint p-0.5">
+            <ModeButton
+              active={breakdownMode === "product"}
+              onClick={() => setBreakdownMode("product")}
+            >
+              {t("overviewPage.byProduct")}
+            </ModeButton>
+            <ModeButton
+              active={breakdownMode === "supplier"}
+              onClick={() => setBreakdownMode("supplier")}
+            >
+              {t("overviewPage.bySupplier")}
+            </ModeButton>
+          </div>
+        </div>
+
+        {breakdown.length === 0 ? (
+          <p className="text-[13px] text-muted">{t("overviewPage.empty")}</p>
+        ) : (
+          <div className="space-y-5">
+            <BreakdownBars rows={breakdown.slice(0, 8)} maxAbs={maxAbsDb3} locale={locale} />
+            <BreakdownTable rows={breakdown} mode={breakdownMode} locale={locale} />
+          </div>
+        )}
+      </Card>
+
+      <Card className="border-dashed">
+        <h2 className="text-[14px] font-medium text-foreground">
+          {t("overviewPage.cashTitle")}
+        </h2>
+        <p className="mt-1 text-[12px] text-muted">
+          {t("overviewPage.cashDisclaimer")}
+        </p>
+        {report.cashFlow.length === 0 ? (
+          <p className="mt-4 text-[13px] text-muted">{t("overviewPage.empty")}</p>
+        ) : (
+          <div className="mt-5 space-y-3">
+            {report.cashFlow.map((point) => (
+              <div key={point.month}>
+                <div className="mb-1 flex items-baseline justify-between gap-2 text-[12px]">
+                  <span className="font-medium text-foreground">
+                    {formatMonth(point.month, locale)}
+                  </span>
+                  <span
+                    className={`tabular-nums ${
+                      point.net >= 0 ? "text-success" : "text-danger"
+                    }`}
+                  >
+                    {t("overviewPage.cashNet")}: {formatEuro(point.net, locale)}
+                  </span>
+                </div>
+                <div className="grid gap-1.5">
+                  <CashBar
+                    label={t("overviewPage.cashIn")}
+                    amount={point.inflow}
+                    max={maxCash}
+                    tone="in"
+                    locale={locale}
+                  />
+                  <CashBar
+                    label={t("overviewPage.cashOut")}
+                    amount={point.outflow}
+                    max={maxCash}
+                    tone="out"
+                    locale={locale}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function Kpi({
+  label,
+  value,
+  hint,
+  emphasize,
+  positive,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  emphasize?: boolean;
+  positive?: boolean;
+}) {
+  return (
+    <Card className="!p-4">
+      <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
+        {label}
+      </p>
+      <p
+        className={`mt-1 text-[20px] font-semibold tabular-nums tracking-tight ${
+          emphasize
+            ? positive
+              ? "text-success"
+              : "text-danger"
+            : positive === false
+              ? "text-danger"
+              : "text-foreground"
+        }`}
+      >
+        {value}
+      </p>
+      {hint ? <p className="mt-1 text-[11px] text-muted">{hint}</p> : null}
+    </Card>
+  );
+}
+
+function ModeButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-[6px] px-2.5 py-1 text-[12px] ${
+        active
+          ? "bg-white font-medium text-foreground shadow-[var(--shadow-sm)]"
+          : "text-muted hover:text-foreground"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function BreakdownBars({
+  rows,
+  maxAbs,
+  locale,
+}: {
+  rows: BreakdownRow[];
+  maxAbs: number;
+  locale: string;
+}) {
+  return (
+    <div className="space-y-2">
+      {rows.map((row) => {
+        const width = Math.min(100, (Math.abs(row.db3) / maxAbs) * 100);
+        return (
+          <div key={row.id}>
+            <div className="mb-1 flex justify-between gap-2 text-[12px]">
+              <span className="truncate text-muted">{row.name}</span>
+              <span
+                className={`shrink-0 tabular-nums ${
+                  row.db3 >= 0 ? "text-foreground" : "text-danger"
+                }`}
+              >
+                {formatEuro(row.db3, locale)}
+              </span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-surface-soft">
+              <div
+                className={`h-full rounded-full ${
+                  row.db3 >= 0 ? "bg-accent" : "bg-danger/70"
+                }`}
+                style={{ width: `${Math.max(width, 2)}%` }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function BreakdownTable({
+  rows,
+  mode,
+  locale,
+}: {
+  rows: BreakdownRow[];
+  mode: BreakdownMode;
+  locale: string;
+}) {
+  const { t } = useI18n();
+  const href = mode === "product" ? "/products" : "/suppliers";
+
+  return (
+    <div className="overflow-hidden rounded-[10px] border border-line">
+      <div className="grid grid-cols-[1.4fr_0.9fr_0.9fr_0.7fr_0.6fr] gap-2 border-b border-line bg-surface-faint px-3 py-2 text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
+        <span>
+          {mode === "product"
+            ? t("overviewPage.col.product")
+            : t("overviewPage.col.supplier")}
+        </span>
+        <span className="text-right">{t("overviewPage.col.revenue")}</span>
+        <span className="text-right">{t("overviewPage.col.db3")}</span>
+        <span className="text-right">{t("overviewPage.col.margin")}</span>
+        <span className="text-right">{t("overviewPage.col.batches")}</span>
+      </div>
+      <ul>
+        {rows.map((row) => (
+          <li
+            key={row.id}
+            className="grid grid-cols-[1.4fr_0.9fr_0.9fr_0.7fr_0.6fr] items-center gap-2 border-b border-line px-3 py-2.5 text-[13px] last:border-0"
+          >
+            <span className="min-w-0 truncate font-medium">
+              <Link href={href} className="hover:text-accent" title={row.name}>
+                {row.name}
+              </Link>
+            </span>
+            <span className="text-right tabular-nums text-muted">
+              {formatEuro(row.revenue, locale)}
+            </span>
+            <span
+              className={`text-right tabular-nums ${
+                row.db3 >= 0 ? "text-foreground" : "text-danger"
+              }`}
+            >
+              {formatEuro(row.db3, locale)}
+            </span>
+            <span className="text-right tabular-nums text-muted">
+              {formatPercent(row.marginPercent, locale)}
+            </span>
+            <span className="text-right tabular-nums text-muted-soft">
+              {row.batchCount}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function CashBar({
+  label,
+  amount,
+  max,
+  tone,
+  locale,
+}: {
+  label: string;
+  amount: number;
+  max: number;
+  tone: "in" | "out";
+  locale: string;
+}) {
+  const width = Math.min(100, (amount / max) * 100);
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-16 shrink-0 text-[11px] text-muted">{label}</span>
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-soft">
+        <div
+          className={`h-full rounded-full ${
+            tone === "in" ? "bg-success/70" : "bg-danger/60"
+          }`}
+          style={{ width: `${Math.max(width, amount > 0 ? 2 : 0)}%` }}
+        />
+      </div>
+      <span className="w-[88px] shrink-0 text-right text-[12px] tabular-nums text-foreground">
+        {formatEuro(amount, locale)}
+      </span>
+    </div>
+  );
+}
+
+function formatMonth(ym: string, locale: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  if (!y || !m) return ym;
+  return new Intl.DateTimeFormat(locale, {
+    month: "short",
+    year: "numeric",
+  }).format(new Date(y, m - 1, 1));
+}

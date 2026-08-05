@@ -4,10 +4,10 @@ type Props = {
   searchParams: Promise<{ product?: string }>;
 };
 
-/** Alte Direkt-URL → Chargen-Liste mit Modal */
-export default async function NeueChargeRedirect({ searchParams }: Props) {
+/** Convenience URL → batches list with create modal */
+export default async function NewBatchRedirect({ searchParams }: Props) {
   const params = await searchParams;
   const qs = new URLSearchParams({ new: "1" });
   if (params.product) qs.set("product", params.product);
-  redirect(`/chargen?${qs.toString()}`);
+  redirect(`/batches?${qs.toString()}`);
 }

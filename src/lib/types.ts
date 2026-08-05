@@ -3,6 +3,28 @@ export type CostPhase = "einkauf" | "transport" | "lager" | "vertrieb";
 export type SupplierStatus = "active" | "inactive" | "review";
 export type PaymentUnit = "Tage" | "Wochen";
 
+/**
+ * Preisenheit für Product.unitPrice und Batch.quantity.
+ * Kalkulation bleibt immer quantity × unit_price — die Einheit ist nur Semantik.
+ */
+export type PricingUnit = "pcs" | "g" | "kg" | "ml" | "l" | "m";
+
+export const PRICING_UNITS: PricingUnit[] = [
+  "pcs",
+  "g",
+  "kg",
+  "ml",
+  "l",
+  "m",
+];
+
+export function isPricingUnit(value: unknown): value is PricingUnit {
+  return (
+    typeof value === "string" &&
+    (PRICING_UNITS as string[]).includes(value)
+  );
+}
+
 export type CostItem = {
   id: string;
   type: string;
@@ -15,6 +37,29 @@ export type CostItem = {
 export type DiscountTier = {
   minQty: number;
   discountPercent: number;
+};
+
+/** Kommerzielle Defaults auf Supplier-Ebene */
+export type CommercialTerms = {
+  currency: string;
+  paymentDays: number;
+  paymentUnit: PaymentUnit;
+  skontoPercent: number;
+  skontoDays: number;
+  incoterm: string;
+};
+
+/**
+ * Nullable Overrides — `null` = vom Parent erben (Supplier → Product → Batch).
+ * Nie den Parent-Wert beim Anlegen kopieren.
+ */
+export type CommercialOverrides = {
+  currency: string | null;
+  paymentDays: number | null;
+  paymentUnit: PaymentUnit | null;
+  skontoPercent: number | null;
+  skontoDays: number | null;
+  incoterm: string | null;
 };
 
 export type Supplier = {
@@ -49,21 +94,59 @@ export type Product = {
   supplierId: string;
   name: string;
   sku: string;
+  /**
+   * Listenpreis **pro `pricingUnit`** (z. B. €/g oder €/Stk.).
+   * Charge-Menge und Staffeln sind in derselben Einheit.
+   */
   unitPrice: number;
+  /** Mindestabnahme in `pricingUnit` */
   moq: number;
   discountTiers: DiscountTier[];
+  /** Einheit für Preis, Menge, MOQ und Staffeln */
+  pricingUnit: PricingUnit;
+  /** Overrides der Supplier-Konditionen (`null` = erben) */
+  currency: string | null;
+  paymentDays: number | null;
+  paymentUnit: PaymentUnit | null;
+  skontoPercent: number | null;
+  skontoDays: number | null;
+  incoterm: string | null;
   createdAt: string;
 };
 
+/**
+ * Spec-ER: Batch 1 — 1 SalesData.
+ * Verkaufspreis, Menge, Kanal und Vertriebskosten sitzen hier —
+ * nicht am Händler. Händler (`dealerId`) ist optionale Vorlage außerhalb
+ * der Kernkette und liefert Defaults nur solange Felder `null` sind.
+ */
 export type SalesData = {
-  sellPrice: number;
+  /**
+   * Verkaufspreis pro Preisenheit.
+   * `null` = optional vom verknüpften Händler erben (nur wenn dealerId gesetzt).
+   */
+  sellPrice: number | null;
+  /** Verkaufsmenge (typisch = Batch.quantity) */
   quantity: number;
-  /** @deprecated Prefer dealerId — bleibt als Anzeige-Fallback */
+  /** Verkaufskanal / Label (Spec-Feld; kann Händlername sein) */
   channel: string;
-  dealerId: string;
-  costItems: CostItem[];
+  /**
+   * Optionaler Verweis auf Händler-Stammdaten (Vorlage).
+   * `null` = reine SalesData ohne Stammdaten-Kopplung.
+   */
+  dealerId: string | null;
+  /**
+   * Vertriebskosten der Charge.
+   * `null` = optional vom Händler erben; Array (auch leer) = Charge-Werte.
+   */
+  costItems: CostItem[] | null;
 };
 
+/**
+ * Optionale Stammdaten-Vorlage außerhalb des Spec-Kern-ER
+ * (Supplier → Product → Batch → SalesData).
+ * Füllt SalesData-Defaults per Inheritance, speichert sie aber nicht.
+ */
 export type DealerStatus = "active" | "inactive";
 
 export type DealerChannel =
@@ -82,9 +165,9 @@ export type Dealer = {
   phone: string;
   channel: DealerChannel;
   paymentTerms: string;
-  /** Typischer Verkaufspreis / Stück für diesen Kanal */
+  /** Vorlage: Standard-VK für SalesData (wenn sellPrice null) */
   defaultSellPrice: number;
-  /** Standard-Vertriebskosten dieses Händlers */
+  /** Vorlage: Standard-Vertriebskosten (wenn costItems null) */
   salesCostItems: CostItem[];
   status: DealerStatus;
   notes: string;
@@ -96,10 +179,28 @@ export type Batch = {
   productId: string;
   supplierId: string;
   label: string;
+  /**
+   * Menge in `Product.pricingUnit` (Stück, Gramm, Meter, …).
+   * Unit Economics = quantity × unit_price in derselben Einheit.
+   */
   quantity: number;
-  unitPurchasePrice: number;
-  paymentTerms: string;
+  /**
+   * `null` = EK aus Produktlistenpreis + Staffel zur Menge.
+   * Zahl = Charge-Override.
+   */
+  unitPurchasePrice: number | null;
+  /** Overrides der Product/Supplier-Konditionen (`null` = erben) */
+  currency: string | null;
+  paymentDays: number | null;
+  paymentUnit: PaymentUnit | null;
+  skontoPercent: number | null;
+  skontoDays: number | null;
+  incoterm: string | null;
   costItems: CostItem[];
+  /**
+   * Spec: genau eine Verkaufsseite pro Charge (1—1).
+   * Händler nur optional über sales.dealerId.
+   */
   sales: SalesData;
   createdAt: string;
 };
@@ -135,7 +236,7 @@ export const PHASE_LABELS: Record<CostPhase, string> = {
 };
 
 export const ALLOCATION_LABELS: Record<CostAllocation, string> = {
-  per_unit: "pro Stück",
+  per_unit: "pro Einheit",
   lump_sum: "pauschal",
   percent_of_goods: "% vom Warenwert",
 };

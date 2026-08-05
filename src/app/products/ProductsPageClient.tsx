@@ -4,8 +4,9 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useStore } from "@/context/StoreContext";
 import type { Product } from "@/lib/types";
-import { formatEuro, formatPercent } from "@/lib/format";
-import { buildProductMetrics, formatDateDe } from "@/lib/supplierRows";
+import { formatDate, formatEuro, formatNumber, formatPercent } from "@/lib/format";
+import { buildProductMetrics } from "@/lib/supplierRows";
+import { useI18n } from "@/hooks/useI18n";
 import { CountryFlag } from "@/components/CountryFlag";
 import {
   ProductFormModal,
@@ -22,6 +23,7 @@ import {
 
 export default function ProduktePage() {
   const { ready, data, upsertProduct, deleteProduct } = useStore();
+  const { t, plural, locale, lang, pricingUnitLabel } = useI18n();
   const [query, setQuery] = useState("");
   const [filterSupplier, setFilterSupplier] = useState("");
   const [draft, setDraft] = useState<Product | null>(null);
@@ -42,21 +44,21 @@ export default function ProduktePage() {
       })
       .map((product) => {
         const supplier = data.suppliers.find((s) => s.id === product.supplierId);
-        const metrics = buildProductMetrics(product.id, data.batches);
+        const metrics = buildProductMetrics(product.id, data);
         return { product, supplier, metrics };
       })
-      .sort((a, b) => a.product.name.localeCompare(b.product.name, "de"));
-  }, [data, query, filterSupplier]);
+      .sort((a, b) => a.product.name.localeCompare(b.product.name, lang));
+  }, [data, query, filterSupplier, lang]);
 
-  if (!ready) return <p className="text-[13px] text-muted">Laden…</p>;
+  if (!ready) return <p className="text-[13px] text-muted">{t("common.loading")}</p>;
 
   const isEdit = Boolean(draft && data.products.some((p) => p.id === draft.id));
 
   return (
     <div>
       <PageHeader
-        title="Produkte"
-        description="Alle Artikel über Lieferanten hinweg — Preise, MOQ und Unit Economics."
+        title={t("products.title")}
+        description={t("products.description")}
         action={
           <Button
             onClick={() => {
@@ -66,7 +68,7 @@ export default function ProduktePage() {
             }}
             disabled={data.suppliers.length === 0}
           >
-            + Produkt
+            {t("products.add")}
           </Button>
         }
       />
@@ -74,13 +76,13 @@ export default function ProduktePage() {
       <ConfirmDialog
         open={Boolean(deleteTarget)}
         onClose={() => setDeleteTarget(null)}
-        title="Produkt löschen?"
+        title={t("products.deleteTitle")}
         description={
           deleteTarget
-            ? `„${deleteTarget.name}“ und zugehörige Chargen werden gelöscht.`
+            ? t("products.deleteDescription", { name: deleteTarget.name })
             : ""
         }
-        confirmLabel="Endgültig löschen"
+        confirmLabel={t("common.deleteConfirm")}
         onConfirm={() => {
           if (deleteTarget) deleteProduct(deleteTarget.id);
         }}
@@ -99,11 +101,9 @@ export default function ProduktePage() {
 
       {data.suppliers.length === 0 ? (
         <Card>
-          <p className="text-[13px] text-muted">
-            Lege zuerst einen Lieferanten an, bevor du Produkte erfassen kannst.
-          </p>
-          <Link href="/lieferanten" className="mt-3 inline-block">
-            <Button variant="secondary">Zu Lieferanten</Button>
+          <p className="text-[13px] text-muted">{t("products.needSupplier")}</p>
+          <Link href="/suppliers" className="mt-3 inline-block">
+            <Button variant="secondary">{t("products.goSuppliers")}</Button>
           </Link>
         </Card>
       ) : (
@@ -112,7 +112,7 @@ export default function ProduktePage() {
             <TextInput
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Suche Produkt, SKU oder Lieferant…"
+              placeholder={t("products.searchPlaceholder")}
               className="!w-[260px] shrink-0"
             />
             <Select
@@ -120,7 +120,7 @@ export default function ProduktePage() {
               onChange={(e) => setFilterSupplier(e.target.value)}
               className="!w-[200px] shrink-0"
             >
-              <option value="">Alle Lieferanten</option>
+              <option value="">{t("products.allSuppliers")}</option>
               {data.suppliers.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -128,13 +128,13 @@ export default function ProduktePage() {
               ))}
             </Select>
             <p className="ml-auto shrink-0 text-[12px] text-muted-soft">
-              {rows.length} Produkt{rows.length === 1 ? "" : "e"}
+              {plural(rows.length, "products.count", "products.count_plural")}
             </p>
           </div>
 
           {rows.length === 0 ? (
             <div className="rounded-[12px] border border-dashed border-line px-4 py-10 text-center text-[13px] text-muted">
-              Keine Produkte gefunden.
+              {t("products.empty")}
             </div>
           ) : (
             <div className="overflow-hidden rounded-[12px] border border-line bg-white shadow-[var(--shadow-sm)]">
@@ -142,24 +142,32 @@ export default function ProduktePage() {
                 <table className="w-full min-w-[900px] text-left text-[13px]">
                   <thead>
                     <tr className="border-b border-line bg-surface-faint text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
-                      <th className="px-4 py-2.5 font-medium">Produkt</th>
-                      <th className="px-4 py-2.5 font-medium">SKU</th>
-                      <th className="px-4 py-2.5 font-medium">Lieferant</th>
-                      <th className="px-4 py-2.5 text-right font-medium">
-                        Preis/Stk.
-                      </th>
-                      <th className="px-4 py-2.5 text-right font-medium">MOQ</th>
-                      <th className="px-4 py-2.5 text-right font-medium">
-                        Ø Landed Cost
-                      </th>
-                      <th className="px-4 py-2.5 text-right font-medium">
-                        Chargen
+                      <th className="px-4 py-2.5 font-medium">
+                        {t("products.col.product")}
                       </th>
                       <th className="px-4 py-2.5 font-medium">
-                        Letzte Bestellung
+                        {t("products.col.sku")}
+                      </th>
+                      <th className="px-4 py-2.5 font-medium">
+                        {t("products.col.supplier")}
                       </th>
                       <th className="px-4 py-2.5 text-right font-medium">
-                        Ø Marge
+                        {t("products.col.price")}
+                      </th>
+                      <th className="px-4 py-2.5 text-right font-medium">
+                        {t("products.col.moq")}
+                      </th>
+                      <th className="px-4 py-2.5 text-right font-medium">
+                        {t("products.col.avgLanded")}
+                      </th>
+                      <th className="px-4 py-2.5 text-right font-medium">
+                        {t("products.col.batches")}
+                      </th>
+                      <th className="px-4 py-2.5 font-medium">
+                        {t("products.col.lastOrder")}
+                      </th>
+                      <th className="px-4 py-2.5 text-right font-medium">
+                        {t("products.col.avgMargin")}
                       </th>
                       <th className="w-24 px-3 py-2.5" />
                     </tr>
@@ -180,7 +188,7 @@ export default function ProduktePage() {
                           </button>
                         </td>
                         <td className="px-4 py-3 text-muted">
-                          {product.sku || "—"}
+                          {product.sku || t("common.emDash")}
                         </td>
                         <td className="px-4 py-3">
                           {supplier ? (
@@ -189,25 +197,31 @@ export default function ProduktePage() {
                               {supplier.name}
                             </span>
                           ) : (
-                            "—"
+                            t("common.emDash")
                           )}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">
-                          {formatEuro(product.unitPrice)}
+                          {t("products.priceWithUnit", {
+                            price: formatEuro(product.unitPrice, locale),
+                            unit: pricingUnitLabel(product.pricingUnit),
+                          })}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums text-muted">
-                          {product.moq.toLocaleString("de-DE")}
+                          {t("products.moqWithUnit", {
+                            count: formatNumber(product.moq, locale),
+                            unit: pricingUnitLabel(product.pricingUnit),
+                          })}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">
                           {metrics.avgLandedCost != null
-                            ? formatEuro(metrics.avgLandedCost)
-                            : "—"}
+                            ? formatEuro(metrics.avgLandedCost, locale)
+                            : t("common.emDash")}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums text-muted">
                           {metrics.batchCount}
                         </td>
                         <td className="px-4 py-3 text-muted">
-                          {formatDateDe(metrics.lastOrderAt)}
+                          {formatDate(metrics.lastOrderAt, locale)}
                         </td>
                         <td className="px-4 py-3 text-right">
                           {metrics.avgMarginEuro != null ? (
@@ -218,20 +232,25 @@ export default function ProduktePage() {
                                   : "text-danger"
                               }`}
                             >
-                              {formatEuro(metrics.avgMarginEuro)}
+                              {formatEuro(metrics.avgMarginEuro, locale)}
                               <span className="ml-1 text-[12px] text-muted-soft">
-                                {formatPercent(metrics.avgMarginPercent ?? 0)}
+                                {formatPercent(
+                                  metrics.avgMarginPercent ?? 0,
+                                  locale,
+                                )}
                               </span>
                             </span>
                           ) : (
-                            <span className="text-muted-soft">—</span>
+                            <span className="text-muted-soft">
+                              {t("common.emDash")}
+                            </span>
                           )}
                         </td>
                         <td className="px-2 py-3">
                           <div className="flex justify-end gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
-                            <Link href={`/chargen?new=1&product=${product.id}`}>
+                            <Link href={`/batches?new=1&product=${product.id}`}>
                               <Button variant="ghost" className="h-7 px-2">
-                                Charge
+                                {t("products.action.batch")}
                               </Button>
                             </Link>
                             <Button
@@ -239,7 +258,7 @@ export default function ProduktePage() {
                               className="h-7 px-2"
                               onClick={() => setDraft(product)}
                             >
-                              Edit
+                              {t("products.action.edit")}
                             </Button>
                             <Button
                               variant="danger"

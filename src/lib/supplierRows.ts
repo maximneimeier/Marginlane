@@ -1,5 +1,5 @@
 import type { AppData, Supplier, SupplierStatus } from "./types";
-import { calculateUnitEconomics } from "./calc";
+import { calculateResolvedEconomics } from "./resolve";
 
 export type SupplierRow = {
   supplier: Supplier;
@@ -16,13 +16,7 @@ export function buildSupplierRows(data: AppData): SupplierRow[] {
     let avgLandedCost: number | null = null;
     if (batches.length > 0) {
       const sum = batches.reduce((acc, batch) => {
-        const econ = calculateUnitEconomics({
-          quantity: batch.quantity,
-          unitPurchasePrice: batch.unitPurchasePrice,
-          procurementItems: batch.costItems,
-          sellPrice: batch.sales.sellPrice,
-          salesItems: batch.sales.costItems,
-        });
+        const econ = calculateResolvedEconomics(data, batch);
         return acc + econ.landedCostPerUnit;
       }, 0);
       avgLandedCost = sum / batches.length;
@@ -142,9 +136,9 @@ export type ProductMetrics = {
 
 export function buildProductMetrics(
   productId: string,
-  batches: AppData["batches"],
+  data: AppData,
 ): ProductMetrics {
-  const related = batches.filter((b) => b.productId === productId);
+  const related = data.batches.filter((b) => b.productId === productId);
   if (related.length === 0) {
     return {
       productId,
@@ -162,15 +156,9 @@ export function buildProductMetrics(
   let soldCount = 0;
 
   for (const batch of related) {
-    const econ = calculateUnitEconomics({
-      quantity: batch.quantity,
-      unitPurchasePrice: batch.unitPurchasePrice,
-      procurementItems: batch.costItems,
-      sellPrice: batch.sales.sellPrice,
-      salesItems: batch.sales.costItems,
-    });
+    const econ = calculateResolvedEconomics(data, batch);
     landedSum += econ.landedCostPerUnit;
-    if (batch.sales.sellPrice > 0) {
+    if (econ.sellPrice > 0) {
       marginSum += econ.contributionPerUnit;
       marginPctSum += econ.contributionPercent;
       soldCount += 1;

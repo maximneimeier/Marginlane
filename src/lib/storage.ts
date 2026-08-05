@@ -4,14 +4,18 @@ import type {
   CostItem,
   Dealer,
   DealerChannel,
+  PaymentUnit,
+  PricingUnit,
   Product,
   SalesData,
   Supplier,
 } from "./types";
-import { EMPTY_DATA, formatPaymentTerms } from "./types";
+import { EMPTY_DATA, formatPaymentTerms, isPricingUnit } from "./types";
 import { createId } from "./format";
+import { emptyCommercialOverrides } from "./resolve";
 
-const STORAGE_KEY = "landed-cost-v6";
+const STORAGE_KEY = "landed-cost-v7";
+const LEGACY_STORAGE_KEYS = ["landed-cost-v6"];
 
 function normalizeSupplier(raw: Partial<Supplier> & { contact?: string }): Supplier {
   const paymentDays = raw.paymentDays ?? 30;
@@ -209,61 +213,234 @@ export function cloneDealerSalesCosts(dealer: Dealer): CostItem[] {
   }));
 }
 
-/** Verkaufsseite einer Charge aus Händler-Stammdaten befüllen */
+/**
+ * Spec-SalesData ohne Händler-Kopplung — konkrete Werte auf der Charge.
+ */
+export function emptySalesData(quantity = 0): SalesData {
+  return {
+    sellPrice: 0,
+    quantity,
+    channel: "",
+    dealerId: null,
+    costItems: [],
+  };
+}
+
+/**
+ * Optionale Vorlage: Charge an Händler koppeln.
+ * VK & Vertriebskosten bleiben `null` (= live vom Händler erben).
+ * channel wird als Spec-Feld vorausgefüllt.
+ */
 export function salesFromDealer(
   dealer: Dealer,
 ): Pick<SalesData, "dealerId" | "channel" | "sellPrice" | "costItems"> {
   return {
     dealerId: dealer.id,
     channel: dealer.name,
-    sellPrice: dealer.defaultSellPrice,
-    costItems: cloneDealerSalesCosts(dealer),
+    sellPrice: null,
+    costItems: null,
+  };
+}
+
+/**
+ * Händler-Kopplung lösen: geerbte Werte materialisieren,
+ * damit SalesData spezkonform konkrete Zahlen behält.
+ */
+export function detachDealerFromSales(
+  sales: SalesData,
+  dealer: Dealer | undefined,
+): SalesData {
+  const sell =
+    sales.sellPrice !== null && sales.sellPrice !== undefined
+      ? sales.sellPrice
+      : (dealer?.defaultSellPrice ?? 0);
+  const costs =
+    sales.costItems !== null && sales.costItems !== undefined
+      ? sales.costItems
+      : dealer
+        ? cloneDealerSalesCosts(dealer)
+        : [];
+  return {
+    ...sales,
+    dealerId: null,
+    channel: sales.channel || dealer?.name || "",
+    sellPrice: sell,
+    costItems: costs,
+  };
+}
+
+function readOverride<T>(
+  raw: Record<string, unknown> | undefined,
+  key: string,
+): T | null {
+  if (!raw || !(key in raw)) return null;
+  const v = raw[key];
+  return v === undefined ? null : (v as T | null);
+}
+
+function normalizeCommercialOverrides(
+  raw: Record<string, unknown> | undefined,
+): ReturnType<typeof emptyCommercialOverrides> {
+  const base = emptyCommercialOverrides();
+  if (!raw) return base;
+  return {
+    currency: readOverride<string>(raw, "currency"),
+    paymentDays: readOverride<number>(raw, "paymentDays"),
+    paymentUnit: readOverride<PaymentUnit>(raw, "paymentUnit"),
+    skontoPercent: readOverride<number>(raw, "skontoPercent"),
+    skontoDays: readOverride<number>(raw, "skontoDays"),
+    incoterm: readOverride<string>(raw, "incoterm"),
+  };
+}
+
+function normalizeProduct(raw: Partial<Product> & Record<string, unknown>): Product {
+  const overrides = normalizeCommercialOverrides(raw);
+  const pricingUnit: PricingUnit = isPricingUnit(raw.pricingUnit)
+    ? raw.pricingUnit
+    : "pcs";
+  return {
+    id: raw.id || createId("prd"),
+    supplierId: raw.supplierId || "",
+    name: raw.name || "",
+    sku: raw.sku || "",
+    unitPrice: raw.unitPrice ?? 0,
+    moq: raw.moq ?? 0,
+    discountTiers: Array.isArray(raw.discountTiers) ? raw.discountTiers : [],
+    pricingUnit,
+    ...overrides,
+    createdAt: raw.createdAt || new Date().toISOString(),
   };
 }
 
 function normalizeSales(
   raw: Partial<SalesData> | undefined,
   dealers: Dealer[],
+  legacySnapshot: boolean,
 ): SalesData {
   const channel = raw?.channel || "";
-  let dealerId = raw?.dealerId || "";
-  if (!dealerId && channel) {
+  let dealerIdRaw = raw?.dealerId || "";
+  if (!dealerIdRaw && channel) {
     const match = dealers.find(
       (d) => d.name.toLowerCase() === channel.toLowerCase(),
     );
-    dealerId = match?.id ?? "";
+    dealerIdRaw = match?.id ?? "";
   }
-  const dealer = dealers.find((d) => d.id === dealerId);
+  const dealerId = dealerIdRaw || null;
+  const dealer = dealerId
+    ? dealers.find((d) => d.id === dealerId)
+    : undefined;
+
+  // null = vom Händler erben (nur sinnvoll mit dealerId).
+  // Legacy-Snapshots behalten Zahlen/Arrays als Charge-Werte.
+  let sellPrice: number | null;
+  let costItems: CostItem[] | null;
+
+  if (raw && "sellPrice" in raw && raw.sellPrice === null) {
+    sellPrice = null;
+  } else if (raw?.sellPrice != null) {
+    sellPrice = raw.sellPrice;
+  } else if (legacySnapshot) {
+    sellPrice = 0;
+  } else {
+    sellPrice = dealerId ? null : 0;
+  }
+
+  if (raw && "costItems" in raw && raw.costItems === null) {
+    costItems = null;
+  } else if (Array.isArray(raw?.costItems)) {
+    costItems = raw!.costItems!;
+  } else if (legacySnapshot) {
+    costItems = [];
+  } else {
+    costItems = dealerId ? null : [];
+  }
+
+  // Spec: ohne Händler-Vorlage hält SalesData konkrete Werte
+  if (!dealerId) {
+    if (sellPrice === null) sellPrice = 0;
+    if (costItems === null) costItems = [];
+  }
+
   return {
-    sellPrice: raw?.sellPrice ?? 0,
+    sellPrice,
     quantity: raw?.quantity ?? 0,
     dealerId,
     channel: dealer?.name || channel,
-    costItems: raw?.costItems ?? [],
+    costItems,
   };
+}
+
+function normalizeBatch(
+  raw: Partial<Batch> & Record<string, unknown>,
+  dealers: Dealer[],
+  legacySnapshot: boolean,
+): Batch {
+  const overrides = normalizeCommercialOverrides(raw);
+  // Alte Daten hatten immer eine Zahl → als Override behalten.
+  // Neue Seeds / explizit null → erben vom Produkt.
+  let unitPurchasePrice: number | null;
+  if ("unitPurchasePrice" in raw && raw.unitPurchasePrice === null) {
+    unitPurchasePrice = null;
+  } else if (typeof raw.unitPurchasePrice === "number") {
+    unitPurchasePrice = raw.unitPurchasePrice;
+  } else {
+    unitPurchasePrice = legacySnapshot ? 0 : null;
+  }
+
+  return {
+    id: raw.id || createId("bat"),
+    productId: raw.productId || "",
+    supplierId: raw.supplierId || "",
+    label: raw.label || "",
+    quantity: raw.quantity ?? 0,
+    unitPurchasePrice,
+    ...overrides,
+    costItems: Array.isArray(raw.costItems) ? raw.costItems : [],
+    sales: normalizeSales(raw.sales, dealers, legacySnapshot),
+    createdAt: raw.createdAt || new Date().toISOString(),
+  };
+}
+
+function readStoredJson(): { parsed: AppData; legacy: boolean } | null {
+  if (typeof window === "undefined") return null;
+  const current = localStorage.getItem(STORAGE_KEY);
+  if (current) {
+    return { parsed: { ...EMPTY_DATA, ...JSON.parse(current) } as AppData, legacy: false };
+  }
+  for (const key of LEGACY_STORAGE_KEYS) {
+    const legacy = localStorage.getItem(key);
+    if (legacy) {
+      return {
+        parsed: { ...EMPTY_DATA, ...JSON.parse(legacy) } as AppData,
+        legacy: true,
+      };
+    }
+  }
+  return null;
 }
 
 export function loadData(): AppData {
   if (typeof window === "undefined") return EMPTY_DATA;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return seedDemoData();
-    const parsed = { ...EMPTY_DATA, ...JSON.parse(raw) } as AppData;
+    const stored = readStoredJson();
+    if (!stored) return seedDemoData();
+    const { parsed, legacy } = stored;
     const dealers = (parsed.dealers || []).map((d) => normalizeDealer(d));
-    const batches = (parsed.batches || []).map((b) => ({
-      ...b,
-      sales: normalizeSales(b.sales, dealers),
-    }));
+    const products = (parsed.products || []).map((p) =>
+      normalizeProduct(p as Product & Record<string, unknown>),
+    );
+    const batches = (parsed.batches || []).map((b) =>
+      normalizeBatch(b as Batch & Record<string, unknown>, dealers, legacy),
+    );
     const next: AppData = {
       ...parsed,
       suppliers: (parsed.suppliers || []).map((s) =>
         normalizeSupplier(s as Supplier & { contact?: string }),
       ),
       dealers,
+      products,
       batches,
-      products: parsed.products || [],
     };
-    // Angereicherte Händler-Defaults persistieren
     saveData(next);
     return next;
   } catch {
@@ -574,11 +751,13 @@ export function seedDemoData(): AppData {
     {
       id: createId("prd"),
       supplierId: s7.id,
-      name: "Cotton Tote Bag",
-      sku: "BAG-COT-L",
-      unitPrice: 1.9,
-      moq: 1000,
-      discountTiers: [],
+      name: "Organic Cotton Twill",
+      sku: "FAB-COT-TW",
+      /** Demo: Meterware — Preis pro Meter × Meter */
+      unitPrice: 4.2,
+      moq: 50,
+      discountTiers: [{ minQty: 200, discountPercent: 8 }],
+      pricingUnit: "m" as const,
       createdAt: daysAgo(60),
     },
     // Porto — 2
@@ -597,9 +776,11 @@ export function seedDemoData(): AppData {
       supplierId: s8.id,
       name: "Tissue Wrap Sheets",
       sku: "WRAP-TIS-50",
-      unitPrice: 0.08,
+      /** Demo: Preis pro Gramm × Gramm (nicht Stück) */
+      unitPrice: 0.0016,
       moq: 5000,
       discountTiers: [{ minQty: 20000, discountPercent: 15 }],
+      pricingUnit: "g" as const,
       createdAt: daysAgo(16),
     },
     // Taipei — 3
@@ -633,7 +814,7 @@ export function seedDemoData(): AppData {
       discountTiers: [],
       createdAt: daysAgo(8),
     },
-  ];
+  ].map((p) => normalizeProduct(p));
 
   const dAmazon = normalizeDealer({
     name: "Amazon DE",
@@ -770,6 +951,7 @@ export function seedDemoData(): AppData {
     dConrad,
   ];
 
+  // Demo: meiste Felder null = erben; einzelne Overrides zeigen Abweichung.
   const batches: Batch[] = [
     {
       id: createId("bat"),
@@ -777,8 +959,8 @@ export function seedDemoData(): AppData {
       supplierId: s1.id,
       label: "PO-2026-014",
       quantity: 1000,
-      unitPurchasePrice: 8.08,
-      paymentTerms: s1.paymentTerms,
+      unitPurchasePrice: null,
+      ...emptyCommercialOverrides(),
       costItems: [
         cost("Fracht", 420, "lump_sum", "transport"),
         cost("Zoll", 6.5, "percent_of_goods", "einkauf"),
@@ -786,15 +968,11 @@ export function seedDemoData(): AppData {
         cost("Versicherung", 0.8, "percent_of_goods", "transport"),
       ],
       sales: {
-        sellPrice: 29.9,
+        sellPrice: null,
         quantity: 1000,
         dealerId: dAmazon.id,
         channel: dAmazon.name,
-        costItems: [
-          cost("Plattformgebühr", 15, "percent_of_goods", "vertrieb", "Amazon Fee"),
-          cost("Zahlungsgebühr", 1.9, "percent_of_goods", "vertrieb"),
-          cost("Fulfillment", 2.4, "per_unit", "vertrieb", "FBA"),
-        ],
+        costItems: null,
       },
       createdAt: daysAgo(18),
     },
@@ -805,7 +983,7 @@ export function seedDemoData(): AppData {
       label: "PO-2026-019",
       quantity: 400,
       unitPurchasePrice: 21.5,
-      paymentTerms: s1.paymentTerms,
+      ...emptyCommercialOverrides(),
       costItems: [
         cost("Fracht", 310, "lump_sum", "transport"),
         cost("Zoll", 5.5, "percent_of_goods", "einkauf"),
@@ -828,21 +1006,18 @@ export function seedDemoData(): AppData {
       supplierId: s3.id,
       label: "PO-2026-022",
       quantity: 2500,
-      unitPurchasePrice: 2.28,
-      paymentTerms: s3.paymentTerms,
+      unitPurchasePrice: null,
+      ...emptyCommercialOverrides(),
       costItems: [
         cost("Fracht", 680, "lump_sum", "transport"),
         cost("Zoll", 4.2, "percent_of_goods", "einkauf"),
       ],
       sales: {
-        sellPrice: 12.99,
+        sellPrice: null,
         quantity: 2500,
         dealerId: dShop.id,
         channel: dShop.name,
-        costItems: [
-          cost("Zahlungsgebühr", 2.1, "percent_of_goods", "vertrieb"),
-          cost("Versand outbound", 1.8, "per_unit", "vertrieb"),
-        ],
+        costItems: null,
       },
       createdAt: daysAgo(9),
     },
@@ -852,17 +1027,15 @@ export function seedDemoData(): AppData {
       supplierId: s3.id,
       label: "PO-2026-028",
       quantity: 5000,
-      unitPurchasePrice: 0.78,
-      paymentTerms: s3.paymentTerms,
+      unitPurchasePrice: null,
+      ...emptyCommercialOverrides(),
       costItems: [cost("Fracht", 240, "lump_sum", "transport")],
       sales: {
         sellPrice: 6.99,
         quantity: 5000,
         dealerId: dShop.id,
         channel: dShop.name,
-        costItems: [
-          cost("Zahlungsgebühr", 2.1, "percent_of_goods", "vertrieb"),
-        ],
+        costItems: null,
       },
       createdAt: daysAgo(6),
     },
@@ -872,15 +1045,15 @@ export function seedDemoData(): AppData {
       supplierId: s5.id,
       label: "PO-2026-031",
       quantity: 800,
-      unitPurchasePrice: 3.9,
-      paymentTerms: s5.paymentTerms,
+      unitPurchasePrice: null,
+      ...emptyCommercialOverrides(),
       costItems: [cost("Fracht", 95, "lump_sum", "transport")],
       sales: {
-        sellPrice: 9.9,
+        sellPrice: null,
         quantity: 800,
         dealerId: dMedia.id,
         channel: dMedia.name,
-        costItems: [cost("Provision", 5, "percent_of_goods", "vertrieb")],
+        costItems: null,
       },
       createdAt: daysAgo(4),
     },
@@ -890,8 +1063,8 @@ export function seedDemoData(): AppData {
       supplierId: s9.id,
       label: "PO-2026-035",
       quantity: 2000,
-      unitPurchasePrice: 1.05,
-      paymentTerms: s9.paymentTerms,
+      unitPurchasePrice: null,
+      ...emptyCommercialOverrides(),
       costItems: [
         cost("Fracht", 190, "lump_sum", "transport"),
         cost("Zoll", 3.0, "percent_of_goods", "einkauf"),
@@ -915,4 +1088,4 @@ export function seedDemoData(): AppData {
   return data;
 }
 
-export { normalizeSupplier, normalizeDealer };
+export { normalizeSupplier, normalizeDealer, normalizeProduct, normalizeBatch };

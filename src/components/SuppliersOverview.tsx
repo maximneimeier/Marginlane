@@ -2,25 +2,19 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Product, Supplier } from "@/lib/types";
-import {
-  COUNTRIES,
-  INCOTERMS,
-  SUPPLIER_STATUS_LABELS,
-  type SupplierStatus,
-} from "@/lib/types";
+import { INCOTERMS, type SupplierStatus } from "@/lib/types";
 import { CountryFlag } from "@/components/CountryFlag";
-import { formatEuro, formatPercent } from "@/lib/format";
+import { formatDate, formatEuro, formatPercent } from "@/lib/format";
 import {
-  OPTIONAL_COLUMN_LABELS,
   buildProductMetrics,
   buildSupplierRows,
-  formatDateDe,
   sortRows,
   type OptionalColumn,
   type SortKey,
   type SupplierRow,
 } from "@/lib/supplierRows";
 import type { AppData } from "@/lib/types";
+import { useI18n } from "@/hooks/useI18n";
 import {
   Badge,
   Button,
@@ -45,10 +39,6 @@ type Props = {
   productsOf: (supplierId: string) => Product[];
 };
 
-function countryName(code: string) {
-  return COUNTRIES.find((c) => c.code === code)?.name ?? code;
-}
-
 export function SuppliersOverview({
   data,
   onCreate,
@@ -59,6 +49,8 @@ export function SuppliersOverview({
   onResetDemo,
   productsOf,
 }: Props) {
+  const { t, plural, locale, supplierStatusLabel, optionalColLabel, countryLabel, pricingUnitLabel } =
+    useI18n();
   const [view, setView] = useState<ViewMode>("table");
   const [query, setQuery] = useState("");
   const [filterCountry, setFilterCountry] = useState("");
@@ -99,9 +91,9 @@ export function SuppliersOverview({
   const countriesInData = useMemo(() => {
     const codes = [...new Set(rows.map((r) => r.supplier.country).filter(Boolean))];
     return codes.sort((a, b) =>
-      countryName(a).localeCompare(countryName(b), "de"),
+      countryLabel(a).localeCompare(countryLabel(b), locale),
     );
-  }, [rows]);
+  }, [rows, countryLabel, locale]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -158,13 +150,13 @@ export function SuppliersOverview({
       <ConfirmDialog
         open={Boolean(deleteTarget)}
         onClose={() => setDeleteTarget(null)}
-        title="Lieferant löschen?"
+        title={t("suppliers.deleteTitle")}
         description={
           deleteTarget
-            ? `„${deleteTarget.name}“ und alle zugehörigen Produkte sowie Chargen werden unwiderruflich gelöscht.`
+            ? t("suppliers.deleteDescription", { name: deleteTarget.name })
             : ""
         }
-        confirmLabel="Endgültig löschen"
+        confirmLabel={t("common.deleteConfirm")}
         onConfirm={() => {
           if (deleteTarget) onDelete(deleteTarget);
         }}
@@ -173,12 +165,15 @@ export function SuppliersOverview({
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-foreground">
-            Lieferanten
+            {t("suppliers.title")}
           </h1>
           <p className="mt-1 text-[13px] text-muted">
             {filtered.length === rows.length
-              ? `${rows.length} Lieferant${rows.length === 1 ? "" : "en"}`
-              : `${filtered.length} von ${rows.length} Lieferanten`}
+              ? plural(rows.length, "suppliers.count", "suppliers.count_plural")
+              : t("suppliers.countFiltered", {
+                  count: filtered.length,
+                  total: rows.length,
+                })}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -192,7 +187,7 @@ export function SuppliersOverview({
                   : "text-muted hover:text-foreground"
               }`}
             >
-              Tabelle
+              {t("suppliers.view.table")}
             </button>
             <button
               type="button"
@@ -203,26 +198,26 @@ export function SuppliersOverview({
                   : "text-muted hover:text-foreground"
               }`}
             >
-              Karten
+              {t("suppliers.view.cards")}
             </button>
           </div>
           <Button variant="secondary" onClick={onResetDemo}>
-            Demo laden
+            {t("suppliers.demo")}
           </Button>
-          <Button onClick={onCreate}>+ Neuer Lieferant</Button>
+          <Button onClick={onCreate}>{t("suppliers.add")}</Button>
         </div>
       </div>
 
       {rows.length === 0 ? (
         <div className="rounded-[12px] border border-dashed border-line px-6 py-14 text-center">
           <p className="text-[15px] font-medium text-foreground">
-            Noch keine Lieferanten
+            {t("suppliers.emptyTitle")}
           </p>
           <p className="mt-1 text-[13px] text-muted">
-            Lege den ersten Lieferanten an, um Produkte und Chargen zu kalkulieren.
+            {t("suppliers.emptyHint")}
           </p>
           <Button className="mt-5" onClick={onCreate}>
-            Ersten Lieferanten anlegen
+            {t("suppliers.emptyCta")}
           </Button>
         </div>
       ) : (
@@ -231,7 +226,7 @@ export function SuppliersOverview({
             <TextInput
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Suche Name oder Ansprechpartner…"
+              placeholder={t("suppliers.searchPlaceholder")}
               className="!w-[220px] shrink-0"
             />
             <Select
@@ -239,10 +234,10 @@ export function SuppliersOverview({
               onChange={(e) => setFilterCountry(e.target.value)}
               className="!w-[150px] shrink-0"
             >
-              <option value="">Alle Länder</option>
+              <option value="">{t("suppliers.allCountries")}</option>
               {countriesInData.map((code) => (
                 <option key={code} value={code}>
-                  {countryName(code)}
+                  {countryLabel(code)}
                 </option>
               ))}
             </Select>
@@ -251,11 +246,11 @@ export function SuppliersOverview({
               onChange={(e) => setFilterStatus(e.target.value)}
               className="!w-[130px] shrink-0"
             >
-              <option value="">Alle Status</option>
-              {(Object.keys(SUPPLIER_STATUS_LABELS) as SupplierStatus[]).map(
+              <option value="">{t("suppliers.allStatuses")}</option>
+              {(["active", "inactive", "review"] as SupplierStatus[]).map(
                 (s) => (
                   <option key={s} value={s}>
-                    {SUPPLIER_STATUS_LABELS[s]}
+                    {supplierStatusLabel(s)}
                   </option>
                 ),
               )}
@@ -265,7 +260,7 @@ export function SuppliersOverview({
               onChange={(e) => setFilterIncoterm(e.target.value)}
               className="!w-[140px] shrink-0"
             >
-              <option value="">Alle Incoterms</option>
+              <option value="">{t("suppliers.allIncoterms")}</option>
               {INCOTERMS.map((t) => (
                 <option key={t} value={t}>
                   {t}
@@ -278,29 +273,32 @@ export function SuppliersOverview({
                 variant="secondary"
                 onClick={() => setColsOpen((v) => !v)}
               >
-                Spalten anpassen
+                {t("suppliers.columns")}
               </Button>
               {colsOpen ? (
                 <div className="absolute right-0 z-20 mt-1 w-52 rounded-[10px] border border-line bg-white p-2 shadow-[0_12px_40px_rgba(28,29,31,0.12)]">
                   <p className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
-                    Optionale Spalten
+                    {t("suppliers.optionalColumns")}
                   </p>
-                  {(Object.keys(OPTIONAL_COLUMN_LABELS) as OptionalColumn[]).map(
-                    (col) => (
-                      <label
-                        key={col}
-                        className="flex cursor-pointer items-center gap-2 rounded-[6px] px-2 py-1.5 text-[13px] hover:bg-surface-faint"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={hasOptional(col)}
-                          onChange={() => toggleCol(col)}
-                          className="accent-[var(--accent)]"
-                        />
-                        {OPTIONAL_COLUMN_LABELS[col]}
-                      </label>
-                    ),
-                  )}
+                  {(Object.keys({
+                    contactName: true,
+                    paymentDays: true,
+                    skonto: true,
+                    taxId: true,
+                  }) as OptionalColumn[]).map((col) => (
+                    <label
+                      key={col}
+                      className="flex cursor-pointer items-center gap-2 rounded-[6px] px-2 py-1.5 text-[13px] hover:bg-surface-faint"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={hasOptional(col)}
+                        onChange={() => toggleCol(col)}
+                        className="accent-[var(--accent)]"
+                      />
+                      {optionalColLabel(col)}
+                    </label>
+                  ))}
                 </div>
               ) : null}
             </div>
@@ -308,7 +306,7 @@ export function SuppliersOverview({
 
           {filtered.length === 0 ? (
             <div className="rounded-[12px] border border-line bg-white px-4 py-10 text-center text-[13px] text-muted">
-              Keine Lieferanten passen zu den Filtern.
+              {t("suppliers.noFilterResults")}
             </div>
           ) : view === "cards" ? (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -325,9 +323,12 @@ export function SuppliersOverview({
                   }
                   expanded={expandedId === row.supplier.id}
                   products={productsOf(row.supplier.id)}
-                  batches={data.batches}
+                  data={data}
                   onAddProduct={() => onAddProduct(row.supplier.id)}
                   onEditProduct={onEditProduct}
+                  countryLabel={countryLabel}
+                  supplierStatusLabel={supplierStatusLabel}
+                  locale={locale}
                 />
               ))}
             </div>
@@ -338,20 +339,20 @@ export function SuppliersOverview({
                   <thead>
                     <tr className="border-b border-line bg-surface-faint text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
                       <SortTh
-                        label="Firmenname"
+                        label={t("suppliers.col.company")}
                         active={sortKey === "name"}
                         dir={sortDir}
                         onClick={() => toggleSort("name")}
                       />
                       <SortTh
-                        label="Land"
+                        label={t("suppliers.col.country")}
                         active={sortKey === "country"}
                         dir={sortDir}
                         onClick={() => toggleSort("country")}
                         className="hidden sm:table-cell"
                       />
                       <SortTh
-                        label="Produkte"
+                        label={t("suppliers.col.products")}
                         active={sortKey === "productCount"}
                         dir={sortDir}
                         onClick={() => toggleSort("productCount")}
@@ -359,7 +360,7 @@ export function SuppliersOverview({
                         className="hidden md:table-cell"
                       />
                       <SortTh
-                        label="Ø Landed Cost"
+                        label={t("suppliers.col.avgLanded")}
                         active={sortKey === "avgLandedCost"}
                         dir={sortDir}
                         onClick={() => toggleSort("avgLandedCost")}
@@ -367,28 +368,28 @@ export function SuppliersOverview({
                         className="hidden lg:table-cell"
                       />
                       <SortTh
-                        label="Letzte Bestellung"
+                        label={t("suppliers.col.lastOrder")}
                         active={sortKey === "lastOrderAt"}
                         dir={sortDir}
                         onClick={() => toggleSort("lastOrderAt")}
                         className="hidden lg:table-cell"
                       />
                       <SortTh
-                        label="Incoterm"
+                        label={t("suppliers.col.incoterm")}
                         active={sortKey === "incoterm"}
                         dir={sortDir}
                         onClick={() => toggleSort("incoterm")}
                         className="hidden md:table-cell"
                       />
                       <SortTh
-                        label="Status"
+                        label={t("suppliers.col.status")}
                         active={sortKey === "status"}
                         dir={sortDir}
                         onClick={() => toggleSort("status")}
                       />
                       {hasOptional("contactName") ? (
                         <SortTh
-                          label="Ansprechpartner"
+                          label={optionalColLabel("contactName")}
                           active={sortKey === "contactName"}
                           dir={sortDir}
                           onClick={() => toggleSort("contactName")}
@@ -397,7 +398,7 @@ export function SuppliersOverview({
                       ) : null}
                       {hasOptional("paymentDays") ? (
                         <SortTh
-                          label="Zahlungsziel"
+                          label={optionalColLabel("paymentDays")}
                           active={sortKey === "paymentDays"}
                           dir={sortDir}
                           onClick={() => toggleSort("paymentDays")}
@@ -406,7 +407,7 @@ export function SuppliersOverview({
                       ) : null}
                       {hasOptional("skonto") ? (
                         <SortTh
-                          label="Skonto"
+                          label={optionalColLabel("skonto")}
                           active={sortKey === "skonto"}
                           dir={sortDir}
                           onClick={() => toggleSort("skonto")}
@@ -415,7 +416,7 @@ export function SuppliersOverview({
                       ) : null}
                       {hasOptional("taxId") ? (
                         <th className="hidden px-3 py-2.5 font-medium xl:table-cell">
-                          USt-IdNr.
+                          {optionalColLabel("taxId")}
                         </th>
                       ) : null}
                       <th className="w-28 px-3 py-2.5" />
@@ -436,7 +437,7 @@ export function SuppliersOverview({
                                   onClick={() =>
                                     setExpandedId(open ? null : s.id)
                                   }
-                                  aria-label="Details"
+                                  aria-label={t("suppliers.action.details")}
                                 >
                                   <Chevron open={open} />
                                 </button>
@@ -452,17 +453,17 @@ export function SuppliersOverview({
                               </div>
                               <p className="mt-0.5 flex items-center gap-1.5 text-[12px] text-muted-soft sm:hidden">
                                 <CountryFlag code={s.country} />
-                                {countryName(s.country)}
+                                {countryLabel(s.country)}
                               </p>
                             </td>
                             <td className="hidden px-3 py-2.5 sm:table-cell">
                               <span className="inline-flex items-center gap-2">
                                 <CountryFlag
                                   code={s.country}
-                                  title={countryName(s.country)}
+                                  title={countryLabel(s.country)}
                                 />
                                 <span className="text-muted">
-                                  {countryName(s.country)}
+                                  {countryLabel(s.country)}
                                 </span>
                               </span>
                             </td>
@@ -475,29 +476,32 @@ export function SuppliersOverview({
                                 : "—"}
                             </td>
                             <td className="hidden px-3 py-2.5 text-muted lg:table-cell">
-                              {formatDateDe(row.lastOrderAt)}
+                              {formatDate(row.lastOrderAt, locale)}
                             </td>
                             <td className="hidden px-3 py-2.5 tabular-nums text-muted md:table-cell">
                               {s.incoterm || "—"}
                             </td>
                             <td className="px-3 py-2.5">
-                              <StatusBadge status={s.status} />
+                              <StatusBadge status={s.status} label={supplierStatusLabel(s.status)} />
                             </td>
                             {hasOptional("contactName") ? (
                               <td className="hidden px-3 py-2.5 text-muted xl:table-cell">
-                                {s.contactName || "—"}
+                                {s.contactName || t("common.emDash")}
                               </td>
                             ) : null}
                             {hasOptional("paymentDays") ? (
                               <td className="hidden px-3 py-2.5 text-muted xl:table-cell">
-                                {s.paymentDays} {s.paymentUnit}
+                                {s.paymentDays}{" "}
+                                {s.paymentUnit === "Wochen"
+                                  ? t("paymentUnit.Wochen")
+                                  : t("paymentUnit.Tage")}
                               </td>
                             ) : null}
                             {hasOptional("skonto") ? (
                               <td className="hidden px-3 py-2.5 text-muted xl:table-cell">
                                 {s.skontoPercent > 0
-                                  ? `${s.skontoPercent}% / ${s.skontoDays} T.`
-                                  : "—"}
+                                  ? `${s.skontoPercent}% / ${s.skontoDays} ${t("common.daysShort")}`
+                                  : t("common.emDash")}
                               </td>
                             ) : null}
                             {hasOptional("taxId") ? (
@@ -508,13 +512,13 @@ export function SuppliersOverview({
                             <td className="px-2 py-2.5">
                               <div className="flex justify-end gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
                                 <IconBtn
-                                  title="Bearbeiten"
+                                  title={t("common.edit")}
                                   onClick={() => onEdit(s)}
                                 >
                                   ✎
                                 </IconBtn>
                                 <IconBtn
-                                  title="Löschen"
+                                  title={t("common.delete")}
                                   danger
                                   onClick={() => setDeleteTarget(s)}
                                 >
@@ -526,12 +530,13 @@ export function SuppliersOverview({
                           {open ? (
                             <tr className="border-b border-line bg-surface-faint">
                               <td colSpan={99} className="p-0">
-                                <MobileExtras row={row} />
+                                <MobileExtras row={row} locale={locale} />
                                 <ExpandedProducts
                                   products={productsOf(s.id)}
-                                  batches={data.batches}
+                                  data={data}
                                   onAddProduct={() => onAddProduct(s.id)}
                                   onEditProduct={onEditProduct}
+                                  locale={locale}
                                 />
                               </td>
                             </tr>
@@ -548,7 +553,7 @@ export function SuppliersOverview({
           {totalPages > 1 ? (
             <div className="mt-4 flex items-center justify-between text-[13px] text-muted">
               <span>
-                Seite {page} von {totalPages}
+                {t("common.pageOf", { page, total: totalPages })}
               </span>
               <div className="flex gap-2">
                 <Button
@@ -556,14 +561,14 @@ export function SuppliersOverview({
                   disabled={page <= 1}
                   onClick={() => setPage((p) => p - 1)}
                 >
-                  Zurück
+                  {t("common.back")}
                 </Button>
                 <Button
                   variant="secondary"
                   disabled={page >= totalPages}
                   onClick={() => setPage((p) => p + 1)}
                 >
-                  Weiter
+                  {t("common.next")}
                 </Button>
               </div>
             </div>
@@ -611,10 +616,16 @@ function SortTh({
   );
 }
 
-function StatusBadge({ status }: { status: SupplierStatus }) {
+function StatusBadge({
+  status,
+  label,
+}: {
+  status: SupplierStatus;
+  label: string;
+}) {
   const tone =
     status === "active" ? "success" : status === "review" ? "accent" : "neutral";
-  return <Badge tone={tone}>{SUPPLIER_STATUS_LABELS[status]}</Badge>;
+  return <Badge tone={tone}>{label}</Badge>;
 }
 
 function IconBtn({
@@ -663,27 +674,34 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
-function MobileExtras({ row }: { row: SupplierRow }) {
+function MobileExtras({
+  row,
+  locale,
+}: {
+  row: SupplierRow;
+  locale: string;
+}) {
+  const { t } = useI18n();
   const s = row.supplier;
   return (
     <dl className="grid gap-2 border-t border-line px-3 py-3 text-[12px] sm:hidden">
       <div className="flex justify-between gap-2">
-        <dt className="text-muted-soft">Produkte</dt>
+        <dt className="text-muted-soft">{t("suppliers.col.products")}</dt>
         <dd>{row.productCount}</dd>
       </div>
       <div className="flex justify-between gap-2">
-        <dt className="text-muted-soft">Ø Landed Cost</dt>
+        <dt className="text-muted-soft">{t("suppliers.col.avgLanded")}</dt>
         <dd>
-          {row.avgLandedCost != null ? formatEuro(row.avgLandedCost) : "—"}
+          {row.avgLandedCost != null ? formatEuro(row.avgLandedCost) : t("common.emDash")}
         </dd>
       </div>
       <div className="flex justify-between gap-2">
-        <dt className="text-muted-soft">Letzte Bestellung</dt>
-        <dd>{formatDateDe(row.lastOrderAt)}</dd>
+        <dt className="text-muted-soft">{t("suppliers.col.lastOrder")}</dt>
+        <dd>{formatDate(row.lastOrderAt, locale)}</dd>
       </div>
       <div className="flex justify-between gap-2">
-        <dt className="text-muted-soft">Incoterm</dt>
-        <dd>{s.incoterm || "—"}</dd>
+        <dt className="text-muted-soft">{t("suppliers.col.incoterm")}</dt>
+        <dd>{s.incoterm || t("common.emDash")}</dd>
       </div>
     </dl>
   );
@@ -691,39 +709,45 @@ function MobileExtras({ row }: { row: SupplierRow }) {
 
 function ExpandedProducts({
   products,
-  batches,
+  data,
   onAddProduct,
   onEditProduct,
+  locale,
 }: {
   products: Product[];
-  batches: AppData["batches"];
+  data: AppData;
   onAddProduct: () => void;
   onEditProduct: (product: Product) => void;
+  locale: string;
 }) {
+  const { t, pricingUnitLabel } = useI18n();
   return (
     <div className="border-t border-line">
       {products.length === 0 ? (
-        <p className="px-3 py-3 text-[13px] text-muted-soft">Keine Produkte</p>
+        <p className="px-3 py-3 text-[13px] text-muted-soft">
+          {t("suppliers.noProducts")}
+        </p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[780px] text-left text-[12px]">
             <thead>
               <tr className="border-b border-line text-[10px] font-medium uppercase tracking-[0.04em] text-muted-soft">
-                <th className="px-3 py-2 font-medium">Produkt</th>
-                <th className="px-3 py-2 font-medium">SKU</th>
-                <th className="px-3 py-2 text-right font-medium">Preis/Stk.</th>
-                <th className="px-3 py-2 text-right font-medium">MOQ</th>
+                <th className="px-3 py-2 font-medium">{t("products.col.product")}</th>
+                <th className="px-3 py-2 font-medium">{t("products.col.sku")}</th>
+                <th className="px-3 py-2 text-right font-medium">{t("products.col.price")}</th>
+                <th className="px-3 py-2 text-right font-medium">{t("products.col.moq")}</th>
                 <th className="px-3 py-2 text-right font-medium">
-                  Ø Landed Cost
+                  {t("products.col.avgLanded")}
                 </th>
-                <th className="px-3 py-2 text-right font-medium">Chargen</th>
-                <th className="px-3 py-2 font-medium">Letzte Bestellung</th>
-                <th className="px-3 py-2 text-right font-medium">Ø Marge</th>
+                <th className="px-3 py-2 text-right font-medium">{t("products.col.batches")}</th>
+                <th className="px-3 py-2 font-medium">{t("products.col.lastOrder")}</th>
+                <th className="px-3 py-2 text-right font-medium">{t("products.col.avgMargin")}</th>
               </tr>
             </thead>
             <tbody>
               {products.map((p) => {
-                const m = buildProductMetrics(p.id, batches);
+                const m = buildProductMetrics(p.id, data);
+                const unit = pricingUnitLabel(p.pricingUnit);
                 return (
                   <tr
                     key={p.id}
@@ -738,23 +762,29 @@ function ExpandedProducts({
                         {p.name}
                       </button>
                     </td>
-                    <td className="px-3 py-2 text-muted">{p.sku || "—"}</td>
+                    <td className="px-3 py-2 text-muted">{p.sku || t("common.emDash")}</td>
                     <td className="px-3 py-2 text-right tabular-nums">
-                      {formatEuro(p.unitPrice)}
+                      {t("products.priceWithUnit", {
+                        price: formatEuro(p.unitPrice),
+                        unit,
+                      })}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-muted">
-                      {p.moq.toLocaleString("de-DE")}
+                      {t("products.moqWithUnit", {
+                        count: p.moq.toLocaleString(locale),
+                        unit,
+                      })}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">
                       {m.avgLandedCost != null
                         ? formatEuro(m.avgLandedCost)
-                        : "—"}
+                        : t("common.emDash")}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-muted">
                       {m.batchCount}
                     </td>
                     <td className="px-3 py-2 text-muted">
-                      {formatDateDe(m.lastOrderAt)}
+                      {formatDate(m.lastOrderAt, locale)}
                     </td>
                     <td className="px-3 py-2 text-right">
                       {m.avgMarginEuro != null ? (
@@ -771,7 +801,7 @@ function ExpandedProducts({
                           </span>
                         </span>
                       ) : (
-                        <span className="text-muted-soft">—</span>
+                        <span className="text-muted-soft">{t("common.emDash")}</span>
                       )}
                     </td>
                   </tr>
@@ -788,7 +818,7 @@ function ExpandedProducts({
           onClick={onAddProduct}
           className="inline-flex items-center rounded-full border border-line bg-white px-2.5 py-1 text-[12px] font-medium text-muted transition-colors hover:border-line-strong hover:text-foreground"
         >
-          + Produkt hinzufügen
+          {t("suppliers.addProduct")}
         </button>
       </div>
     </div>
@@ -802,9 +832,12 @@ function SupplierCard({
   onOpen,
   expanded,
   products,
-  batches,
+  data,
   onAddProduct,
   onEditProduct,
+  countryLabel,
+  supplierStatusLabel,
+  locale,
 }: {
   row: SupplierRow;
   onEdit: () => void;
@@ -812,10 +845,14 @@ function SupplierCard({
   onOpen: () => void;
   expanded: boolean;
   products: Product[];
-  batches: AppData["batches"];
+  data: AppData;
   onAddProduct: () => void;
   onEditProduct: (product: Product) => void;
+  countryLabel: (code: string) => string;
+  supplierStatusLabel: (status: SupplierStatus) => string;
+  locale: string;
 }) {
+  const { t } = useI18n();
   const s = row.supplier;
   return (
     <div className="rounded-[12px] border border-line bg-white p-4 shadow-[var(--shadow-sm)]">
@@ -826,30 +863,33 @@ function SupplierCard({
           </p>
           <p className="mt-0.5 flex items-center gap-1.5 text-[12px] text-muted">
             <CountryFlag code={s.country} />
-            {countryName(s.country)} · {s.incoterm}
+            {countryLabel(s.country)} · {s.incoterm}
           </p>
         </button>
-        <StatusBadge status={s.status} />
+        <StatusBadge
+          status={s.status}
+          label={supplierStatusLabel(s.status)}
+        />
       </div>
       <dl className="mt-3 grid grid-cols-2 gap-2 text-[12px]">
         <div>
-          <dt className="text-muted-soft">Produkte</dt>
+          <dt className="text-muted-soft">{t("suppliers.col.products")}</dt>
           <dd className="font-medium tabular-nums">{row.productCount}</dd>
         </div>
         <div>
-          <dt className="text-muted-soft">Ø Landed Cost</dt>
+          <dt className="text-muted-soft">{t("suppliers.col.avgLanded")}</dt>
           <dd className="font-medium tabular-nums">
-            {row.avgLandedCost != null ? formatEuro(row.avgLandedCost) : "—"}
+            {row.avgLandedCost != null ? formatEuro(row.avgLandedCost) : t("common.emDash")}
           </dd>
         </div>
         <div className="col-span-2">
-          <dt className="text-muted-soft">Letzte Bestellung</dt>
-          <dd>{formatDateDe(row.lastOrderAt)}</dd>
+          <dt className="text-muted-soft">{t("suppliers.col.lastOrder")}</dt>
+          <dd>{formatDate(row.lastOrderAt, locale)}</dd>
         </div>
       </dl>
       <div className="mt-3 flex gap-1 border-t border-line pt-3">
         <Button variant="ghost" className="h-7 px-2" onClick={onEdit}>
-          Edit
+          {t("common.edit")}
         </Button>
         <Button variant="danger" className="h-7 px-2" onClick={onDelete}>
           ×
@@ -859,9 +899,10 @@ function SupplierCard({
         <div className="mt-3 border-t border-line pt-3">
           <ExpandedProducts
             products={products}
-            batches={batches}
+            data={data}
             onAddProduct={onAddProduct}
             onEditProduct={onEditProduct}
+            locale={locale}
           />
         </div>
       ) : null}

@@ -11,7 +11,7 @@ import {
 } from "react";
 import type { AppData, Batch, Dealer, Product, Supplier } from "@/lib/types";
 import { EMPTY_DATA } from "@/lib/types";
-import { loadData, saveData, seedDemoData } from "@/lib/storage";
+import { loadData, saveData, seedDemoData, detachDealerFromSales } from "@/lib/storage";
 
 type StoreContextValue = {
   ready: boolean;
@@ -102,18 +102,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const deleteDealer = useCallback((id: string) => {
     setData(
-      commit((prev) => ({
-        ...prev,
-        dealers: prev.dealers.filter((d) => d.id !== id),
-        batches: prev.batches.map((b) =>
-          b.sales.dealerId === id
-            ? {
-                ...b,
-                sales: { ...b.sales, dealerId: "", channel: "" },
-              }
-            : b,
-        ),
-      })),
+      commit((prev) => {
+        const dealer = prev.dealers.find((d) => d.id === id);
+        return {
+          ...prev,
+          dealers: prev.dealers.filter((d) => d.id !== id),
+          batches: prev.batches.map((b) =>
+            b.sales.dealerId === id
+              ? {
+                  ...b,
+                  sales: detachDealerFromSales(b.sales, dealer),
+                }
+              : b,
+          ),
+        };
+      }),
     );
   }, []);
 
@@ -143,6 +146,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("landed-cost-v4");
     localStorage.removeItem("landed-cost-v5");
     localStorage.removeItem("landed-cost-v6");
+    localStorage.removeItem("landed-cost-v7");
     const seeded = seedDemoData();
     setData(seeded);
   }, []);

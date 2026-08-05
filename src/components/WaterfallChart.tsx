@@ -2,8 +2,16 @@
 
 import type { WaterfallStep } from "@/lib/calc";
 import { formatEuro } from "@/lib/format";
+import { useI18n } from "@/hooks/useI18n";
 
-export function WaterfallChart({ steps }: { steps: WaterfallStep[] }) {
+export function WaterfallChart({
+  steps,
+  unitLabel,
+}: {
+  steps: WaterfallStep[];
+  unitLabel?: string;
+}) {
+  const { waterfallLabel, locale } = useI18n();
   const max = Math.max(
     ...steps.map((s) => Math.abs(s.amountPerUnit)),
     ...steps.map((s) => Math.abs(s.runningTotal)),
@@ -28,7 +36,7 @@ export function WaterfallChart({ steps }: { steps: WaterfallStep[] }) {
                     : "text-muted"
                 }
               >
-                {step.label}
+                {waterfallLabel(step.id, step.label, unitLabel)}
               </span>
               <span
                 className={`tabular-nums ${
@@ -40,7 +48,7 @@ export function WaterfallChart({ steps }: { steps: WaterfallStep[] }) {
                 }`}
               >
                 {step.kind === "cost" ? "+" : ""}
-                {formatEuro(step.amountPerUnit)}
+                {formatEuro(step.amountPerUnit, locale)}
               </span>
             </div>
             <div className="h-1 overflow-hidden rounded-full bg-surface-soft">

@@ -2,20 +2,31 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  initialsFromName,
+  usePrefs,
+} from "@/context/PreferencesContext";
+import { useI18n } from "@/hooks/useI18n";
 
 const links = [
-  { href: "/lieferanten", label: "Lieferanten", icon: SuppliersIcon },
-  { href: "/produkte", label: "Produkte", icon: ProductsIcon },
-  { href: "/haendler", label: "Händler", icon: DealersIcon },
-  { href: "/chargen", label: "Chargen", icon: BatchesIcon },
+  { href: "/overview", key: "nav.overview" as const, icon: OverviewIcon },
+  { href: "/suppliers", key: "nav.suppliers" as const, icon: SuppliersIcon },
+  { href: "/products", key: "nav.products" as const, icon: ProductsIcon },
+  { href: "/dealers", key: "nav.dealers" as const, icon: DealersIcon },
+  { href: "/batches", key: "nav.batches" as const, icon: BatchesIcon },
+  { href: "/compare", key: "nav.compare" as const, icon: CompareIcon },
 ];
 
 function isActive(pathname: string, href: string) {
-  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+  return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 export function AppNav() {
   const pathname = usePathname();
+  const { prefs } = usePrefs();
+  const { t } = useI18n();
+  const settingsActive = pathname.startsWith("/settings");
+  const initials = initialsFromName(prefs.displayName);
 
   return (
     <aside className="sticky top-0 hidden h-screen w-[220px] shrink-0 flex-col border-r border-line bg-sidebar md:flex">
@@ -33,7 +44,7 @@ export function AppNav() {
 
       <nav className="flex flex-1 flex-col gap-0.5 px-2 pt-1">
         <p className="px-2 pb-1.5 pt-2 text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
-          Workspace
+          {t("nav.workspace")}
         </p>
         {links.map((link) => {
           const active = isActive(pathname, link.href);
@@ -49,14 +60,34 @@ export function AppNav() {
               }`}
             >
               <Icon active={active} />
-              {link.label}
+              {t(link.key)}
             </Link>
           );
         })}
       </nav>
 
-      <div className="border-t border-line px-4 py-3">
-        <p className="text-[11px] text-muted-soft">Daten lokal im Browser</p>
+      <div className="border-t border-line p-2">
+        <Link
+          href="/settings"
+          className={`flex items-center gap-2.5 rounded-[10px] px-2 py-2 transition-colors ${
+            settingsActive
+              ? "bg-white shadow-[var(--shadow-sm)]"
+              : "hover:bg-white/70"
+          }`}
+        >
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[11px] font-semibold tracking-tight text-accent">
+            {initials}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[13px] font-medium text-foreground">
+              {prefs.displayName}
+            </p>
+            <p className="truncate text-[11px] text-muted-soft">
+              {t("nav.settings")}
+            </p>
+          </div>
+          <SettingsChevron />
+        </Link>
       </div>
     </aside>
   );
@@ -64,6 +95,7 @@ export function AppNav() {
 
 export function MobileNav() {
   const pathname = usePathname();
+  const { t } = useI18n();
 
   return (
     <nav className="flex gap-1 overflow-x-auto border-b border-line px-3 py-2 md:hidden">
@@ -79,11 +111,53 @@ export function MobileNav() {
                 : "text-muted"
             }`}
           >
-            {link.label}
+            {t(link.key)}
           </Link>
         );
       })}
+      <Link
+        href="/settings"
+        className={`shrink-0 rounded-[8px] px-3 py-1.5 text-[13px] ${
+          pathname.startsWith("/settings")
+            ? "bg-surface-soft font-medium text-foreground"
+            : "text-muted"
+        }`}
+      >
+        {t("nav.settings")}
+      </Link>
     </nav>
+  );
+}
+
+function SettingsChevron() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 14 14"
+      fill="none"
+      className="shrink-0 text-muted-soft"
+      aria-hidden
+    >
+      <path
+        d="M5.25 3.5 8.75 7l-3.5 3.5"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function OverviewIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={active ? "text-accent" : "text-muted-soft"}>
+      <rect x="2" y="2" width="4.5" height="4.5" rx="1" stroke="currentColor" strokeWidth="1.3" />
+      <rect x="8.5" y="2" width="4.5" height="4.5" rx="1" stroke="currentColor" strokeWidth="1.3" />
+      <rect x="2" y="8.5" width="4.5" height="4.5" rx="1" stroke="currentColor" strokeWidth="1.3" />
+      <rect x="8.5" y="8.5" width="4.5" height="4.5" rx="1" stroke="currentColor" strokeWidth="1.3" />
+    </svg>
   );
 }
 
@@ -132,3 +206,10 @@ function BatchesIcon({ active }: { active: boolean }) {
   );
 }
 
+function CompareIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={active ? "text-accent" : "text-muted-soft"}>
+      <path d="M3 12V6.5M7.5 12V3.5M12 12V8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}

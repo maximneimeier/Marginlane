@@ -1,12 +1,9 @@
 "use client";
 
 import type { CostAllocation, CostItem, CostPhase } from "@/lib/types";
-import {
-  ALLOCATION_LABELS,
-  COST_TYPE_PRESETS,
-  PHASE_LABELS,
-} from "@/lib/types";
+import { COST_TYPE_PRESETS } from "@/lib/types";
 import { createId } from "@/lib/format";
+import { useI18n } from "@/hooks/useI18n";
 import { Button, Field, Select, TextInput } from "./ui";
 
 type Props = {
@@ -16,6 +13,8 @@ type Props = {
   title: string;
   /** Wenn true: % bezieht sich auf Verkaufserlös statt Einkaufswarenwert */
   percentOfRevenue?: boolean;
+  /** Kurzlabel der Preisenheit (Stk., g, …) für „pro {unit}“ */
+  unitLabel?: string;
 };
 
 export function CostItemEditor({
@@ -24,15 +23,19 @@ export function CostItemEditor({
   allowedPhases,
   title,
   percentOfRevenue = false,
+  unitLabel,
 }: Props) {
+  const { t, costTypeLabel, phaseLabel, allocationLabel } = useI18n();
+
   function addItem() {
     const phase = allowedPhases[0] ?? "einkauf";
+    const type = COST_TYPE_PRESETS[0];
     onChange([
       ...items,
       {
         id: createId("cost"),
-        type: COST_TYPE_PRESETS[0],
-        label: COST_TYPE_PRESETS[0],
+        type,
+        label: costTypeLabel(type),
         amount: 0,
         allocation: "lump_sum",
         phase,
@@ -46,7 +49,7 @@ export function CostItemEditor({
         if (item.id !== id) return item;
         const next = { ...item, ...patch };
         if (patch.type && !patch.label) {
-          next.label = patch.type;
+          next.label = costTypeLabel(patch.type);
         }
         return next;
       }),
@@ -62,13 +65,13 @@ export function CostItemEditor({
       <div className="mb-3 flex items-center justify-between gap-3">
         <h3 className="text-sm font-medium text-foreground">{title}</h3>
         <Button variant="ghost" onClick={addItem}>
-          + Kostenposten
+          {t("costEditor.add")}
         </Button>
       </div>
 
       {items.length === 0 ? (
         <p className="rounded-md border border-dashed border-line px-4 py-6 text-center text-sm text-muted">
-          Noch keine Kostenposten. Typen sind frei erweiterbar.
+          {t("costEditor.empty")}
         </p>
       ) : (
         <ul className="space-y-3">
@@ -78,35 +81,43 @@ export function CostItemEditor({
               className="grid gap-3 rounded-md border border-line bg-white p-3 sm:grid-cols-12"
             >
               <div className="sm:col-span-3">
-                <Field label="Typ">
+                <Field label={t("costEditor.type")}>
                   <Select
                     value={item.type}
-                    onChange={(e) => update(item.id, { type: e.target.value })}
+                    onChange={(e) => {
+                      const type = e.target.value;
+                      update(item.id, {
+                        type,
+                        label: costTypeLabel(type),
+                      });
+                    }}
                   >
-                    {COST_TYPE_PRESETS.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
+                    {COST_TYPE_PRESETS.map((preset) => (
+                      <option key={preset} value={preset}>
+                        {costTypeLabel(preset)}
                       </option>
                     ))}
                     {!COST_TYPE_PRESETS.includes(
                       item.type as (typeof COST_TYPE_PRESETS)[number],
                     ) ? (
-                      <option value={item.type}>{item.type}</option>
+                      <option value={item.type}>
+                        {costTypeLabel(item.type)}
+                      </option>
                     ) : null}
                   </Select>
                 </Field>
               </div>
               <div className="sm:col-span-3">
-                <Field label="Bezeichnung">
+                <Field label={t("costEditor.label")}>
                   <TextInput
                     value={item.label}
                     onChange={(e) => update(item.id, { label: e.target.value })}
-                    placeholder="Optional anders benennen"
+                    placeholder={t("costEditor.labelPlaceholder")}
                   />
                 </Field>
               </div>
               <div className="sm:col-span-2">
-                <Field label="Betrag">
+                <Field label={t("costEditor.amount")}>
                   <TextInput
                     type="number"
                     step="0.01"
@@ -119,7 +130,7 @@ export function CostItemEditor({
                 </Field>
               </div>
               <div className="sm:col-span-2">
-                <Field label="Verteilung">
+                <Field label={t("costEditor.allocation")}>
                   <Select
                     value={item.allocation}
                     onChange={(e) =>
@@ -128,20 +139,22 @@ export function CostItemEditor({
                       })
                     }
                   >
-                    {(Object.keys(ALLOCATION_LABELS) as CostAllocation[]).map(
-                      (key) => (
-                        <option key={key} value={key}>
-                          {key === "percent_of_goods" && percentOfRevenue
-                            ? "% vom Verkaufswert"
-                            : ALLOCATION_LABELS[key]}
-                        </option>
-                      ),
-                    )}
+                    {(
+                      [
+                        "per_unit",
+                        "lump_sum",
+                        "percent_of_goods",
+                      ] as CostAllocation[]
+                    ).map((key) => (
+                      <option key={key} value={key}>
+                        {allocationLabel(key, percentOfRevenue, unitLabel)}
+                      </option>
+                    ))}
                   </Select>
                 </Field>
               </div>
               <div className="sm:col-span-2">
-                <Field label="Phase">
+                <Field label={t("costEditor.phase")}>
                   <div className="flex gap-2">
                     <Select
                       value={item.phase}
@@ -154,7 +167,7 @@ export function CostItemEditor({
                     >
                       {allowedPhases.map((phase) => (
                         <option key={phase} value={phase}>
-                          {PHASE_LABELS[phase]}
+                          {phaseLabel(phase)}
                         </option>
                       ))}
                     </Select>
@@ -162,7 +175,7 @@ export function CostItemEditor({
                       variant="danger"
                       className="shrink-0 px-2"
                       onClick={() => remove(item.id)}
-                      aria-label="Entfernen"
+                      aria-label={t("costEditor.remove")}
                     >
                       ×
                     </Button>

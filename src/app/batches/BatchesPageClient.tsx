@@ -4,8 +4,9 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useStore } from "@/context/StoreContext";
-import { calculateUnitEconomics } from "@/lib/calc";
-import { formatEuro, formatPercent } from "@/lib/format";
+import { calculateResolvedEconomics } from "@/lib/resolve";
+import { formatEuro, formatNumber, formatPercent } from "@/lib/format";
+import { useI18n } from "@/hooks/useI18n";
 import { BatchFormModal } from "@/components/BatchFormModal";
 import { Button, Card, PageHeader } from "@/components/ui";
 
@@ -13,6 +14,7 @@ function ChargenPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { ready, data, upsertBatch, deleteBatch } = useStore();
+  const { t, locale, pricingUnitLabel } = useI18n();
   const [modalOpen, setModalOpen] = useState(false);
   const [initialProductId, setInitialProductId] = useState("");
 
@@ -23,10 +25,10 @@ function ChargenPageInner() {
     if (!wantsNew && !product) return;
     setInitialProductId(product);
     setModalOpen(true);
-    router.replace("/chargen", { scroll: false });
+    router.replace("/batches", { scroll: false });
   }, [ready, searchParams, router]);
 
-  if (!ready) return <p className="text-sm text-muted">Laden…</p>;
+  if (!ready) return <p className="text-sm text-muted">{t("common.loading")}</p>;
 
   return (
     <div>
@@ -40,13 +42,13 @@ function ChargenPageInner() {
         }}
         onSave={(batch) => {
           upsertBatch(batch);
-          router.push(`/chargen/${batch.id}`);
+          router.push(`/batches/${batch.id}`);
         }}
       />
 
       <PageHeader
-        title="Chargen"
-        description="Konkrete Einkäufe mit Kostenposten, Landed Cost und Verkaufsseite."
+        title={t("batches.title")}
+        description={t("batches.description")}
         action={
           <Button
             onClick={() => {
@@ -54,23 +56,23 @@ function ChargenPageInner() {
               setModalOpen(true);
             }}
           >
-            Neue Charge
+            {t("batches.add")}
           </Button>
         }
       />
 
       {data.batches.length === 0 ? (
         <Card>
-          <p className="text-[13px] text-muted">Noch keine Chargen angelegt.</p>
+          <p className="text-[13px] text-muted">{t("batches.empty")}</p>
         </Card>
       ) : (
         <div className="overflow-hidden rounded-[12px] border border-line bg-white shadow-[var(--shadow-sm)]">
           <div className="grid grid-cols-[1.2fr_1fr_1fr_0.8fr_0.9fr_auto] gap-3 border-b border-line bg-surface-faint px-4 py-2 text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
-            <span>Charge</span>
-            <span>Produkt</span>
-            <span>Lieferant</span>
-            <span className="text-right">Landed Cost</span>
-            <span className="text-right">Marge</span>
+            <span>{t("batches.col.batch")}</span>
+            <span>{t("batches.col.product")}</span>
+            <span>{t("batches.col.supplier")}</span>
+            <span className="text-right">{t("batches.col.landed")}</span>
+            <span className="text-right">{t("batches.col.margin")}</span>
             <span />
           </div>
           <ul>
@@ -79,13 +81,7 @@ function ChargenPageInner() {
               const supplier = data.suppliers.find(
                 (s) => s.id === batch.supplierId,
               );
-              const econ = calculateUnitEconomics({
-                quantity: batch.quantity,
-                unitPurchasePrice: batch.unitPurchasePrice,
-                procurementItems: batch.costItems,
-                sellPrice: batch.sales.sellPrice,
-                salesItems: batch.sales.costItems,
-              });
+              const econ = calculateResolvedEconomics(data, batch);
 
               return (
                 <li
@@ -94,23 +90,26 @@ function ChargenPageInner() {
                 >
                   <div className="min-w-0">
                     <Link
-                      href={`/chargen/${batch.id}`}
+                      href={`/batches/${batch.id}`}
                       className="font-medium text-foreground hover:text-accent"
                     >
                       {batch.label}
                     </Link>
                     <p className="text-[12px] text-muted-soft">
-                      {batch.quantity.toLocaleString("de-DE")} Stk.
+                      {t("batches.qty", {
+                        count: formatNumber(batch.quantity, locale),
+                        unit: pricingUnitLabel(product?.pricingUnit ?? "pcs"),
+                      })}
                     </p>
                   </div>
                   <span className="truncate text-[13px] text-muted">
-                    {product?.name ?? "—"}
+                    {product?.name ?? t("common.emDash")}
                   </span>
                   <span className="truncate text-[13px] text-muted">
-                    {supplier?.name ?? "—"}
+                    {supplier?.name ?? t("common.emDash")}
                   </span>
                   <span className="text-right text-[13px] tabular-nums">
-                    {formatEuro(econ.landedCostPerUnit)}
+                    {formatEuro(econ.landedCostPerUnit, locale)}
                   </span>
                   <span className="text-right text-[13px]">
                     <span
@@ -120,17 +119,17 @@ function ChargenPageInner() {
                           : "text-danger"
                       }`}
                     >
-                      {formatEuro(econ.contributionPerUnit)}
+                      {formatEuro(econ.contributionPerUnit, locale)}
                     </span>
                     <span className="ml-1 text-[12px] text-muted-soft">
-                      {formatPercent(econ.contributionPercent)}
+                      {formatPercent(econ.contributionPercent, locale)}
                     </span>
                   </span>
                   <Button
                     variant="danger"
                     className="justify-self-end"
                     onClick={() => {
-                      if (confirm("Charge löschen?")) deleteBatch(batch.id);
+                      if (confirm(t("batches.deleteConfirm"))) deleteBatch(batch.id);
                     }}
                   >
                     ×
@@ -145,9 +144,14 @@ function ChargenPageInner() {
   );
 }
 
+function ChargenPageFallback() {
+  const { t } = useI18n();
+  return <p className="text-sm text-muted">{t("common.loading")}</p>;
+}
+
 export default function ChargenPage() {
   return (
-    <Suspense fallback={<p className="text-sm text-muted">Laden…</p>}>
+    <Suspense fallback={<ChargenPageFallback />}>
       <ChargenPageInner />
     </Suspense>
   );

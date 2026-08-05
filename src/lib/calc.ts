@@ -53,6 +53,10 @@ export type UnitEconomics = {
   salesBreakdown: { item: CostItem; perUnit: number; total: number }[];
 };
 
+/**
+ * quantity und unitPurchasePrice/sellPrice sind in der Preisenheit des Produkts
+ * (Stück, Gramm, …) — siehe Product.pricingUnit.
+ */
 export function calculateUnitEconomics(input: {
   quantity: number;
   unitPurchasePrice: number;
@@ -145,7 +149,7 @@ export function calculateUnitEconomics(input: {
 
   waterfall.push({
     id: "margin",
-    label: "Nettomarge / Stück",
+    label: "Nettomarge / Einheit",
     amountPerUnit: contributionPerUnit,
     runningTotal: contributionPerUnit,
     kind: "margin",

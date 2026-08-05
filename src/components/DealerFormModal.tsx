@@ -2,13 +2,9 @@
 
 import { useEffect, useState } from "react";
 import type { Dealer, DealerChannel, DealerStatus } from "@/lib/types";
-import {
-  COUNTRIES,
-  DEALER_CHANNEL_LABELS,
-  DEALER_STATUS_LABELS,
-  SALES_PHASES,
-} from "@/lib/types";
+import { COUNTRIES, SALES_PHASES } from "@/lib/types";
 import { createId, formatEuro } from "@/lib/format";
+import { useI18n } from "@/hooks/useI18n";
 import { CostItemEditor } from "@/components/CostItemEditor";
 import {
   Button,
@@ -52,6 +48,8 @@ export function DealerFormModal({
   onClose,
   onSave,
 }: Props) {
+  const { t, locale, dealerChannelLabel, dealerStatusLabel, countryLabel } =
+    useI18n();
   const [draft, setDraft] = useState<Dealer>(emptyDealer());
 
   useEffect(() => {
@@ -78,8 +76,8 @@ export function DealerFormModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={isEdit ? "Händler bearbeiten" : "Neuen Händler anlegen"}
-      description="Verkaufspreis und Vertriebskosten werden bei der Charge übernommen."
+      title={isEdit ? t("dealerModal.editTitle") : t("dealerModal.createTitle")}
+      description={t("dealerModal.description")}
       wide
     >
       <form
@@ -90,15 +88,15 @@ export function DealerFormModal({
         }}
       >
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Name" required>
+          <Field label={t("dealerModal.name")} required>
             <TextInput
               autoFocus
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-              placeholder="z. B. MediaMarkt Saturn"
+              placeholder={t("dealerModal.namePlaceholder")}
             />
           </Field>
-          <Field label="Kanal" required>
+          <Field label={t("dealerModal.channel")} required>
             <Select
               value={draft.channel}
               onChange={(e) =>
@@ -108,29 +106,29 @@ export function DealerFormModal({
                 })
               }
             >
-              {(Object.keys(DEALER_CHANNEL_LABELS) as DealerChannel[]).map(
-                (key) => (
-                  <option key={key} value={key}>
-                    {DEALER_CHANNEL_LABELS[key]}
-                  </option>
-                ),
-              )}
-            </Select>
-          </Field>
-          <Field label="Land">
-            <Select
-              value={draft.country}
-              onChange={(e) => setDraft({ ...draft, country: e.target.value })}
-            >
-              <option value="">Land wählen…</option>
-              {COUNTRIES.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.name}
+              {(
+                ["b2b", "retail", "marketplace", "online", "other"] as DealerChannel[]
+              ).map((key) => (
+                <option key={key} value={key}>
+                  {dealerChannelLabel(key)}
                 </option>
               ))}
             </Select>
           </Field>
-          <Field label="Status">
+          <Field label={t("dealerModal.country")}>
+            <Select
+              value={draft.country}
+              onChange={(e) => setDraft({ ...draft, country: e.target.value })}
+            >
+              <option value="">{t("dealerModal.selectCountry")}</option>
+              {COUNTRIES.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {countryLabel(c.code)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label={t("dealerModal.status")}>
             <Select
               value={draft.status}
               onChange={(e) =>
@@ -140,16 +138,14 @@ export function DealerFormModal({
                 })
               }
             >
-              {(Object.keys(DEALER_STATUS_LABELS) as DealerStatus[]).map(
-                (key) => (
-                  <option key={key} value={key}>
-                    {DEALER_STATUS_LABELS[key]}
-                  </option>
-                ),
-              )}
+              {(["active", "inactive"] as DealerStatus[]).map((key) => (
+                <option key={key} value={key}>
+                  {dealerStatusLabel(key)}
+                </option>
+              ))}
             </Select>
           </Field>
-          <Field label="Ansprechpartner">
+          <Field label={t("dealerModal.contactName")}>
             <TextInput
               value={draft.contactName}
               onChange={(e) =>
@@ -157,31 +153,31 @@ export function DealerFormModal({
               }
             />
           </Field>
-          <Field label="E-Mail">
+          <Field label={t("dealerModal.email")}>
             <TextInput
               type="email"
               value={draft.email}
               onChange={(e) => setDraft({ ...draft, email: e.target.value })}
             />
           </Field>
-          <Field label="Telefon">
+          <Field label={t("dealerModal.phone")}>
             <TextInput
               value={draft.phone}
               onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
             />
           </Field>
-          <Field label="Zahlungskonditionen">
+          <Field label={t("dealerModal.paymentTerms")}>
             <TextInput
               value={draft.paymentTerms}
               onChange={(e) =>
                 setDraft({ ...draft, paymentTerms: e.target.value })
               }
-              placeholder="z. B. 30 Tage"
+              placeholder={t("dealerModal.paymentTermsPlaceholder")}
             />
           </Field>
           <Field
-            label="Standard-Verkaufspreis / Stück (€)"
-            hint="Wird beim Auswählen in der Charge vorausgefüllt."
+            label={t("dealerModal.defaultSellPrice")}
+            hint={t("dealerModal.defaultSellPriceHint")}
           >
             <TextInput
               type="number"
@@ -200,9 +196,9 @@ export function DealerFormModal({
           {draft.defaultSellPrice > 0 ? (
             <div className="flex items-end">
               <p className="pb-2 text-[12px] text-muted">
-                Vorschau:{" "}
+                {t("dealerModal.preview")}{" "}
                 <span className="font-medium tabular-nums text-foreground">
-                  {formatEuro(draft.defaultSellPrice)}
+                  {formatEuro(draft.defaultSellPrice, locale)}
                 </span>
               </p>
             </div>
@@ -211,7 +207,7 @@ export function DealerFormModal({
 
         <div className="rounded-[10px] border border-line bg-surface-faint p-3.5">
           <CostItemEditor
-            title="Standard-Vertriebskosten"
+            title={t("dealerModal.defaultSalesCosts")}
             items={draft.salesCostItems}
             onChange={(salesCostItems) =>
               setDraft({ ...draft, salesCostItems })
@@ -220,12 +216,11 @@ export function DealerFormModal({
             percentOfRevenue
           />
           <p className="mt-2 text-[12px] text-muted-soft">
-            Diese Kosten werden übernommen, sobald der Händler an einer Charge
-            gewählt wird.
+            {t("dealerModal.salesCostsHint")}
           </p>
         </div>
 
-        <Field label="Notizen">
+        <Field label={t("dealerModal.notes")}>
           <TextArea
             value={draft.notes}
             onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
@@ -234,10 +229,10 @@ export function DealerFormModal({
         </Field>
         <div className="flex justify-end gap-2 border-t border-line pt-4">
           <Button type="button" variant="secondary" onClick={onClose}>
-            Abbrechen
+            {t("common.cancel")}
           </Button>
           <Button type="submit" disabled={!draft.name.trim()}>
-            Speichern
+            {t("common.save")}
           </Button>
         </div>
       </form>
