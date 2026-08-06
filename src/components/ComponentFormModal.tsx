@@ -17,7 +17,7 @@ import {
   TextInput,
 } from "@/components/ui";
 
-export function emptyProduct(supplierId: string): Product {
+export function emptyComponent(supplierId = ""): Product {
   return {
     id: createId("prd"),
     supplierId,
@@ -43,7 +43,7 @@ type Props = {
   lockSupplier?: boolean;
 };
 
-export function ProductFormModal({
+export function ComponentFormModal({
   open,
   initial,
   suppliers,
@@ -70,13 +70,13 @@ export function ProductFormModal({
   }, [open]);
 
   const title = isEdit
-    ? t("productModal.editTitle")
-    : t("productModal.createTitle");
+    ? t("componentModal.editTitle")
+    : t("componentModal.createTitle");
 
   if (!draft) {
     return (
       <Modal open={open} onClose={onClose} title={title}>
-        <p className="text-[13px] text-muted">{t("productModal.noDraft")}</p>
+        <p className="text-[13px] text-muted">{t("componentModal.noDraft")}</p>
       </Modal>
     );
   }
@@ -98,8 +98,8 @@ export function ProductFormModal({
   }
 
   function handleSave() {
-    if (!draft || !draft.name.trim() || !draft.supplierId) return;
-    onSave({ ...draft, name: draft.name.trim() });
+    if (!draft || !draft.name.trim()) return;
+    onSave({ ...draft, name: draft.name.trim(), supplierId: draft.supplierId || "" });
     onClose();
   }
 
@@ -108,12 +108,15 @@ export function ProductFormModal({
       open={open}
       onClose={onClose}
       title={title}
-      description={t("productModal.description")}
+      description={t("componentModal.description")}
       wide
     >
       <div className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label={t("productModal.supplier")} required>
+          <Field
+            label={t("componentModal.supplier")}
+            hint={t("componentModal.supplierOptionalHint")}
+          >
             <Select
               value={draft.supplierId}
               onChange={(e) =>
@@ -121,7 +124,7 @@ export function ProductFormModal({
               }
               disabled={lockSupplier}
             >
-              <option value="">{t("productModal.supplierPlaceholder")}</option>
+              <option value="">{t("componentModal.supplierNone")}</option>
               {suppliers.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -129,24 +132,24 @@ export function ProductFormModal({
               ))}
             </Select>
           </Field>
-          <Field label={t("productModal.name")} required>
+          <Field label={t("componentModal.name")} required>
             <TextInput
               autoFocus
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-              placeholder={t("productModal.namePlaceholder")}
+              placeholder={t("componentModal.namePlaceholder")}
             />
           </Field>
-          <Field label={t("productModal.sku")}>
+          <Field label={t("componentModal.sku")}>
             <TextInput
               value={draft.sku}
               onChange={(e) => setDraft({ ...draft, sku: e.target.value })}
-              placeholder={t("productModal.skuPlaceholder")}
+              placeholder={t("componentModal.skuPlaceholder")}
             />
           </Field>
           <Field
-            label={t("productModal.pricingUnit")}
-            hint={t("productModal.pricingUnitHint")}
+            label={t("componentModal.pricingUnit")}
+            hint={t("componentModal.pricingUnitHint")}
           >
             <Select
               value={draft.pricingUnit}
@@ -165,7 +168,7 @@ export function ProductFormModal({
             </Select>
           </Field>
           <Field
-            label={t("productModal.unitPrice", {
+            label={t("componentModal.unitPrice", {
               unit: pricingUnitLabel(draft.pricingUnit),
             })}
           >
@@ -195,29 +198,25 @@ export function ProductFormModal({
               onChange={(e) =>
                 setDraft({ ...draft, moq: Number(e.target.value) || 0 })
               }
-              placeholder={t("productModal.moqPlaceholder")}
+              placeholder={t("componentModal.moqPlaceholder")}
             />
           </Field>
         </div>
 
-        {supplier ? (
-          <CommercialOverridesEditor
-            value={pickCommercialOverrides(draft)}
-            inherited={inherited}
-            resolved={commercial}
-            parentLabel={supplier.name}
-            onChange={(next) => setDraft({ ...draft, ...next })}
-          />
-        ) : (
-          <p className="text-[13px] text-muted">
-            {t("productModal.pickSupplierForTerms")}
-          </p>
-        )}
+        <CommercialOverridesEditor
+          value={pickCommercialOverrides(draft)}
+          inherited={inherited}
+          resolved={commercial}
+          parentLabel={
+            supplier?.name ?? t("componentModal.defaultTermsParent")
+          }
+          onChange={(next) => setDraft({ ...draft, ...next })}
+        />
 
         <div>
           <div className="mb-2 flex items-center justify-between">
             <p className="text-[12px] font-medium text-muted">
-              {t("productModal.tiers")}
+              {t("componentModal.tiers")}
             </p>
             <Button
               variant="ghost"
@@ -231,18 +230,18 @@ export function ProductFormModal({
                 })
               }
             >
-              {t("productModal.addTier")}
+              {t("componentModal.addTier")}
             </Button>
           </div>
           {draft.discountTiers.length === 0 ? (
             <p className="text-[13px] text-muted-soft">
-              {t("productModal.noTiers")}
+              {t("componentModal.noTiers")}
             </p>
           ) : (
             <ul className="space-y-2">
               {draft.discountTiers.map((tier, i) => (
                 <li key={i} className="flex flex-wrap items-end gap-2">
-                  <Field label={t("productModal.tierMinQty")}>
+                  <Field label={t("componentModal.tierMinQty")}>
                     <TextInput
                       type="number"
                       value={tier.minQty || ""}
@@ -253,7 +252,7 @@ export function ProductFormModal({
                       }
                     />
                   </Field>
-                  <Field label={t("productModal.tierDiscount")}>
+                  <Field label={t("componentModal.tierDiscount")}>
                     <TextInput
                       type="number"
                       step="0.1"

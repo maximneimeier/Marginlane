@@ -12,6 +12,8 @@ const links = [
   { href: "/overview", key: "nav.overview" as const, icon: OverviewIcon },
   { href: "/suppliers", key: "nav.suppliers" as const, icon: SuppliersIcon },
   { href: "/products", key: "nav.products" as const, icon: ProductsIcon },
+  { href: "/components", key: "nav.components" as const, icon: ComponentsIcon },
+  { href: "/overhead", key: "nav.overhead" as const, icon: OverheadIcon },
   { href: "/dealers", key: "nav.dealers" as const, icon: DealersIcon },
   { href: "/batches", key: "nav.batches" as const, icon: BatchesIcon },
   { href: "/compare", key: "nav.compare" as const, icon: CompareIcon },
@@ -180,6 +182,26 @@ function ProductsIcon({ active }: { active: boolean }) {
         strokeLinejoin="round"
       />
       <path d="M7.5 7.5V13.1M7.5 7.5 2.7 5.1M7.5 7.5l4.8-2.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function ComponentsIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={active ? "text-accent" : "text-muted-soft"}>
+      <rect x="2.25" y="2.25" width="4.5" height="4.5" rx="1" stroke="currentColor" strokeWidth="1.3" />
+      <rect x="8.25" y="2.25" width="4.5" height="4.5" rx="1" stroke="currentColor" strokeWidth="1.3" />
+      <rect x="2.25" y="8.25" width="4.5" height="4.5" rx="1" stroke="currentColor" strokeWidth="1.3" />
+      <rect x="8.25" y="8.25" width="4.5" height="4.5" rx="1" stroke="currentColor" strokeWidth="1.3" />
+    </svg>
+  );
+}
+
+function OverheadIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={active ? "text-accent" : "text-muted-soft"}>
+      <rect x="2.25" y="2.25" width="10.5" height="10.5" rx="2" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M4.5 7.5h6M7.5 4.5v6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   );
 }

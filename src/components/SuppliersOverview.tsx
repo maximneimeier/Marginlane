@@ -35,7 +35,7 @@ type Props = {
   onDelete: (supplier: Supplier) => void;
   onAddProduct: (supplierId: string) => void;
   onEditProduct: (product: Product) => void;
-  onResetDemo: () => void;
+  onClearData: () => void;
   productsOf: (supplierId: string) => Product[];
 };
 
@@ -46,7 +46,7 @@ export function SuppliersOverview({
   onDelete,
   onAddProduct,
   onEditProduct,
-  onResetDemo,
+  onClearData,
   productsOf,
 }: Props) {
   const { t, plural, locale, supplierStatusLabel, optionalColLabel, countryLabel, pricingUnitLabel } =
@@ -201,8 +201,8 @@ export function SuppliersOverview({
               {t("suppliers.view.cards")}
             </button>
           </div>
-          <Button variant="secondary" onClick={onResetDemo}>
-            {t("suppliers.demo")}
+          <Button variant="secondary" onClick={onClearData}>
+            {t("suppliers.clearData")}
           </Button>
           <Button onClick={onCreate}>{t("suppliers.add")}</Button>
         </div>
@@ -732,16 +732,16 @@ function ExpandedProducts({
           <table className="w-full min-w-[780px] text-left text-[12px]">
             <thead>
               <tr className="border-b border-line text-[10px] font-medium uppercase tracking-[0.04em] text-muted-soft">
-                <th className="px-3 py-2 font-medium">{t("products.col.product")}</th>
-                <th className="px-3 py-2 font-medium">{t("products.col.sku")}</th>
-                <th className="px-3 py-2 text-right font-medium">{t("products.col.price")}</th>
-                <th className="px-3 py-2 text-right font-medium">{t("products.col.moq")}</th>
+                <th className="px-3 py-2 font-medium">{t("components.col.product")}</th>
+                <th className="px-3 py-2 font-medium">{t("components.col.sku")}</th>
+                <th className="px-3 py-2 text-right font-medium">{t("components.col.price")}</th>
+                <th className="px-3 py-2 text-right font-medium">{t("components.col.moq")}</th>
                 <th className="px-3 py-2 text-right font-medium">
-                  {t("products.col.avgLanded")}
+                  {t("components.col.avgLanded")}
                 </th>
-                <th className="px-3 py-2 text-right font-medium">{t("products.col.batches")}</th>
-                <th className="px-3 py-2 font-medium">{t("products.col.lastOrder")}</th>
-                <th className="px-3 py-2 text-right font-medium">{t("products.col.avgMargin")}</th>
+                <th className="px-3 py-2 text-right font-medium">{t("components.col.batches")}</th>
+                <th className="px-3 py-2 font-medium">{t("components.col.lastOrder")}</th>
+                <th className="px-3 py-2 text-right font-medium">{t("components.col.avgMargin")}</th>
               </tr>
             </thead>
             <tbody>
@@ -764,13 +764,13 @@ function ExpandedProducts({
                     </td>
                     <td className="px-3 py-2 text-muted">{p.sku || t("common.emDash")}</td>
                     <td className="px-3 py-2 text-right tabular-nums">
-                      {t("products.priceWithUnit", {
+                      {t("components.priceWithUnit", {
                         price: formatEuro(p.unitPrice),
                         unit,
                       })}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-muted">
-                      {t("products.moqWithUnit", {
+                      {t("components.moqWithUnit", {
                         count: p.moq.toLocaleString(locale),
                         unit,
                       })}

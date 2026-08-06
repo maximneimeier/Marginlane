@@ -84,7 +84,7 @@ export default function ChargeDetailPage({ id }: { id: string }) {
     <main>
       <PageHeader
         title={batch.label}
-        description={`${product?.name ?? t("products.col.product")} · ${supplier?.name ?? t("batchModal.supplier")} · ${t("batches.qty", { count: batch.quantity.toLocaleString(locale), unit })}`}
+        description={`${product?.name ?? t("components.col.product")} · ${supplier?.name ?? t("batchModal.supplier")} · ${t("batches.qty", { count: batch.quantity.toLocaleString(locale), unit })}`}
         action={
           <div className="flex gap-2">
             {editing ? (

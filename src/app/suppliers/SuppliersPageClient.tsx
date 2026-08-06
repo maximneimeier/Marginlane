@@ -8,9 +8,9 @@ import {
   emptySupplier,
 } from "@/components/SupplierFormModal";
 import {
-  ProductFormModal,
-  emptyProduct,
-} from "@/components/ProductFormModal";
+  ComponentFormModal,
+  emptyComponent,
+} from "@/components/ComponentFormModal";
 import { SuppliersOverview } from "@/components/SuppliersOverview";
 import { useI18n } from "@/hooks/useI18n";
 
@@ -21,7 +21,7 @@ export default function LieferantenPage() {
     upsertSupplier,
     deleteSupplier,
     upsertProduct,
-    resetDemo,
+    clearData,
   } = useStore();
   const { t } = useI18n();
   const [supplierModal, setSupplierModal] = useState<{
@@ -58,11 +58,11 @@ export default function LieferantenPage() {
           upsertSupplier(supplier);
         }}
         onAddProduct={(supplierId) => {
-          setProductDraft(emptyProduct(supplierId));
+          setProductDraft(emptyComponent(supplierId));
         }}
       />
 
-      <ProductFormModal
+      <ComponentFormModal
         open={Boolean(productDraft)}
         initial={productDraft}
         suppliers={data.suppliers}
@@ -81,12 +81,14 @@ export default function LieferantenPage() {
           deleteSupplier(supplier.id);
         }}
         onAddProduct={(supplierId) => {
-          setProductDraft(emptyProduct(supplierId));
+          setProductDraft(emptyComponent(supplierId));
         }}
         onEditProduct={(product) => {
           setProductDraft(product);
         }}
-        onResetDemo={resetDemo}
+        onClearData={() => {
+          void clearData();
+        }}
         productsOf={(supplierId) =>
           data.products.filter((p) => p.supplierId === supplierId)
         }

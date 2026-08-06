@@ -116,7 +116,7 @@ export function defaultOverviewRange(now = new Date()): DateRange {
   return rangeForPreset("this_year", now);
 }
 
-function inRange(iso: string, range: DateRange): boolean {
+export function inRange(iso: string, range: DateRange): boolean {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return false;
   const from = parseDateInput(range.from);
@@ -380,8 +380,8 @@ export function buildOverview(
   };
 }
 
-/** Explicit column in the Sankey: cost sits next to its related DB. */
-export type SankeyNodeId =
+/** Fixed metric nodes in the contribution Sankey. */
+export type SankeyMetricId =
   | "revenue"
   | "material"
   | "db1"
@@ -391,16 +391,23 @@ export type SankeyNodeId =
   | "sales"
   | "db3";
 
+/** @deprecated Use SankeyMetricId */
+export type SankeyNodeId = SankeyMetricId;
+
 export type ContributionSankeyNode = {
-  id: SankeyNodeId;
-  /** 0 = Revenue, 1 = Material+DB1, 2 = Logistics+DB2, 3 = Marketing+Sales+DB3 */
+  /** Metric id or `product:<id>` */
+  id: string;
+  /** Display label for products; metrics use i18n in the UI */
+  label?: string;
+  metricId?: SankeyMetricId;
   depth: number;
   value: number;
+  kind: "product" | "metric";
 };
 
 export type ContributionSankeyLink = {
-  source: SankeyNodeId;
-  target: SankeyNodeId;
+  source: string;
+  target: string;
   value: number;
 };
 
@@ -421,6 +428,10 @@ function nearly(a: number, b: number) {
   return Math.abs(a - b) <= EPS;
 }
 
+export function productSankeyId(productId: string): string {
+  return `product:${productId}`;
+}
+
 /**
  * Verifies the DB cascade identities used by waterfall + sankey.
  */
@@ -432,24 +443,40 @@ export function verifyContributionIdentity(kpis: OverviewKpis): ContributionIden
 }
 
 /**
- * Sankey flow for contribution margin:
- *   Revenue → Material + DB1
- *   DB1 → Logistics + DB2
- *   DB2 → Marketing + Sales + DB3
+ * Sankey flow for contribution margin.
  *
- * Cost nodes share the same depth as their related DB so they appear
- * as the “parts” under that stage.
+ * When products contribute revenue, they appear left of Revenue:
+ *   Product A/B/C → Revenue → Material + DB1 → …
  */
-export function buildContributionSankey(kpis: OverviewKpis): {
+export function buildContributionSankey(
+  kpis: OverviewKpis,
+  products: BreakdownRow[] = [],
+): {
   nodes: ContributionSankeyNode[];
   links: ContributionSankeyLink[];
 } {
   const { revenue, material, logistics, marketing, sales, db1, db2, db3 } =
     kpis;
 
+  const productSources = products
+    .filter((p) => p.revenue > 0)
+    .sort((a, b) => b.revenue - a.revenue);
+
+  const showProducts = productSources.length >= 1;
+  const depthOffset = showProducts ? 1 : 0;
+
   const links: ContributionSankeyLink[] = [];
 
-  // Stage 1 — parts under DB1: Material | DB1
+  if (showProducts) {
+    for (const p of productSources) {
+      links.push({
+        source: productSankeyId(p.id),
+        target: "revenue",
+        value: p.revenue,
+      });
+    }
+  }
+
   if (revenue > 0) {
     if (db1 > 0) {
       if (material > 0) {
@@ -465,7 +492,6 @@ export function buildContributionSankey(kpis: OverviewKpis): {
     }
   }
 
-  // Stage 2 — parts under DB2: Logistics | DB2
   if (db1 > 0) {
     if (db2 > 0) {
       if (logistics > 0) {
@@ -481,7 +507,6 @@ export function buildContributionSankey(kpis: OverviewKpis): {
     }
   }
 
-  // Stage 3 — parts under DB3: Marketing | Sales | DB3
   if (db2 > 0) {
     let remaining = db2;
     if (marketing > 0) {
@@ -503,7 +528,18 @@ export function buildContributionSankey(kpis: OverviewKpis): {
     }
   }
 
-  const valueById: Partial<Record<SankeyNodeId, number>> = {
+  const metricDepth: Record<SankeyMetricId, number> = {
+    revenue: 0 + depthOffset,
+    material: 1 + depthOffset,
+    db1: 1 + depthOffset,
+    logistics: 2 + depthOffset,
+    db2: 2 + depthOffset,
+    marketing: 3 + depthOffset,
+    sales: 3 + depthOffset,
+    db3: 3 + depthOffset,
+  };
+
+  const metricValue: Record<SankeyMetricId, number> = {
     revenue,
     material,
     db1,
@@ -514,24 +550,29 @@ export function buildContributionSankey(kpis: OverviewKpis): {
     db3: Math.max(db3, 0),
   };
 
-  const depthById: Record<SankeyNodeId, number> = {
-    revenue: 0,
-    material: 1,
-    db1: 1,
-    logistics: 2,
-    db2: 2,
-    marketing: 3,
-    sales: 3,
-    db3: 3,
-  };
-
-  const used = new Set<SankeyNodeId>();
+  const used = new Set<string>();
   for (const l of links) {
     used.add(l.source);
     used.add(l.target);
   }
 
-  const order: SankeyNodeId[] = [
+  const nodes: ContributionSankeyNode[] = [];
+
+  if (showProducts) {
+    for (const p of productSources) {
+      const id = productSankeyId(p.id);
+      if (!used.has(id)) continue;
+      nodes.push({
+        id,
+        label: p.name,
+        depth: 0,
+        value: p.revenue,
+        kind: "product",
+      });
+    }
+  }
+
+  const metricOrder: SankeyMetricId[] = [
     "revenue",
     "material",
     "db1",
@@ -542,13 +583,16 @@ export function buildContributionSankey(kpis: OverviewKpis): {
     "db3",
   ];
 
-  const nodes: ContributionSankeyNode[] = order
-    .filter((id) => used.has(id))
-    .map((id) => ({
-      id,
-      depth: depthById[id],
-      value: valueById[id] ?? 0,
-    }));
+  for (const mid of metricOrder) {
+    if (!used.has(mid)) continue;
+    nodes.push({
+      id: mid,
+      metricId: mid,
+      depth: metricDepth[mid],
+      value: metricValue[mid],
+      kind: "metric",
+    });
+  }
 
   return { nodes, links };
 }

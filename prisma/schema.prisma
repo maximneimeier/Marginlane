@@ -1,0 +1,17 @@
+// Marginlane workspace data (AppData as JSON document)
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// Single-tenant workspace snapshot — mirrors the previous localStorage AppData.
+model Workspace {
+  id        String   @id @default("default")
+  data      Json
+  updatedAt DateTime @updatedAt
+}

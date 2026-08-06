@@ -114,6 +114,25 @@ export type Product = {
   createdAt: string;
 };
 
+/** Verkaufsprodukt (Katalog) — was das Unternehmen verkauft */
+export type CatalogProductStatus = "active" | "inactive";
+
+export type CatalogProduct = {
+  id: string;
+  name: string;
+  sku: string;
+  /** Verkaufspreis pro pricingUnit */
+  sellPrice: number;
+  pricingUnit: PricingUnit;
+  currency: string;
+  status: CatalogProductStatus;
+  category: string;
+  /** Optional Zielmarge in Prozent (z. B. 35 = 35%) */
+  targetMarginPercent: number | null;
+  notes: string;
+  createdAt: string;
+};
+
 /**
  * Spec-ER: Batch 1 — 1 SalesData.
  * Verkaufspreis, Menge, Kanal und Vertriebskosten sitzen hier —
@@ -205,11 +224,42 @@ export type Batch = {
   createdAt: string;
 };
 
+/** Wiederkehrende Gemeinkosten-Position (Unternehmensoverhead) */
+export type OverheadPeriod = "monatlich" | "quartalsweise" | "jaehrlich";
+export type OverheadCategory = "verwaltung" | "vertrieb_fix" | "sonstige";
+export type OverheadAllocation =
+  | "gleichmaessig"
+  | "nach_umsatzanteil"
+  | "nach_stueckzahl"
+  | "manuell";
+
+export type OverheadManualShare = {
+  productId: string;
+  percent: number;
+};
+
+export type OverheadItem = {
+  id: string;
+  name: string;
+  betrag: number;
+  waehrung: string;
+  periode: OverheadPeriod;
+  kategorie: OverheadCategory;
+  verteilschluessel: OverheadAllocation;
+  /** Nur bei verteilschluessel = manuell; Summe der Prozente = 100 */
+  manuelleAufteilung: OverheadManualShare[] | null;
+  createdAt: string;
+};
+
 export type AppData = {
   suppliers: Supplier[];
+  /** Beschaffungs-Komponenten (bestellbar) */
   products: Product[];
+  /** Verkaufskatalog */
+  catalogProducts: CatalogProduct[];
   dealers: Dealer[];
   batches: Batch[];
+  overheadItems: OverheadItem[];
 };
 
 export const COST_TYPE_PRESETS = [
@@ -332,11 +382,32 @@ export const COUNTRIES = [
   { code: "HU", name: "Ungarn" },
 ] as const;
 
+export const OVERHEAD_PERIODS: OverheadPeriod[] = [
+  "monatlich",
+  "quartalsweise",
+  "jaehrlich",
+];
+
+export const OVERHEAD_CATEGORIES: OverheadCategory[] = [
+  "verwaltung",
+  "vertrieb_fix",
+  "sonstige",
+];
+
+export const OVERHEAD_ALLOCATIONS: OverheadAllocation[] = [
+  "gleichmaessig",
+  "nach_umsatzanteil",
+  "nach_stueckzahl",
+  "manuell",
+];
+
 export const EMPTY_DATA: AppData = {
   suppliers: [],
   products: [],
+  catalogProducts: [],
   dealers: [],
   batches: [],
+  overheadItems: [],
 };
 
 export function formatPaymentTerms(s: {

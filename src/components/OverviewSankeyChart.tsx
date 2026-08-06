@@ -5,9 +5,9 @@ import dynamic from "next/dynamic";
 import type { EChartsOption } from "echarts";
 import {
   buildContributionSankey,
-  verifyContributionIdentity,
+  type BreakdownRow,
   type OverviewKpis,
-  type SankeyNodeId,
+  type SankeyMetricId,
 } from "@/lib/overview";
 import { formatEuro } from "@/lib/format";
 import { useI18n } from "@/hooks/useI18n";
@@ -19,7 +19,7 @@ const ReactECharts = dynamic(() => import("echarts-for-react"), {
   ),
 });
 
-const NODE_COLORS: Record<SankeyNodeId, string> = {
+const METRIC_COLORS: Record<SankeyMetricId, string> = {
   revenue: "#266df0",
   material: "#e5484d",
   logistics: "#e5484d",
@@ -30,11 +30,28 @@ const NODE_COLORS: Record<SankeyNodeId, string> = {
   db3: "#0fc27b",
 };
 
-export function OverviewSankeyChart({ kpis }: { kpis: OverviewKpis }) {
+const PRODUCT_PALETTE = [
+  "#5b8def",
+  "#7aa2f7",
+  "#3d6fd8",
+  "#8bb4ff",
+  "#4a7ae0",
+  "#6b9aef",
+  "#9ec0ff",
+  "#2f5fc4",
+];
+
+export function OverviewSankeyChart({
+  kpis,
+  products,
+}: {
+  kpis: OverviewKpis;
+  products: BreakdownRow[];
+}) {
   const { t, locale } = useI18n();
 
-  const labelMap = useMemo(
-    (): Record<SankeyNodeId, string> => ({
+  const metricLabels = useMemo(
+    (): Record<SankeyMetricId, string> => ({
       revenue: t("overviewPage.wf.revenue"),
       material: t("overviewPage.wf.material").replace(/^−\s*/, ""),
       logistics: t("overviewPage.wf.logistics").replace(/^−\s*/, ""),
@@ -48,13 +65,30 @@ export function OverviewSankeyChart({ kpis }: { kpis: OverviewKpis }) {
   );
 
   const { nodes, links } = useMemo(
-    () => buildContributionSankey(kpis),
-    [kpis],
+    () => buildContributionSankey(kpis, products),
+    [kpis, products],
   );
-  const identity = useMemo(() => verifyContributionIdentity(kpis), [kpis]);
+
+  const displayName = useMemo(() => {
+    const map = new Map<string, string>();
+    const used = new Set<string>();
+    for (const n of nodes) {
+      let name =
+        n.kind === "product"
+          ? (n.label ?? n.id)
+          : metricLabels[n.metricId ?? "revenue"];
+      // Ensure unique ECharts node names
+      if (used.has(name)) {
+        name = `${name} (${n.id.slice(-4)})`;
+      }
+      used.add(name);
+      map.set(n.id, name);
+    }
+    return map;
+  }, [nodes, metricLabels]);
 
   const option = useMemo<EChartsOption>(() => {
-    const label = (id: SankeyNodeId) => labelMap[id];
+    let productColorIdx = 0;
 
     return {
       tooltip: {
@@ -86,30 +120,37 @@ export function OverviewSankeyChart({ kpis }: { kpis: OverviewKpis }) {
           type: "sankey",
           emphasis: { focus: "adjacency" },
           nodeAlign: "left",
-          nodeGap: 18,
-          nodeWidth: 18,
+          nodeGap: 14,
+          nodeWidth: 16,
           layoutIterations: 0,
-          data: nodes.map((n) => ({
-            name: label(n.id),
-            depth: n.depth,
-            amount: n.value,
-            itemStyle: {
-              color:
-                n.id === "db3" && kpis.db3 < 0
+          data: nodes.map((n) => {
+            const name = displayName.get(n.id) ?? n.id;
+            const color =
+              n.kind === "product"
+                ? PRODUCT_PALETTE[productColorIdx++ % PRODUCT_PALETTE.length]
+                : n.metricId === "db3" && kpis.db3 < 0
                   ? "#e5484d"
-                  : NODE_COLORS[n.id],
-              borderWidth: 0,
-            },
-            label: {
-              formatter: `{b}\n${formatEuro(n.value, locale)}`,
-              fontSize: 10,
-              lineHeight: 14,
-              color: "#1c1d1f",
-            },
-          })),
+                  : METRIC_COLORS[n.metricId ?? "revenue"];
+
+            return {
+              name,
+              depth: n.depth,
+              amount: n.value,
+              itemStyle: {
+                color,
+                borderWidth: 0,
+              },
+              label: {
+                formatter: `{b}\n${formatEuro(n.value, locale)}`,
+                fontSize: 10,
+                lineHeight: 14,
+                color: "#1c1d1f",
+              },
+            };
+          }),
           links: links.map((l) => ({
-            source: label(l.source),
-            target: label(l.target),
+            source: displayName.get(l.source) ?? l.source,
+            target: displayName.get(l.target) ?? l.target,
             value: l.value,
           })),
           lineStyle: {
@@ -123,7 +164,12 @@ export function OverviewSankeyChart({ kpis }: { kpis: OverviewKpis }) {
         },
       ],
     };
-  }, [nodes, links, labelMap, locale, kpis.db3]);
+  }, [nodes, links, displayName, locale, kpis.db3]);
+
+  const height = Math.max(
+    380,
+    280 + nodes.filter((n) => n.kind === "product").length * 28,
+  );
 
   if (links.length === 0) {
     return (
@@ -132,61 +178,13 @@ export function OverviewSankeyChart({ kpis }: { kpis: OverviewKpis }) {
   }
 
   return (
-    <div className="mt-2 w-full min-w-0 space-y-4">
+    <div className="mt-2 w-full min-w-0">
       <ReactECharts
         option={option}
-        style={{ height: 380, width: "100%" }}
+        style={{ height, width: "100%" }}
         opts={{ renderer: "svg" }}
         notMerge
       />
-
-      <div className="grid gap-2 rounded-[10px] border border-line bg-surface-faint px-3 py-2.5 sm:grid-cols-3">
-        <IdentityCheck
-          ok={identity.stage1}
-          title={t("overviewPage.sankey.stage1")}
-          detail={`${formatEuro(kpis.revenue, locale)} = ${formatEuro(kpis.material, locale)} + ${formatEuro(kpis.db1, locale)}`}
-        />
-        <IdentityCheck
-          ok={identity.stage2}
-          title={t("overviewPage.sankey.stage2")}
-          detail={`${formatEuro(kpis.db1, locale)} = ${formatEuro(kpis.logistics, locale)} + ${formatEuro(kpis.db2, locale)}`}
-        />
-        <IdentityCheck
-          ok={identity.stage3}
-          title={t("overviewPage.sankey.stage3")}
-          detail={`${formatEuro(kpis.db2, locale)} = ${formatEuro(kpis.marketing, locale)} + ${formatEuro(kpis.sales, locale)} + ${formatEuro(kpis.db3, locale)}`}
-        />
-      </div>
-    </div>
-  );
-}
-
-function IdentityCheck({
-  ok,
-  title,
-  detail,
-}: {
-  ok: boolean;
-  title: string;
-  detail: string;
-}) {
-  return (
-    <div className="min-w-0">
-      <p className="flex items-center gap-1.5 text-[12px] font-medium text-foreground">
-        <span
-          className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
-            ok ? "bg-success" : "bg-danger"
-          }`}
-          aria-hidden
-        />
-        {title}
-        <span className={`text-[11px] ${ok ? "text-success" : "text-danger"}`}>
-          {ok ? "✓" : "✗"}
-        </span>
-      </p>
-      <p className="mt-0.5 truncate text-[11px] tabular-nums text-muted" title={detail}>
-        {detail}
-      </p>
     </div>
   );
 }

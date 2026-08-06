@@ -26,8 +26,15 @@ export default function OverviewPage() {
 
   const [preset, setPreset] = useState<DatePreset>("this_year");
   const [range, setRange] = useState<DateRange>(() => defaultOverviewRange());
-  /** `null` = all products, `[]` = none, otherwise selected IDs */
-  const [selectedProductIds, setSelectedProductIds] = useState<string[] | null>(
+  /** Per-chart product filters (`null` = all). Independent of each other. */
+  const [waterfallProducts, setWaterfallProducts] = useState<string[] | null>(
+    null,
+  );
+  const [sankeyProducts, setSankeyProducts] = useState<string[] | null>(null);
+  const [breakdownProducts, setBreakdownProducts] = useState<string[] | null>(
+    null,
+  );
+  const [cashflowProducts, setCashflowProducts] = useState<string[] | null>(
     null,
   );
   const [breakdownMode, setBreakdownMode] = useState<BreakdownMode>("product");
@@ -37,9 +44,26 @@ export default function OverviewPage() {
     [data.products],
   );
 
-  const report = useMemo(
-    () => buildOverview(data, range, { productIds: selectedProductIds }),
-    [data, range, selectedProductIds],
+  /** KPIs: all products in date range */
+  const kpiReport = useMemo(
+    () => buildOverview(data, range, { productIds: null }),
+    [data, range],
+  );
+  const waterfallReport = useMemo(
+    () => buildOverview(data, range, { productIds: waterfallProducts }),
+    [data, range, waterfallProducts],
+  );
+  const sankeyReport = useMemo(
+    () => buildOverview(data, range, { productIds: sankeyProducts }),
+    [data, range, sankeyProducts],
+  );
+  const breakdownReport = useMemo(
+    () => buildOverview(data, range, { productIds: breakdownProducts }),
+    [data, range, breakdownProducts],
+  );
+  const cashflowReport = useMemo(
+    () => buildOverview(data, range, { productIds: cashflowProducts }),
+    [data, range, cashflowProducts],
   );
 
   if (!ready) {
@@ -58,13 +82,13 @@ export default function OverviewPage() {
     setRange((prev) => ({ ...prev, ...partial }));
   }
 
-  const allProductsSelected = selectedProductIds === null;
-
   const breakdown =
-    breakdownMode === "product" ? report.byProduct : report.bySupplier;
+    breakdownMode === "product"
+      ? breakdownReport.byProduct
+      : breakdownReport.bySupplier;
   const maxAbsDb3 = Math.max(...breakdown.map((r) => Math.abs(r.db3)), 1);
   const maxCash = Math.max(
-    ...report.cashFlow.flatMap((p) => [p.inflow, p.outflow]),
+    ...cashflowReport.cashFlow.flatMap((p) => [p.inflow, p.outflow]),
     1,
   );
 
@@ -77,7 +101,7 @@ export default function OverviewPage() {
 
       <Card className="!p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div className="grid flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid flex-1 gap-3 sm:grid-cols-3">
             <Field label={t("overviewPage.from")}>
               <TextInput
                 type="date"
@@ -107,177 +131,232 @@ export default function OverviewPage() {
                 <option value="custom">{t("overviewPage.preset.custom")}</option>
               </Select>
             </Field>
-            <Field label={t("overviewPage.products")}>
-              <ProductFilterDropdown
-                products={products}
-                value={selectedProductIds}
-                onChange={setSelectedProductIds}
-              />
-            </Field>
           </div>
           <p className="shrink-0 text-[12px] text-muted lg:pb-2">
-            {t("overviewPage.batchCount", { count: report.kpis.batchCount })}
-            {!allProductsSelected
-              ? selectedProductIds.length === 0
-                ? ` · ${t("overviewPage.productsHintNone")}`
-                : ` · ${t("overviewPage.productsHintSelected", {
-                    count: selectedProductIds.length,
-                  })}`
-              : null}
+            {t("overviewPage.batchCount", { count: kpiReport.kpis.batchCount })}
           </p>
         </div>
       </Card>
 
-      {report.kpis.uncategorized > 0 ? (
+      {kpiReport.kpis.uncategorized > 0 ? (
         <div className="rounded-[10px] border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[13px] text-amber-950">
           {t("overviewPage.uncategorizedWarning", {
-            amount: formatEuro(report.kpis.uncategorized, locale),
+            amount: formatEuro(kpiReport.kpis.uncategorized, locale),
           })}
         </div>
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <Kpi
-          label={t("overviewPage.kpi.revenue")}
-          value={formatEuro(report.kpis.revenue, locale)}
-        />
-        <Kpi
-          label={t("overviewPage.kpi.db1")}
-          value={formatEuro(report.kpis.db1, locale)}
-          hint={t("overviewPage.kpi.db1Hint")}
-        />
-        <Kpi
-          label={t("overviewPage.kpi.db2")}
-          value={formatEuro(report.kpis.db2, locale)}
-          hint={t("overviewPage.kpi.db2Hint")}
-        />
-        <Kpi
-          label={t("overviewPage.kpi.db3")}
-          value={formatEuro(report.kpis.db3, locale)}
-          hint={t("overviewPage.kpi.db3Hint")}
-          emphasize
-          positive={report.kpis.db3 >= 0}
-        />
-        <Kpi
-          label={t("overviewPage.kpi.margin")}
-          value={formatPercent(report.kpis.marginPercent, locale)}
-          hint={t("overviewPage.kpi.marginHint")}
-          positive={report.kpis.marginPercent >= 0}
-        />
-      </div>
-
-      <Card>
-        <h2 className="text-[14px] font-medium text-foreground">
-          {t("overviewPage.waterfallTitle")}
-        </h2>
-        <p className="mt-1 text-[12px] text-muted">
-          {t("overviewPage.waterfallHint")}
-        </p>
-        {report.kpis.batchCount === 0 ? (
-          <p className="mt-4 text-[13px] text-muted">{t("overviewPage.empty")}</p>
-        ) : (
-          <div className="mt-5">
-            <OverviewWaterfallChart steps={report.waterfall} />
+            <Kpi
+              label={t("overviewPage.kpi.revenue")}
+              value={formatEuro(kpiReport.kpis.revenue, locale)}
+            />
+            <Kpi
+              label={t("overviewPage.kpi.db1")}
+              value={formatEuro(kpiReport.kpis.db1, locale)}
+              hint={t("overviewPage.kpi.db1Hint")}
+            />
+            <Kpi
+              label={t("overviewPage.kpi.db2")}
+              value={formatEuro(kpiReport.kpis.db2, locale)}
+              hint={t("overviewPage.kpi.db2Hint")}
+            />
+            <Kpi
+              label={t("overviewPage.kpi.db3")}
+              value={formatEuro(kpiReport.kpis.db3, locale)}
+              hint={t("overviewPage.kpi.db3Hint")}
+              emphasize
+              positive={kpiReport.kpis.db3 >= 0}
+            />
+            <Kpi
+              label={t("overviewPage.kpi.margin")}
+              value={formatPercent(kpiReport.kpis.marginPercent, locale)}
+              hint={t("overviewPage.kpi.marginHint")}
+              positive={kpiReport.kpis.marginPercent >= 0}
+            />
           </div>
-        )}
-      </Card>
 
-      <Card>
-        <h2 className="text-[14px] font-medium text-foreground">
-          {t("overviewPage.sankeyTitle")}
-        </h2>
-        <p className="mt-1 text-[12px] text-muted">
-          {t("overviewPage.sankeyHint")}
-        </p>
-        {report.kpis.batchCount === 0 ? (
-          <p className="mt-4 text-[13px] text-muted">{t("overviewPage.empty")}</p>
-        ) : (
-          <OverviewSankeyChart kpis={report.kpis} />
-        )}
-      </Card>
+          <Card>
+            <ChartHeader
+              title={t("overviewPage.waterfallTitle")}
+              hint={t("overviewPage.waterfallHint")}
+              products={products}
+              productFilter={waterfallProducts}
+              onProductFilterChange={setWaterfallProducts}
+              productLabel={t("overviewPage.products")}
+            />
+            {waterfallReport.kpis.batchCount === 0 ? (
+              <p className="mt-4 text-[13px] text-muted">
+                {t("overviewPage.empty")}
+              </p>
+            ) : (
+              <div className="mt-5">
+                <OverviewWaterfallChart steps={waterfallReport.waterfall} />
+              </div>
+            )}
+          </Card>
 
-      <Card>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="text-[14px] font-medium text-foreground">
-              {t("overviewPage.breakdownTitle")}
-            </h2>
-            <p className="mt-1 text-[12px] text-muted">
-              {t("overviewPage.breakdownHint")}
-            </p>
-          </div>
-          <div className="flex gap-1 rounded-[8px] border border-line bg-surface-faint p-0.5">
-            <ModeButton
-              active={breakdownMode === "product"}
-              onClick={() => setBreakdownMode("product")}
-            >
-              {t("overviewPage.byProduct")}
-            </ModeButton>
-            <ModeButton
-              active={breakdownMode === "supplier"}
-              onClick={() => setBreakdownMode("supplier")}
-            >
-              {t("overviewPage.bySupplier")}
-            </ModeButton>
-          </div>
-        </div>
+          <Card>
+            <ChartHeader
+              title={t("overviewPage.sankeyTitle")}
+              hint={t("overviewPage.sankeyHint")}
+              products={products}
+              productFilter={sankeyProducts}
+              onProductFilterChange={setSankeyProducts}
+              productLabel={t("overviewPage.products")}
+            />
+            {sankeyReport.kpis.batchCount === 0 ? (
+              <p className="mt-4 text-[13px] text-muted">
+                {t("overviewPage.empty")}
+              </p>
+            ) : (
+              <OverviewSankeyChart
+                kpis={sankeyReport.kpis}
+                products={sankeyReport.byProduct}
+              />
+            )}
+          </Card>
 
-        {breakdown.length === 0 ? (
-          <p className="text-[13px] text-muted">{t("overviewPage.empty")}</p>
-        ) : (
-          <div className="space-y-5">
-            <BreakdownBars rows={breakdown.slice(0, 8)} maxAbs={maxAbsDb3} locale={locale} />
-            <BreakdownTable rows={breakdown} mode={breakdownMode} locale={locale} />
-          </div>
-        )}
-      </Card>
-
-      <Card className="border-dashed">
-        <h2 className="text-[14px] font-medium text-foreground">
-          {t("overviewPage.cashTitle")}
-        </h2>
-        <p className="mt-1 text-[12px] text-muted">
-          {t("overviewPage.cashDisclaimer")}
-        </p>
-        {report.cashFlow.length === 0 ? (
-          <p className="mt-4 text-[13px] text-muted">{t("overviewPage.empty")}</p>
-        ) : (
-          <div className="mt-5 space-y-3">
-            {report.cashFlow.map((point) => (
-              <div key={point.month}>
-                <div className="mb-1 flex items-baseline justify-between gap-2 text-[12px]">
-                  <span className="font-medium text-foreground">
-                    {formatMonth(point.month, locale)}
-                  </span>
-                  <span
-                    className={`tabular-nums ${
-                      point.net >= 0 ? "text-success" : "text-danger"
-                    }`}
-                  >
-                    {t("overviewPage.cashNet")}: {formatEuro(point.net, locale)}
-                  </span>
+          <Card>
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <h2 className="text-[14px] font-medium text-foreground">
+                  {t("overviewPage.breakdownTitle")}
+                </h2>
+                <p className="mt-1 text-[12px] text-muted">
+                  {t("overviewPage.breakdownHint")}
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 sm:items-end">
+                <div className="w-full sm:w-[220px]">
+                  <Field label={t("overviewPage.products")}>
+                    <ProductFilterDropdown
+                      products={products}
+                      value={breakdownProducts}
+                      onChange={setBreakdownProducts}
+                    />
+                  </Field>
                 </div>
-                <div className="grid gap-1.5">
-                  <CashBar
-                    label={t("overviewPage.cashIn")}
-                    amount={point.inflow}
-                    max={maxCash}
-                    tone="in"
-                    locale={locale}
-                  />
-                  <CashBar
-                    label={t("overviewPage.cashOut")}
-                    amount={point.outflow}
-                    max={maxCash}
-                    tone="out"
-                    locale={locale}
-                  />
+                <div className="flex gap-1 rounded-[8px] border border-line bg-surface-faint p-0.5">
+                  <ModeButton
+                    active={breakdownMode === "product"}
+                    onClick={() => setBreakdownMode("product")}
+                  >
+                    {t("overviewPage.byProduct")}
+                  </ModeButton>
+                  <ModeButton
+                    active={breakdownMode === "supplier"}
+                    onClick={() => setBreakdownMode("supplier")}
+                  >
+                    {t("overviewPage.bySupplier")}
+                  </ModeButton>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </Card>
+            </div>
+
+            {breakdown.length === 0 ? (
+              <p className="text-[13px] text-muted">{t("overviewPage.empty")}</p>
+            ) : (
+              <div className="space-y-5">
+                <BreakdownBars
+                  rows={breakdown.slice(0, 8)}
+                  maxAbs={maxAbsDb3}
+                  locale={locale}
+                />
+                <BreakdownTable
+                  rows={breakdown}
+                  mode={breakdownMode}
+                  locale={locale}
+                />
+              </div>
+            )}
+          </Card>
+
+          <Card className="border-dashed">
+            <ChartHeader
+              title={t("overviewPage.cashTitle")}
+              hint={t("overviewPage.cashDisclaimer")}
+              products={products}
+              productFilter={cashflowProducts}
+              onProductFilterChange={setCashflowProducts}
+              productLabel={t("overviewPage.products")}
+            />
+            {cashflowReport.cashFlow.length === 0 ? (
+              <p className="mt-4 text-[13px] text-muted">
+                {t("overviewPage.empty")}
+              </p>
+            ) : (
+              <div className="mt-5 space-y-3">
+                {cashflowReport.cashFlow.map((point) => (
+                  <div key={point.month}>
+                    <div className="mb-1 flex items-baseline justify-between gap-2 text-[12px]">
+                      <span className="font-medium text-foreground">
+                        {formatMonth(point.month, locale)}
+                      </span>
+                      <span
+                        className={`tabular-nums ${
+                          point.net >= 0 ? "text-success" : "text-danger"
+                        }`}
+                      >
+                        {t("overviewPage.cashNet")}:{" "}
+                        {formatEuro(point.net, locale)}
+                      </span>
+                    </div>
+                    <div className="grid gap-1.5">
+                      <CashBar
+                        label={t("overviewPage.cashIn")}
+                        amount={point.inflow}
+                        max={maxCash}
+                        tone="in"
+                        locale={locale}
+                      />
+                      <CashBar
+                        label={t("overviewPage.cashOut")}
+                        amount={point.outflow}
+                        max={maxCash}
+                        tone="out"
+                        locale={locale}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+    </div>
+  );
+}
+
+function ChartHeader({
+  title,
+  hint,
+  products,
+  productFilter,
+  onProductFilterChange,
+  productLabel,
+}: {
+  title: string;
+  hint: string;
+  products: { id: string; name: string }[];
+  productFilter: string[] | null;
+  onProductFilterChange: (next: string[] | null) => void;
+  productLabel: string;
+}) {
+  return (
+    <div className="mb-1 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0">
+        <h2 className="text-[14px] font-medium text-foreground">{title}</h2>
+        <p className="mt-1 text-[12px] text-muted">{hint}</p>
+      </div>
+      <div className="w-full shrink-0 sm:w-[220px]">
+        <Field label={productLabel}>
+          <ProductFilterDropdown
+            products={products}
+            value={productFilter}
+            onChange={onProductFilterChange}
+          />
+        </Field>
+      </div>
     </div>
   );
 }
@@ -392,7 +471,7 @@ function BreakdownTable({
   locale: string;
 }) {
   const { t } = useI18n();
-  const href = mode === "product" ? "/products" : "/suppliers";
+  const href = mode === "product" ? "/components" : "/suppliers";
 
   return (
     <div className="overflow-hidden rounded-[10px] border border-line">
