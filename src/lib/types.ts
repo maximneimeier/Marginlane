@@ -179,16 +179,38 @@ export const EMPTY_SALES_PLAN_SETTINGS: SalesPlanSettings = {
 };
 
 /**
- * BOM-Komponente eines Verkaufsprodukts.
- * Gesamteinkaufspreis = Σ (purchasePricePerUnit × quantityPerProductUnit).
+ * Stammdatensatz: wiederverwendbare Beschaffungs-Komponente (ohne Produktbezug).
+ * Zuordnung zu Produkten über `ProductComponent`.
  */
 export type Component = {
   id: string;
-  productId: string;
+  /** "" = kein Lieferant */
   supplierId: string;
   name: string;
+  /** Optionale Artikelnummer beim Lieferanten (unabhängig von Produkt-SKU) */
+  sku: string;
+  /**
+   * Währung des Einkaufspreises.
+   * `null` = vom verknüpften Lieferanten erben.
+   * Ohne Lieferant: explizite Währung (Default Workspace/EUR).
+   */
+  currency: string | null;
   purchasePricePerUnit: number;
+  /** Freitext, z. B. Verpackungseinheiten beim Lieferanten */
+  notes: string;
+};
+
+/**
+ * n:m-Verknüpfung Katalogprodukt ↔ Komponenten-Stamm.
+ * Menge und optionaler Sonderpreis gelten nur für dieses Produkt.
+ */
+export type ProductComponent = {
+  id: string;
+  productId: string;
+  componentId: string;
   quantityPerProductUnit: number;
+  /** null = Standard-EK der Component */
+  purchasePriceOverride: number | null;
 };
 
 /**
@@ -359,8 +381,10 @@ export type AppData = {
   products: Product[];
   /** Verkaufskatalog */
   catalogProducts: CatalogProduct[];
-  /** BOM-Komponenten (1:n zu CatalogProduct, n:1 zu Supplier) */
+  /** Komponenten-Stammdaten (wiederverwendbar) */
   components: Component[];
+  /** BOM: Produkt ↔ Komponente (n:m) */
+  productComponents: ProductComponent[];
   dealers: Dealer[];
   batches: Batch[];
   /** Plan: budgetierte wiederkehrende Positionen */
@@ -379,6 +403,7 @@ export const COST_TYPE_PRESETS = [
   "Fracht",
   "Zoll",
   "QC / Inspection",
+  "Montage / Repacking",
   "Verpackung",
   "Lager",
   "Versicherung",
@@ -561,6 +586,7 @@ export const EMPTY_DATA: AppData = {
   products: [],
   catalogProducts: [],
   components: [],
+  productComponents: [],
   dealers: [],
   batches: [],
   overheadItems: [],

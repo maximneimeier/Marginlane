@@ -1,23 +1,35 @@
 "use client";
 
-import { useLayoutEffect, useEffect, useState } from "react";
-import type { AppData, Component } from "@/lib/types";
-import { emptyComponent as createEmptyComponent } from "@/lib/migrateAppData";
+import { useLayoutEffect, useEffect, useMemo, useState } from "react";
+import type { AppData, Component, ProductComponent } from "@/lib/types";
+import { CURRENCIES } from "@/lib/types";
+import {
+  emptyComponent as createEmptyComponent,
+  emptyProductComponent,
+} from "@/lib/migrateAppData";
+import {
+  resolveComponentCurrency,
+  WORKSPACE_DEFAULT_CURRENCY,
+} from "@/lib/resolve";
 import { useI18n } from "@/hooks/useI18n";
 import {
   Button,
   Field,
   Modal,
   Select,
+  TextArea,
   TextInput,
 } from "@/components/ui";
 
-export function emptyBomComponent(
-  productId = "",
-  supplierId = "",
-): Component {
-  return createEmptyComponent(productId, supplierId);
+export function emptyBomComponent(supplierId = ""): Component {
+  return createEmptyComponent(supplierId);
 }
+
+export type ComponentFormSave = {
+  mode: "create" | "link";
+  component: Component;
+  link: ProductComponent;
+};
 
 type Props = {
   open: boolean;
@@ -25,8 +37,10 @@ type Props = {
   data: AppData;
   isEdit: boolean;
   onClose: () => void;
-  onSave: (component: Component) => void;
+  onSave: (result: ComponentFormSave) => void;
 };
+
+type FormMode = "create" | "link";
 
 export function ComponentFormModal({
   open,
@@ -37,19 +51,38 @@ export function ComponentFormModal({
   onSave,
 }: Props) {
   const { t, locale } = useI18n();
+  const [formMode, setFormMode] = useState<FormMode>("create");
   const [draft, setDraft] = useState<Component | null>(null);
+  const [existingId, setExistingId] = useState("");
+  const [productId, setProductId] = useState("");
+  const [quantity, setQuantity] = useState(1);
+  const [priceOverride, setPriceOverride] = useState<string>("");
 
   useLayoutEffect(() => {
     if (!open) return;
-    setDraft(
-      initial
-        ? structuredClone(initial)
-        : emptyBomComponent(
-            data.catalogProducts[0]?.id ?? "",
-            data.suppliers[0]?.id ?? "",
-          ),
-    );
-  }, [open, initial, data.catalogProducts, data.suppliers]);
+    if (initial) {
+      setFormMode("create");
+      setDraft(structuredClone(initial));
+      setExistingId("");
+      const existingLink = (data.productComponents ?? []).find(
+        (pc) => pc.componentId === initial.id,
+      );
+      setProductId(existingLink?.productId ?? data.catalogProducts[0]?.id ?? "");
+      setQuantity(existingLink?.quantityPerProductUnit ?? 1);
+      setPriceOverride(
+        existingLink?.purchasePriceOverride != null
+          ? String(existingLink.purchasePriceOverride)
+          : "",
+      );
+    } else {
+      setFormMode("create");
+      setDraft(emptyBomComponent(data.suppliers[0]?.id ?? ""));
+      setExistingId("");
+      setProductId(data.catalogProducts[0]?.id ?? "");
+      setQuantity(1);
+      setPriceOverride("");
+    }
+  }, [open, initial, data.catalogProducts, data.suppliers, data.productComponents]);
 
   useEffect(() => {
     if (!open) return;
@@ -64,7 +97,33 @@ export function ComponentFormModal({
     ? t("componentModal.editTitle")
     : t("componentModal.createTitle");
 
-  if (!draft) {
+  const linkedSupplier = useMemo(() => {
+    const supplierId =
+      formMode === "link"
+        ? data.components.find((c) => c.id === existingId)?.supplierId
+        : draft?.supplierId;
+    return supplierId
+      ? data.suppliers.find((s) => s.id === supplierId)
+      : undefined;
+  }, [data.suppliers, data.components, draft?.supplierId, existingId, formMode]);
+
+  const activeComponent =
+    formMode === "link"
+      ? data.components.find((c) => c.id === existingId)
+      : draft;
+
+  const currencyResolved = useMemo(
+    () =>
+      activeComponent
+        ? resolveComponentCurrency(activeComponent, linkedSupplier)
+        : {
+            value: WORKSPACE_DEFAULT_CURRENCY,
+            source: "none" as const,
+          },
+    [activeComponent, linkedSupplier],
+  );
+
+  if (!draft && formMode === "create") {
     return (
       <Modal open={open} onClose={onClose} title={title}>
         <p className="text-[13px] text-muted">{t("componentModal.noDraft")}</p>
@@ -72,18 +131,89 @@ export function ComponentFormModal({
     );
   }
 
+  function setSupplier(supplierId: string) {
+    if (!draft) return;
+    if (supplierId) {
+      setDraft({ ...draft, supplierId, currency: null });
+    } else {
+      setDraft({
+        ...draft,
+        supplierId: "",
+        currency: draft.currency ?? WORKSPACE_DEFAULT_CURRENCY,
+      });
+    }
+  }
+
   function handleSave() {
-    if (!draft || !draft.name.trim() || !draft.productId) return;
-    onSave({
+    const overrideRaw = priceOverride.trim();
+    const purchasePriceOverride =
+      overrideRaw === ""
+        ? null
+        : Math.max(Number(overrideRaw) || 0, 0);
+
+    if (formMode === "link") {
+      if (!existingId || !productId) return;
+      const component = data.components.find((c) => c.id === existingId);
+      if (!component) return;
+      onSave({
+        mode: "link",
+        component,
+        link: {
+          ...emptyProductComponent(productId, existingId),
+          quantityPerProductUnit: Math.max(quantity, 0),
+          purchasePriceOverride,
+        },
+      });
+      onClose();
+      return;
+    }
+
+    if (!draft || !draft.name.trim()) return;
+    const hasSupplier = Boolean(draft.supplierId);
+    const component: Component = {
       ...draft,
       name: draft.name.trim(),
-      quantityPerProductUnit: Math.max(draft.quantityPerProductUnit, 0),
+      sku: draft.sku.trim(),
+      notes: draft.notes.trim(),
+      currency: hasSupplier
+        ? null
+        : draft.currency || WORKSPACE_DEFAULT_CURRENCY,
       purchasePricePerUnit: Math.max(draft.purchasePricePerUnit, 0),
+    };
+
+    // Edit stamm without forcing a new link if no product chosen
+    if (isEdit && !productId) {
+      onSave({
+        mode: "create",
+        component,
+        link: emptyProductComponent("", component.id),
+      });
+      onClose();
+      return;
+    }
+
+    if (!productId) return;
+    onSave({
+      mode: "create",
+      component,
+      link: {
+        ...emptyProductComponent(productId, component.id),
+        quantityPerProductUnit: Math.max(quantity, 0),
+        purchasePriceOverride,
+      },
     });
     onClose();
   }
 
-  const canSave = Boolean(draft.name.trim() && draft.productId);
+  const canSave =
+    formMode === "link"
+      ? Boolean(existingId && productId)
+      : Boolean(
+          draft?.name.trim() && (isEdit || productId),
+        );
+
+  const showManualCurrency =
+    formMode === "create" && draft && !draft.supplierId;
 
   return (
     <Modal
@@ -93,12 +223,170 @@ export function ComponentFormModal({
       description={t("componentModal.bomDescription")}
     >
       <div className="space-y-4">
-        <Field label={t("componentModal.product")} required>
+        {!isEdit ? (
+          <div className="flex gap-1 rounded-[8px] border border-line bg-surface-faint p-0.5">
+            <button
+              type="button"
+              onClick={() => setFormMode("create")}
+              className={`flex-1 rounded-[6px] px-2.5 py-1.5 text-[12px] font-medium ${
+                formMode === "create"
+                  ? "bg-white text-foreground shadow-[var(--shadow-sm)]"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              {t("componentModal.mode.create")}
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormMode("link")}
+              className={`flex-1 rounded-[6px] px-2.5 py-1.5 text-[12px] font-medium ${
+                formMode === "link"
+                  ? "bg-white text-foreground shadow-[var(--shadow-sm)]"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              {t("componentModal.mode.link")}
+            </button>
+          </div>
+        ) : null}
+
+        {formMode === "link" && !isEdit ? (
+          <Field label={t("componentModal.existing")} required>
+            <Select
+              value={existingId}
+              onChange={(e) => setExistingId(e.target.value)}
+            >
+              <option value="">{t("componentModal.existingPlaceholder")}</option>
+              {[...data.components]
+                .sort((a, b) => a.name.localeCompare(b.name, locale))
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                    {c.sku ? ` (${c.sku})` : ""}
+                  </option>
+                ))}
+            </Select>
+          </Field>
+        ) : (
+          <>
+            <Field label={t("componentModal.name")} required>
+              <TextInput
+                autoFocus
+                value={draft?.name ?? ""}
+                onChange={(e) =>
+                  draft && setDraft({ ...draft, name: e.target.value })
+                }
+                placeholder={t("componentModal.namePlaceholder")}
+              />
+            </Field>
+
+            <Field
+              label={t("componentModal.componentSku")}
+              hint={t("componentModal.componentSkuHint")}
+            >
+              <TextInput
+                value={draft?.sku ?? ""}
+                onChange={(e) =>
+                  draft && setDraft({ ...draft, sku: e.target.value })
+                }
+                placeholder={t("componentModal.componentSkuPlaceholder")}
+              />
+            </Field>
+
+            <Field
+              label={t("componentModal.supplier")}
+              hint={t("componentModal.supplierOptionalHint")}
+            >
+              <Select
+                value={draft?.supplierId ?? ""}
+                onChange={(e) => setSupplier(e.target.value)}
+              >
+                <option value="">{t("componentModal.supplierNone")}</option>
+                {[...data.suppliers]
+                  .sort((a, b) => a.name.localeCompare(b.name, locale))
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+              </Select>
+            </Field>
+
+            <Field label={t("componentModal.purchasePrice")} required>
+              <TextInput
+                type="number"
+                step="0.01"
+                min="0"
+                value={draft?.purchasePricePerUnit || ""}
+                onChange={(e) =>
+                  draft &&
+                  setDraft({
+                    ...draft,
+                    purchasePricePerUnit: Number(e.target.value) || 0,
+                  })
+                }
+                placeholder="0.00"
+              />
+            </Field>
+
+            {showManualCurrency ? (
+              <Field
+                label={t("componentModal.currency")}
+                hint={t("componentModal.currencyManualHint")}
+              >
+                <Select
+                  value={draft?.currency || WORKSPACE_DEFAULT_CURRENCY}
+                  onChange={(e) =>
+                    draft && setDraft({ ...draft, currency: e.target.value })
+                  }
+                >
+                  {CURRENCIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            ) : draft?.supplierId ? (
+              <Field
+                label={t("componentModal.currency")}
+                hint={t("componentModal.currencyInheritedHint", {
+                  currency: currencyResolved.value,
+                  supplier: linkedSupplier?.name ?? "",
+                })}
+              >
+                <TextInput value={currencyResolved.value} disabled readOnly />
+              </Field>
+            ) : null}
+
+            <Field
+              label={t("componentModal.notes")}
+              hint={t("componentModal.notesHint")}
+            >
+              <TextArea
+                value={draft?.notes ?? ""}
+                onChange={(e) =>
+                  draft && setDraft({ ...draft, notes: e.target.value })
+                }
+                placeholder={t("componentModal.notesPlaceholder")}
+                rows={2}
+              />
+            </Field>
+          </>
+        )}
+
+        <Field
+          label={t("componentModal.product")}
+          required={!isEdit || formMode === "link"}
+          hint={
+            isEdit
+              ? t("componentModal.productOptionalEditHint")
+              : undefined
+          }
+        >
           <Select
-            value={draft.productId}
-            onChange={(e) =>
-              setDraft({ ...draft, productId: e.target.value })
-            }
+            value={productId}
+            onChange={(e) => setProductId(e.target.value)}
           >
             <option value="">{t("componentModal.productPlaceholder")}</option>
             {[...data.catalogProducts]
@@ -112,71 +400,36 @@ export function ComponentFormModal({
           </Select>
         </Field>
 
-        <Field label={t("componentModal.name")} required>
-          <TextInput
-            autoFocus
-            value={draft.name}
-            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-            placeholder={t("componentModal.namePlaceholder")}
-          />
-        </Field>
-
-        <Field
-          label={t("componentModal.supplier")}
-          hint={t("componentModal.supplierOptionalHint")}
-        >
-          <Select
-            value={draft.supplierId}
-            onChange={(e) =>
-              setDraft({ ...draft, supplierId: e.target.value })
-            }
-          >
-            <option value="">{t("componentModal.supplierNone")}</option>
-            {[...data.suppliers]
-              .sort((a, b) => a.name.localeCompare(b.name, locale))
-              .map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-          </Select>
-        </Field>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label={t("componentModal.purchasePrice")} required>
-            <TextInput
-              type="number"
-              step="0.01"
-              min="0"
-              value={draft.purchasePricePerUnit || ""}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  purchasePricePerUnit: Number(e.target.value) || 0,
-                })
-              }
-              placeholder="0.00"
-            />
-          </Field>
-          <Field
-            label={t("componentModal.qtyPerProduct")}
-            hint={t("componentModal.qtyPerProductHint")}
-          >
-            <TextInput
-              type="number"
-              step="0.01"
-              min="0"
-              value={draft.quantityPerProductUnit || ""}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  quantityPerProductUnit: Number(e.target.value) || 0,
-                })
-              }
-              placeholder="1"
-            />
-          </Field>
-        </div>
+        {productId ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field
+              label={t("componentModal.qtyPerProduct")}
+              hint={t("componentModal.qtyPerProductHint")}
+            >
+              <TextInput
+                type="number"
+                step="0.01"
+                min="0"
+                value={quantity || ""}
+                onChange={(e) => setQuantity(Number(e.target.value) || 0)}
+                placeholder="1"
+              />
+            </Field>
+            <Field
+              label={t("componentModal.priceOverride")}
+              hint={t("componentModal.priceOverrideHint")}
+            >
+              <TextInput
+                type="number"
+                step="0.01"
+                min="0"
+                value={priceOverride}
+                onChange={(e) => setPriceOverride(e.target.value)}
+                placeholder={t("componentModal.priceOverridePlaceholder")}
+              />
+            </Field>
+          </div>
+        ) : null}
 
         {data.catalogProducts.length === 0 ? (
           <p className="rounded-[8px] border border-dashed border-line px-3 py-2 text-[12px] text-muted">

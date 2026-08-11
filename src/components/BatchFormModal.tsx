@@ -68,9 +68,13 @@ export function BatchFormModal({
   const bomPurchase = useMemo(
     () =>
       productId
-        ? catalogProductUnitPurchaseCost(productId, data.components)
+        ? catalogProductUnitPurchaseCost(
+            productId,
+            data.components,
+            data.productComponents ?? [],
+          )
         : 0,
-    [productId, data.components],
+    [productId, data.components, data.productComponents],
   );
 
   const unit = product
@@ -117,7 +121,14 @@ export function BatchFormModal({
       ? data.catalogProducts.find((p) => p.id === initialProductId)
       : undefined;
     const comps = initialProduct
-      ? data.components.filter((c) => c.productId === initialProduct.id)
+      ? (() => {
+          const ids = new Set(
+            (data.productComponents ?? [])
+              .filter((pc) => pc.productId === initialProduct.id)
+              .map((pc) => pc.componentId),
+          );
+          return data.components.filter((c) => ids.has(c.id));
+        })()
       : [];
     const nextSupplierId =
       comps.find((c) => c.supplierId)?.supplierId ??
@@ -142,7 +153,7 @@ export function BatchFormModal({
     open,
     initialProductId,
     data.catalogProducts,
-    data.components,
+    data.productComponents,
     data.suppliers,
     data.batches.length,
   ]);
@@ -190,7 +201,12 @@ export function BatchFormModal({
   function handleProductChange(id: string) {
     setProductId(id);
     setPriceManual(false);
-    const comps = data.components.filter((c) => c.productId === id);
+    const ids = new Set(
+      (data.productComponents ?? [])
+        .filter((pc) => pc.productId === id)
+        .map((pc) => pc.componentId),
+    );
+    const comps = data.components.filter((c) => ids.has(c.id));
     const fromBom = comps.find((c) => c.supplierId)?.supplierId;
     if (fromBom) setSupplierId(fromBom);
   }

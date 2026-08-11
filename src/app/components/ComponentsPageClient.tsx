@@ -5,41 +5,59 @@ import Link from "next/link";
 import { useStore } from "@/context/StoreContext";
 import type { Component } from "@/lib/types";
 import { formatEuro } from "@/lib/format";
-import { buildProductMetrics } from "@/lib/supplierRows";
 import { useI18n } from "@/hooks/useI18n";
 import { CountryFlag } from "@/components/CountryFlag";
 import {
   ComponentFormModal,
-  emptyBomComponent,
+  type ComponentFormSave,
 } from "@/components/ComponentFormModal";
 import {
   Button,
+  ConfirmDialog,
   PageHeader,
   Select,
   TextInput,
 } from "@/components/ui";
 
 export default function ComponentsPage() {
-  const { ready, data, upsertComponent } = useStore();
-  const { t, plural, locale, lang, pricingUnitLabel } = useI18n();
+  const {
+    ready,
+    data,
+    upsertComponent,
+    upsertProductComponent,
+    deleteComponent,
+    linkedProductNamesForComponent,
+  } = useStore();
+  const { t, plural, locale, lang } = useI18n();
   const [query, setQuery] = useState("");
   const [filterSupplier, setFilterSupplier] = useState("");
   const [draft, setDraft] = useState<Component | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [deleteBlocked, setDeleteBlocked] = useState<{
+    name: string;
+    products: string[];
+  } | null>(null);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const links = data.productComponents ?? [];
     return data.components
       .map((component) => {
-        const product = data.catalogProducts.find(
-          (p) => p.id === component.productId,
-        );
         const supplier = data.suppliers.find(
           (s) => s.id === component.supplierId,
         );
-        return { component, product, supplier };
+        const componentLinks = links.filter(
+          (pc) => pc.componentId === component.id,
+        );
+        const productCount = new Set(componentLinks.map((pc) => pc.productId))
+          .size;
+        const totalQty = componentLinks.reduce(
+          (sum, pc) => sum + Math.max(pc.quantityPerProductUnit, 0),
+          0,
+        );
+        return { component, supplier, productCount, totalQty };
       })
-      .filter(({ component, product, supplier }) => {
+      .filter(({ component, supplier }) => {
         if (filterSupplier === "__none__") {
           if (component.supplierId) return false;
         } else if (filterSupplier && component.supplierId !== filterSupplier) {
@@ -48,16 +66,11 @@ export default function ComponentsPage() {
         if (!q) return true;
         return (
           component.name.toLowerCase().includes(q) ||
-          (product?.name.toLowerCase().includes(q) ?? false) ||
-          (product?.sku.toLowerCase().includes(q) ?? false) ||
+          component.sku.toLowerCase().includes(q) ||
           (supplier?.name.toLowerCase().includes(q) ?? false)
         );
       })
-      .sort((a, b) => {
-        const nameA = a.component.name || a.product?.name || "";
-        const nameB = b.component.name || b.product?.name || "";
-        return nameA.localeCompare(nameB, lang);
-      });
+      .sort((a, b) => a.component.name.localeCompare(b.component.name, lang));
   }, [data, query, filterSupplier, lang]);
 
   if (!ready) {
@@ -69,12 +82,7 @@ export default function ComponentsPage() {
   );
 
   function openCreate() {
-    setDraft(
-      emptyBomComponent(
-        data.catalogProducts[0]?.id ?? "",
-        data.suppliers[0]?.id ?? "",
-      ),
-    );
+    setDraft(null);
     setModalOpen(true);
   }
 
@@ -86,6 +94,30 @@ export default function ComponentsPage() {
   function closeModal() {
     setModalOpen(false);
     setDraft(null);
+  }
+
+  function handleSave(result: ComponentFormSave) {
+    upsertComponent(result.component);
+    if (result.link.productId) {
+      const existing = (data.productComponents ?? []).find(
+        (pc) =>
+          pc.productId === result.link.productId &&
+          pc.componentId === result.component.id,
+      );
+      upsertProductComponent(
+        existing ? { ...result.link, id: existing.id } : result.link,
+      );
+    }
+    closeModal();
+  }
+
+  function tryDelete(component: Component) {
+    const products = linkedProductNamesForComponent(component.id);
+    if (products.length > 0) {
+      setDeleteBlocked({ name: component.name, products });
+      return;
+    }
+    deleteComponent(component.id);
   }
 
   return (
@@ -104,10 +136,24 @@ export default function ComponentsPage() {
         data={data}
         isEdit={isEdit}
         onClose={closeModal}
-        onSave={(component) => {
-          upsertComponent(component);
-          closeModal();
-        }}
+        onSave={handleSave}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deleteBlocked)}
+        onClose={() => setDeleteBlocked(null)}
+        title={t("components.deleteBlockedTitle")}
+        description={
+          deleteBlocked
+            ? t("components.deleteBlockedDescription", {
+                name: deleteBlocked.name,
+                products: deleteBlocked.products.join(", "),
+              })
+            : ""
+        }
+        confirmLabel={t("common.close")}
+        danger={false}
+        onConfirm={() => setDeleteBlocked(null)}
       />
 
       <div className="mb-3 flex flex-nowrap items-center gap-2 overflow-x-auto">
@@ -151,7 +197,7 @@ export default function ComponentsPage() {
                     {t("productModal.componentName")}
                   </th>
                   <th className="px-4 py-2.5 font-medium">
-                    {t("components.col.product")}
+                    {t("components.col.sku")}
                   </th>
                   <th className="px-4 py-2.5 font-medium">
                     {t("components.col.supplier")}
@@ -160,98 +206,82 @@ export default function ComponentsPage() {
                     {t("productModal.componentPrice")}
                   </th>
                   <th className="px-4 py-2.5 text-right font-medium">
-                    {t("productModal.componentQty")}
+                    {t("components.col.products")}
                   </th>
                   <th className="px-4 py-2.5 text-right font-medium">
-                    {t("products.col.batches")}
+                    {t("components.col.totalQty")}
                   </th>
-                  <th className="w-24 px-3 py-2.5" />
+                  <th className="w-28 px-3 py-2.5" />
                 </tr>
               </thead>
               <tbody>
-                {rows.map(({ component, product, supplier }) => {
-                  const metrics = product
-                    ? buildProductMetrics(product.id, data)
-                    : null;
-                  const unit = product
-                    ? pricingUnitLabel(product.pricingUnit)
-                    : pricingUnitLabel("pcs");
-                  return (
-                    <tr
-                      key={component.id}
-                      className="group border-b border-line last:border-0 hover:bg-surface-faint"
-                    >
-                      <td className="px-4 py-3">
-                        <button
-                          type="button"
-                          onClick={() => openEdit(component)}
-                          className="text-left font-medium text-foreground hover:text-accent"
-                        >
-                          {component.name || t("common.emDash")}
-                        </button>
-                      </td>
-                      <td className="px-4 py-3 text-muted">
-                        {product ? (
-                          <Link
-                            href="/products"
-                            className="hover:text-accent"
-                          >
-                            {product.name}
-                          </Link>
-                        ) : (
-                          t("common.emDash")
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {supplier ? (
-                          <span className="inline-flex items-center gap-2 text-muted">
-                            <CountryFlag code={supplier.country} />
-                            {supplier.name}
-                          </span>
-                        ) : (
-                          t("common.emDash")
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {formatEuro(component.purchasePricePerUnit, locale)}
-                        <span className="ml-1 text-[11px] text-muted-soft">
-                          / {unit}
+                {rows.map(({ component, supplier, productCount, totalQty }) => (
+                  <tr
+                    key={component.id}
+                    className="group border-b border-line last:border-0 hover:bg-surface-faint"
+                  >
+                    <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        onClick={() => openEdit(component)}
+                        className="text-left font-medium text-foreground hover:text-accent"
+                      >
+                        {component.name || t("common.emDash")}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 tabular-nums text-muted">
+                      {component.sku || t("common.emDash")}
+                    </td>
+                    <td className="px-4 py-3">
+                      {supplier ? (
+                        <span className="inline-flex items-center gap-2 text-muted">
+                          <CountryFlag code={supplier.country} />
+                          {supplier.name}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums text-muted">
-                        {component.quantityPerProductUnit}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums text-muted">
-                        {metrics?.batchCount ?? 0}
-                      </td>
-                      <td className="px-2 py-3">
-                        <div className="flex justify-end gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
-                          {product ? (
-                            <Link
-                              href={`/batches?new=1&product=${product.id}`}
-                            >
-                              <Button variant="ghost" className="h-7 px-2">
-                                {t("components.action.batch")}
-                              </Button>
-                            </Link>
-                          ) : null}
-                          <Button
-                            variant="ghost"
-                            className="h-7 px-2"
-                            onClick={() => openEdit(component)}
-                          >
-                            {t("components.action.edit")}
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                      ) : (
+                        t("common.emDash")
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {formatEuro(component.purchasePricePerUnit, locale)}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums text-muted">
+                      {productCount}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums text-muted">
+                      {totalQty}
+                    </td>
+                    <td className="px-2 py-3">
+                      <div className="flex justify-end gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
+                        <Button
+                          variant="ghost"
+                          className="h-7 px-2"
+                          onClick={() => openEdit(component)}
+                        >
+                          {t("components.action.edit")}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          className="h-7 px-2 text-danger"
+                          onClick={() => tryDelete(component)}
+                        >
+                          {t("common.delete")}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         </div>
       )}
+
+      <p className="mt-3 text-[12px] text-muted-soft">
+        <Link href="/products" className="hover:text-accent">
+          {t("components.hintProducts")}
+        </Link>
+      </p>
     </div>
   );
 }

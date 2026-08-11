@@ -89,6 +89,7 @@ export default function ChargeDetailPage({ id }: { id: string }) {
   const displayPurchase = resolveUnitPurchasePrice(
     batch.productId,
     data.components,
+    data.productComponents ?? [],
     batch,
   );
 
@@ -251,6 +252,7 @@ export default function ChargeDetailPage({ id }: { id: string }) {
                         resolveUnitPurchasePrice(
                           draft.productId,
                           data.components,
+                          data.productComponents ?? [],
                           draft,
                         ).value,
                       )}

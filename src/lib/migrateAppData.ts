@@ -15,6 +15,7 @@ import type {
   CostItem,
   OverheadActual,
   Product,
+  ProductComponent,
   Sale,
   SalesData,
   SalesPlanCell,
@@ -63,7 +64,8 @@ function legacySalesToSale(sales: SalesData, fallbackQty: number): Sale {
 /**
  * Migriert ältere AppData-Shapes auf das aktuelle Modell:
  * - CatalogProduct.sellPrice → listPrice
- * - Product (alte Komponenten) → Component (+ ggf. CatalogProduct)
+ * - Product (alte Komponenten) → Component + ProductComponent (+ ggf. CatalogProduct)
+ * - Component.productId (1:1) → Component-Stamm + ProductComponent (n:m)
  * - Batch.sales Objekt → Sale[]
  * - Batch.productId zeigt auf CatalogProduct
  */
@@ -112,22 +114,76 @@ export function migrateAppData(raw: unknown): AppData {
       })
     : [];
 
-  let components: Component[] = Array.isArray(input.components)
-    ? input.components.map((c) => ({
-        id: c.id || createId("cmp"),
-        productId: c.productId || "",
-        supplierId: c.supplierId || "",
-        name: c.name || "",
-        purchasePricePerUnit: c.purchasePricePerUnit ?? 0,
-        quantityPerProductUnit: c.quantityPerProductUnit ?? 1,
-      }))
+  type LegacyComponent = Partial<Component> & {
+    id?: string;
+    productId?: string;
+    quantityPerProductUnit?: number;
+    purchasePricePerUnit?: number;
+    supplierId?: string;
+    name?: string;
+    sku?: string;
+    currency?: string | null;
+    notes?: string;
+  };
+
+  const rawComponents: LegacyComponent[] = Array.isArray(input.components)
+    ? (input.components as LegacyComponent[])
     : [];
+
+  const existingLinksRaw = Array.isArray(
+    (input as { productComponents?: unknown }).productComponents,
+  )
+    ? ((input as { productComponents: unknown[] }).productComponents as Array<
+        Partial<ProductComponent>
+      >)
+    : [];
+
+  const hasLegacyProductId = rawComponents.some(
+    (c) => typeof c.productId === "string" && c.productId.length > 0,
+  );
+  const alreadyNm =
+    existingLinksRaw.length > 0 ||
+    (rawComponents.length > 0 && !hasLegacyProductId);
+
+  let components: Component[] = [];
+  let productComponents: ProductComponent[] = [];
+
+  if (alreadyNm && !hasLegacyProductId) {
+    components = rawComponents.map((c) => normalizeComponentStamm(c));
+    productComponents = existingLinksRaw.map((pc) =>
+      normalizeProductComponent(pc),
+    );
+  } else {
+    // Legacy 1:1 Component.productId → Stamm + Link (kein Deduplizieren)
+    for (const c of rawComponents) {
+      const id = c.id || createId("cmp");
+      components.push(normalizeComponentStamm({ ...c, id }));
+      if (c.productId) {
+        productComponents.push({
+          id: `pc_${id}`,
+          productId: c.productId,
+          componentId: id,
+          quantityPerProductUnit:
+            typeof c.quantityPerProductUnit === "number"
+              ? c.quantityPerProductUnit
+              : 1,
+          purchasePriceOverride: null,
+        });
+      }
+    }
+    // Bereits vorhandene Links (falls Dual-Write) mergen by id
+    for (const pc of existingLinksRaw) {
+      const normalized = normalizeProductComponent(pc);
+      if (!productComponents.some((x) => x.id === normalized.id)) {
+        productComponents.push(normalized);
+      }
+    }
+  }
 
   const legacyProducts = Array.isArray(input.products) ? input.products : [];
   const productIdRemap = new Map<string, string>();
 
-  // Alte Beschaffungs-„Produkte“ → CatalogProduct + eine BOM-Komponente
-  // (nur wenn noch keine Components existieren — sonst schon migriert)
+  // Alte Beschaffungs-„Produkte“ → CatalogProduct + Component + ProductComponent
   if (legacyProducts.length > 0) {
     const alreadyMigrated =
       components.length > 0 &&
@@ -161,17 +217,25 @@ export function migrateAppData(raw: unknown): AppData {
           });
         }
         productIdRemap.set(legacy.id, catalogId);
+        const cmpId = createId("cmp");
         components.push({
-          id: createId("cmp"),
-          productId: catalogId,
+          id: cmpId,
           supplierId: legacy.supplierId || "",
           name: legacy.name || "Komponente",
+          sku: legacy.sku || "",
+          currency: legacy.currency ?? null,
           purchasePricePerUnit: legacy.unitPrice ?? 0,
+          notes: "",
+        });
+        productComponents.push({
+          id: `pc_${cmpId}`,
+          productId: catalogId,
+          componentId: cmpId,
           quantityPerProductUnit: 1,
+          purchasePriceOverride: null,
         });
       }
     } else if (legacyProducts.length > 0 && components.length === 0) {
-      // Fallback: products exist but remap by id for batches
       for (const legacy of legacyProducts) {
         productIdRemap.set(legacy.id, legacy.id);
       }
@@ -403,6 +467,7 @@ export function migrateAppData(raw: unknown): AppData {
     suppliers,
     catalogProducts,
     components,
+    productComponents,
     dealers,
     batches,
     overheadItems: migratedOverhead,
@@ -418,6 +483,51 @@ export function migrateAppData(raw: unknown): AppData {
   };
 }
 
+function normalizeComponentStamm(
+  c: Partial<Component> & {
+    id?: string;
+    purchasePricePerUnit?: number;
+    supplierId?: string;
+    name?: string;
+    sku?: string;
+    currency?: string | null;
+    notes?: string;
+  },
+): Component {
+  return {
+    id: c.id || createId("cmp"),
+    supplierId: c.supplierId || "",
+    name: c.name || "",
+    sku: typeof c.sku === "string" ? c.sku : "",
+    currency:
+      c.currency === null || c.currency === undefined
+        ? null
+        : String(c.currency) || null,
+    purchasePricePerUnit: c.purchasePricePerUnit ?? 0,
+    notes: typeof c.notes === "string" ? c.notes : "",
+  };
+}
+
+function normalizeProductComponent(
+  pc: Partial<ProductComponent>,
+): ProductComponent {
+  const override =
+    pc.purchasePriceOverride === null || pc.purchasePriceOverride === undefined
+      ? null
+      : Number(pc.purchasePriceOverride);
+  return {
+    id: pc.id || createId("pc"),
+    productId: pc.productId || "",
+    componentId: pc.componentId || "",
+    quantityPerProductUnit:
+      typeof pc.quantityPerProductUnit === "number"
+        ? pc.quantityPerProductUnit
+        : 1,
+    purchasePriceOverride:
+      override != null && Number.isFinite(override) ? override : null,
+  };
+}
+
 export function emptySale(quantity = 0): Sale {
   return {
     id: createId("sale"),
@@ -429,32 +539,63 @@ export function emptySale(quantity = 0): Sale {
   };
 }
 
-export function emptyComponent(
-  productId: string,
-  supplierId = "",
-): Component {
+export function emptyComponent(supplierId = ""): Component {
   return {
     id: createId("cmp"),
-    productId,
     supplierId,
     name: "",
+    sku: "",
+    currency: supplierId ? null : "EUR",
     purchasePricePerUnit: 0,
-    quantityPerProductUnit: 1,
+    notes: "",
   };
 }
 
-/** Summe EK pro Verkaufseinheit aus BOM-Komponenten */
+export function emptyProductComponent(
+  productId = "",
+  componentId = "",
+): ProductComponent {
+  return {
+    id: createId("pc"),
+    productId,
+    componentId,
+    quantityPerProductUnit: 1,
+    purchasePriceOverride: null,
+  };
+}
+
+/** Effektiver EK/Einheit für eine BOM-Zeile */
+export function effectiveComponentUnitPrice(
+  component: Component,
+  link: ProductComponent,
+): number {
+  if (
+    link.purchasePriceOverride !== null &&
+    link.purchasePriceOverride !== undefined
+  ) {
+    return link.purchasePriceOverride;
+  }
+  return component.purchasePricePerUnit;
+}
+
+/** Summe EK pro Verkaufseinheit aus BOM (ProductComponent Join) */
 export function catalogProductUnitPurchaseCost(
   productId: string,
   components: Component[],
+  productComponents: ProductComponent[],
 ): number {
-  return components
-    .filter((c) => c.productId === productId)
-    .reduce(
-      (sum, c) =>
-        sum + c.purchasePricePerUnit * Math.max(c.quantityPerProductUnit, 0),
-      0,
-    );
+  const byId = new Map(components.map((c) => [c.id, c]));
+  return productComponents
+    .filter((pc) => pc.productId === productId)
+    .reduce((sum, pc) => {
+      const component = byId.get(pc.componentId);
+      if (!component) return sum;
+      return (
+        sum +
+        effectiveComponentUnitPrice(component, pc) *
+          Math.max(pc.quantityPerProductUnit, 0)
+      );
+    }, 0);
 }
 
 export function primarySale(batch: Batch): Sale | undefined {

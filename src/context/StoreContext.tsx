@@ -19,6 +19,7 @@ import type {
   OverheadActual,
   OverheadItem,
   Product,
+  ProductComponent,
   SalesPlanCell,
   SalesPlanRowMeta,
   SalesPlanScenario,
@@ -48,7 +49,15 @@ type StoreContextValue = {
   upsertCatalogProduct: (product: CatalogProduct) => void;
   deleteCatalogProduct: (id: string) => void;
   upsertComponent: (component: Component) => void;
-  deleteComponent: (id: string) => void;
+  /**
+   * Löscht nur, wenn keine ProductComponent-Links existieren.
+   * @returns false wenn blockiert
+   */
+  deleteComponent: (id: string) => boolean;
+  upsertProductComponent: (link: ProductComponent) => void;
+  deleteProductComponent: (id: string) => void;
+  /** Produktnamen, in denen die Komponente noch verbaut ist */
+  linkedProductNamesForComponent: (componentId: string) => string[];
   upsertDealer: (dealer: Dealer) => void;
   deleteDealer: (id: string) => void;
   upsertBatch: (batch: Batch) => void;
@@ -110,7 +119,24 @@ async function persistWorkspace(data: AppData) {
     body: JSON.stringify(data),
   });
   if (!res.ok) {
-    throw new Error(`Failed to save workspace (${res.status})`);
+    let detail = "";
+    try {
+      const body = (await res.json()) as {
+        error?: string;
+        issues?: { path: string; message: string }[];
+      };
+      if (body.issues?.length) {
+        detail = `: ${body.issues
+          .slice(0, 3)
+          .map((i) => i.message)
+          .join("; ")}`;
+      } else if (body.error) {
+        detail = `: ${body.error}`;
+      }
+    } catch {
+      /* ignore parse errors */
+    }
+    throw new Error(`Failed to save workspace (${res.status})${detail}`);
   }
   return migrateAppData(await res.json());
 }
@@ -235,7 +261,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       commit((prev) => ({
         ...prev,
         catalogProducts: prev.catalogProducts.filter((p) => p.id !== id),
-        components: prev.components.filter((c) => c.productId !== id),
+        productComponents: (prev.productComponents ?? []).filter(
+          (pc) => pc.productId !== id,
+        ),
         batches: prev.batches.filter((b) => b.productId !== id),
         salesPlan: (prev.salesPlan ?? []).filter((c) => c.productId !== id),
         salesPlanRowMeta: (prev.salesPlanRowMeta ?? []).filter(
@@ -261,11 +289,59 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [commit],
   );
 
+  const linkedProductNamesForComponent = useCallback(
+    (componentId: string) => {
+      const links = (data.productComponents ?? []).filter(
+        (pc) => pc.componentId === componentId,
+      );
+      return links
+        .map(
+          (pc) =>
+            data.catalogProducts.find((p) => p.id === pc.productId)?.name ??
+            pc.productId,
+        )
+        .filter(Boolean);
+    },
+    [data.productComponents, data.catalogProducts],
+  );
+
   const deleteComponent = useCallback(
     (id: string) => {
+      const linked = (data.productComponents ?? []).some(
+        (pc) => pc.componentId === id,
+      );
+      if (linked) return false;
       commit((prev) => ({
         ...prev,
         components: prev.components.filter((c) => c.id !== id),
+      }));
+      return true;
+    },
+    [commit, data.productComponents],
+  );
+
+  const upsertProductComponent = useCallback(
+    (link: ProductComponent) => {
+      commit((prev) => {
+        const list = prev.productComponents ?? [];
+        return {
+          ...prev,
+          productComponents: list.some((pc) => pc.id === link.id)
+            ? list.map((pc) => (pc.id === link.id ? link : pc))
+            : [...list, link],
+        };
+      });
+    },
+    [commit],
+  );
+
+  const deleteProductComponent = useCallback(
+    (id: string) => {
+      commit((prev) => ({
+        ...prev,
+        productComponents: (prev.productComponents ?? []).filter(
+          (pc) => pc.id !== id,
+        ),
       }));
     },
     [commit],
@@ -492,6 +568,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteCatalogProduct,
       upsertComponent,
       deleteComponent,
+      upsertProductComponent,
+      deleteProductComponent,
+      linkedProductNamesForComponent,
       upsertDealer,
       deleteDealer,
       upsertBatch,
@@ -518,6 +597,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteCatalogProduct,
       upsertComponent,
       deleteComponent,
+      upsertProductComponent,
+      deleteProductComponent,
+      linkedProductNamesForComponent,
       upsertDealer,
       deleteDealer,
       upsertBatch,

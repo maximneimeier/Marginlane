@@ -1,29 +1,46 @@
 # Marginlane
 
-Unit Economics für Importeure und E-Commerce: vom Lieferanten bis zur Marge — mit Landed Cost, Chargen und Händlern.
+Unit Economics für Importeure: vom Lieferanten bis zur Marge — mit Landed Cost, BOM-Komponenten, Chargen und Händlern.
 
-## Start
+## Start (lokal)
+
+1. Postgres bereitstellen und `.env` anlegen:
 
 ```bash
+cp .env.example .env
+# DATABASE_URL anpassen
+```
+
+2. Schema + App:
+
+```bash
+npx prisma migrate dev
 npm run dev
 ```
 
-Öffne [http://localhost:3000](http://localhost:3000). Daten liegen lokal im Browser (`localStorage`).
+Öffne [http://localhost:3000](http://localhost:3000). Daten liegen in PostgreSQL (Workspace-Dokument).
 
-## Features
+## Scripts
 
-- **Lieferanten & Produkte** — Kontakt, Zahlungskonditionen, MOQ, Rabattstaffeln
-- **Händler** — Abnehmer mit Standard-VK und Vertriebskosten
-- **Chargen** — Menge, EK, beliebig viele Kostenposten (pro Stück / pauschal / % Warenwert)
-- **Landed Cost** — automatische Umlegung der Beschaffungskosten aufs Stück
+| Script | Zweck |
+|--------|--------|
+| `npm run dev` | Entwicklungsserver |
+| `npm run build` / `start` | Produktion |
+| `npm test` | Unit-Tests (Vitest) |
+| `npm run db:migrate` | Prisma migrate (dev) |
+| `npm run db:studio` | Prisma Studio |
+
+## Features (Demo-MVP)
+
+- **Produkte & Komponenten** — Verkaufskatalog + BOM mit Lieferanten-Vererbung (Währung)
+- **Lieferanten & Händler** — Konditionen, Defaults für Verkauf
+- **Chargen** — Menge, EK, Kostenposten (pro Stück / pauschal / % Warenwert), inkl. Montage/Repacking
 - **Unit Economics** — Wasserfall Einkauf → Landed Cost → Vertrieb → Nettomarge
+- **Gemeinkosten** — Sektion in der Overview (Verteilschlüssel)
+- **CSV-Export** — unter Einstellungen (Lieferanten, Produkte, Komponenten, Chargen)
 
-## Datenmodell
+Phase-2 (Absatzplan, Konsolidierung, …) ist per Feature-Flags ausgeschaltet (`src/lib/features.ts`).
 
-```
-Lieferant → Produkt → Charge → Händler
-                       ├─ Kostenposten[] (Beschaffung)
-                       └─ Verkauf + Kostenposten[] (Vertrieb)
-```
+## Deploy
 
-Neue Kostenarten brauchen kein Schema-Update — nur einen weiteren Posten-Typ.
+Siehe [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).

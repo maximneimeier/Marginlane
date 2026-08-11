@@ -757,45 +757,62 @@ function ExpandedComponents({
               </tr>
             </thead>
             <tbody>
-              {components.map((c) => {
-                const product = data.catalogProducts.find(
-                  (p) => p.id === c.productId,
+              {components.flatMap((c) => {
+                const links = (data.productComponents ?? []).filter(
+                  (pc) => pc.componentId === c.id,
                 );
-                const m = product
-                  ? buildProductMetrics(product.id, data)
-                  : null;
-                const unit = product
-                  ? pricingUnitLabel(product.pricingUnit)
-                  : pricingUnitLabel("pcs");
-                return (
-                  <tr
-                    key={c.id}
-                    className="border-b border-line/70 last:border-0 hover:bg-white/60"
-                  >
-                    <td className="px-3 py-2">
-                      <button
-                        type="button"
-                        onClick={() => onEditProduct(c)}
-                        className="text-left font-medium text-foreground hover:text-accent"
-                      >
-                        {c.name || t("common.emDash")}
-                      </button>
-                    </td>
-                    <td className="px-3 py-2 text-muted">
-                      {product?.name ?? t("common.emDash")}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {formatEuro(c.purchasePricePerUnit, locale)}
-                      <span className="ml-1 text-muted-soft">/ {unit}</span>
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-muted">
-                      {c.quantityPerProductUnit}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-muted">
-                      {m?.batchCount ?? 0}
-                    </td>
-                  </tr>
-                );
+                const rows =
+                  links.length > 0
+                    ? links
+                    : [
+                        {
+                          id: `none-${c.id}`,
+                          productId: "",
+                          quantityPerProductUnit: 0,
+                        },
+                      ];
+                return rows.map((pc) => {
+                  const product = data.catalogProducts.find(
+                    (p) => p.id === pc.productId,
+                  );
+                  const m = product
+                    ? buildProductMetrics(product.id, data)
+                    : null;
+                  const unit = product
+                    ? pricingUnitLabel(product.pricingUnit)
+                    : pricingUnitLabel("pcs");
+                  return (
+                    <tr
+                      key={`${c.id}-${pc.id}`}
+                      className="border-b border-line/70 last:border-0 hover:bg-white/60"
+                    >
+                      <td className="px-3 py-2">
+                        <button
+                          type="button"
+                          onClick={() => onEditProduct(c)}
+                          className="text-left font-medium text-foreground hover:text-accent"
+                        >
+                          {c.name || t("common.emDash")}
+                        </button>
+                      </td>
+                      <td className="px-3 py-2 text-muted">
+                        {product?.name ?? t("common.emDash")}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        {formatEuro(c.purchasePricePerUnit, locale)}
+                        <span className="ml-1 text-muted-soft">/ {unit}</span>
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-muted">
+                        {"quantityPerProductUnit" in pc
+                          ? pc.quantityPerProductUnit
+                          : t("common.emDash")}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-muted">
+                        {m?.batchCount ?? 0}
+                      </td>
+                    </tr>
+                  );
+                });
               })}
             </tbody>
           </table>

@@ -2,14 +2,17 @@
 
 import { useState } from "react";
 import { useStore } from "@/context/StoreContext";
-import type { CatalogProduct, Component, Supplier } from "@/lib/types";
+import type {
+  CatalogProduct,
+  Component,
+  ProductComponent,
+  Supplier,
+} from "@/lib/types";
 import {
   SupplierFormModal,
   emptySupplier,
 } from "@/components/SupplierFormModal";
-import {
-  CatalogProductFormModal,
-} from "@/components/CatalogProductFormModal";
+import { CatalogProductFormModal } from "@/components/CatalogProductFormModal";
 import { SuppliersOverview } from "@/components/SuppliersOverview";
 import { useI18n } from "@/hooks/useI18n";
 
@@ -21,7 +24,8 @@ export default function LieferantenPage() {
     deleteSupplier,
     upsertCatalogProduct,
     upsertComponent,
-    deleteComponent,
+    upsertProductComponent,
+    deleteProductComponent,
     clearData,
   } = useStore();
   const { t } = useI18n();
@@ -30,16 +34,24 @@ export default function LieferantenPage() {
     draft: Supplier | null;
     isEdit: boolean;
   }>({ open: false, draft: null, isEdit: false });
-  const [productDraft, setProductDraft] = useState<CatalogProduct | null>(null);
+  const [productDraft, setProductDraft] = useState<CatalogProduct | null>(
+    null,
+  );
 
-  if (!ready) return <p className="text-[13px] text-muted">{t("common.loading")}</p>;
+  if (!ready) {
+    return <p className="text-[13px] text-muted">{t("common.loading")}</p>;
+  }
 
   function openCreateSupplier() {
     setSupplierModal({ open: true, draft: emptySupplier(), isEdit: false });
   }
 
   function openEditSupplier(supplier: Supplier) {
-    setSupplierModal({ open: true, draft: supplier, isEdit: true });
+    setSupplierModal({
+      open: true,
+      draft: structuredClone(supplier),
+      isEdit: true,
+    });
   }
 
   const isEditProduct = Boolean(
@@ -50,14 +62,21 @@ export default function LieferantenPage() {
   function saveProduct(
     product: CatalogProduct,
     components: Component[],
+    links: ProductComponent[],
   ) {
     upsertCatalogProduct(product);
-    const nextIds = new Set(components.map((c) => c.id));
-    for (const c of data.components.filter((x) => x.productId === product.id)) {
-      if (!nextIds.has(c.id)) deleteComponent(c.id);
-    }
     for (const c of components) {
       upsertComponent(c);
+    }
+    const existingLinks = (data.productComponents ?? []).filter(
+      (pc) => pc.productId === product.id,
+    );
+    const nextIds = new Set(links.map((l) => l.id));
+    for (const link of existingLinks) {
+      if (!nextIds.has(link.id)) deleteProductComponent(link.id);
+    }
+    for (const link of links) {
+      upsertProductComponent(link);
     }
     setProductDraft(null);
   }
@@ -99,8 +118,11 @@ export default function LieferantenPage() {
           /* siehe Link auf /products */
         }}
         onEditProduct={(component) => {
+          const link = (data.productComponents ?? []).find(
+            (pc) => pc.componentId === component.id,
+          );
           const product = data.catalogProducts.find(
-            (p) => p.id === component.productId,
+            (p) => p.id === link?.productId,
           );
           if (product) setProductDraft(product);
         }}

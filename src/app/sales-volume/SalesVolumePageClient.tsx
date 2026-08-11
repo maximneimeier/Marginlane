@@ -1001,6 +1001,7 @@ export default function SalesVolumePageClient() {
                     const unitCost = rowUnitCost(
                       row.product.id,
                       data.components,
+                      data.productComponents ?? [],
                     );
                     const margin = plannedMarginPercent(unitPrice, unitCost);
                     const target = row.product.targetMarginPercent;

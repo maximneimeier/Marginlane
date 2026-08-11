@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useStore } from "@/context/StoreContext";
-import type { CatalogProduct, Component } from "@/lib/types";
+import type { CatalogProduct, Component, ProductComponent } from "@/lib/types";
 import { formatEuro, formatPercent } from "@/lib/format";
 import { catalogProductUnitPurchaseCost } from "@/lib/migrateAppData";
 import type { MessageKey } from "@/lib/i18n";
@@ -26,7 +26,8 @@ export default function ProductsPageClient() {
     data,
     upsertCatalogProduct,
     upsertComponent,
-    deleteComponent,
+    upsertProductComponent,
+    deleteProductComponent,
     deleteCatalogProduct,
   } = useStore();
   const { t, plural, locale, lang, pricingUnitLabel } = useI18n();
@@ -52,19 +53,24 @@ export default function ProductsPageClient() {
       .sort((a, b) => a.name.localeCompare(b.name, lang));
   }, [data.catalogProducts, query, filterStatus, lang]);
 
-  function saveProduct(product: CatalogProduct, components: Component[]) {
+  function saveProduct(
+    product: CatalogProduct,
+    components: Component[],
+    links: ProductComponent[],
+  ) {
     upsertCatalogProduct(product);
-    const existingIds = new Set(
-      data.components
-        .filter((c) => c.productId === product.id)
-        .map((c) => c.id),
-    );
-    const nextIds = new Set(components.map((c) => c.id));
-    for (const id of existingIds) {
-      if (!nextIds.has(id)) deleteComponent(id);
-    }
     for (const c of components) {
       upsertComponent(c);
+    }
+    const existingLinks = (data.productComponents ?? []).filter(
+      (pc) => pc.productId === product.id,
+    );
+    const nextIds = new Set(links.map((l) => l.id));
+    for (const link of existingLinks) {
+      if (!nextIds.has(link.id)) deleteProductComponent(link.id);
+    }
+    for (const link of links) {
+      upsertProductComponent(link);
     }
   }
 
@@ -175,9 +181,10 @@ export default function ProductsPageClient() {
                   const purchase = catalogProductUnitPurchaseCost(
                     product.id,
                     data.components,
+                    data.productComponents ?? [],
                   );
-                  const componentCount = data.components.filter(
-                    (c) => c.productId === product.id,
+                  const componentCount = (data.productComponents ?? []).filter(
+                    (pc) => pc.productId === product.id,
                   ).length;
                   return (
                     <tr

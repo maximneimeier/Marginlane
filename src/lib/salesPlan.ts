@@ -4,6 +4,7 @@ import type {
   Component,
   Dealer,
   DealerChannel,
+  ProductComponent,
   SalesPlanCell,
   SalesPlanRowMeta,
   SalesPlanScenario,
@@ -14,6 +15,7 @@ import {
   SALES_PLAN_SCENARIOS,
 } from "./types";
 import { parseDateInput, type DateRange } from "./overview";
+import { catalogProductUnitPurchaseCost } from "./migrateAppData";
 
 /** `null` = Direktverkauf / ohne Händler */
 export type DealerRef = string | null;
@@ -942,14 +944,13 @@ export function summarizePlannedVolume(
 export function rowUnitCost(
   productId: string,
   components: Component[],
+  productComponents: ProductComponent[] = [],
 ): number {
-  return components
-    .filter((c) => c.productId === productId)
-    .reduce(
-      (sum, c) =>
-        sum + c.purchasePricePerUnit * Math.max(c.quantityPerProductUnit, 0),
-      0,
-    );
+  return catalogProductUnitPurchaseCost(
+    productId,
+    components,
+    productComponents,
+  );
 }
 
 export function ensureScenarioOnCells(

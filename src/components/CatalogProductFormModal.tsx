@@ -7,12 +7,14 @@ import type {
   CatalogProductStatus,
   Component,
   PricingUnit,
+  ProductComponent,
 } from "@/lib/types";
 import { CURRENCIES } from "@/lib/types";
 import { createId, formatEuro } from "@/lib/format";
 import {
   catalogProductUnitPurchaseCost,
   emptyComponent,
+  emptyProductComponent,
 } from "@/lib/migrateAppData";
 import { useI18n } from "@/hooks/useI18n";
 import {
@@ -40,13 +42,22 @@ export function emptyCatalogProduct(): CatalogProduct {
   };
 }
 
+type BomLine = {
+  component: Component;
+  link: ProductComponent;
+};
+
 type Props = {
   open: boolean;
   initial: CatalogProduct | null;
   isEdit: boolean;
   data: AppData;
   onClose: () => void;
-  onSave: (product: CatalogProduct, components: Component[]) => void;
+  onSave: (
+    product: CatalogProduct,
+    components: Component[],
+    links: ProductComponent[],
+  ) => void;
 };
 
 export function CatalogProductFormModal({
@@ -61,26 +72,39 @@ export function CatalogProductFormModal({
   const [draft, setDraft] = useState<CatalogProduct | null>(() =>
     initial ? structuredClone(initial) : null,
   );
-  const [components, setComponents] = useState<Component[]>([]);
+  const [lines, setLines] = useState<BomLine[]>([]);
 
   useLayoutEffect(() => {
     if (!open) {
       setDraft(null);
-      setComponents([]);
+      setLines([]);
       return;
     }
     if (initial) {
       setDraft(structuredClone(initial));
-      setComponents(
-        structuredClone(
-          data.components.filter((c) => c.productId === initial.id),
-        ),
+      const links = (data.productComponents ?? []).filter(
+        (pc) => pc.productId === initial.id,
+      );
+      setLines(
+        links.map((link) => {
+          const component =
+            data.components.find((c) => c.id === link.componentId) ??
+            emptyComponent();
+          return {
+            link: structuredClone(link),
+            component: structuredClone(
+              component.id === link.componentId
+                ? component
+                : { ...emptyComponent(), id: link.componentId },
+            ),
+          };
+        }),
       );
     } else {
       setDraft(null);
-      setComponents([]);
+      setLines([]);
     }
-  }, [open, initial, data.components]);
+  }, [open, initial, data.components, data.productComponents]);
 
   useEffect(() => {
     if (!open) return;
@@ -91,13 +115,14 @@ export function CatalogProductFormModal({
     };
   }, [open]);
 
-  const unitPurchase = useMemo(
-    () =>
-      draft
-        ? catalogProductUnitPurchaseCost(draft.id, components)
-        : 0,
-    [draft, components],
-  );
+  const unitPurchase = useMemo(() => {
+    if (!draft) return 0;
+    return catalogProductUnitPurchaseCost(
+      draft.id,
+      lines.map((l) => l.component),
+      lines.map((l) => ({ ...l.link, productId: draft.id })),
+    );
+  }, [draft, lines]);
 
   const title = isEdit
     ? t("productModal.editTitle")
@@ -114,7 +139,7 @@ export function CatalogProductFormModal({
   }
 
   function handleSave() {
-    if (!draft || !draft.name.trim()) return;
+    if (!draft || !draft.name.trim() || !draft.sku.trim()) return;
     const product: CatalogProduct = {
       ...draft,
       name: draft.name.trim(),
@@ -122,29 +147,52 @@ export function CatalogProductFormModal({
       category: draft.category.trim(),
       notes: draft.notes.trim(),
     };
-    const nextComponents = components
-      .filter((c) => c.name.trim() || c.purchasePricePerUnit > 0)
-      .map((c) => ({
-        ...c,
-        productId: product.id,
-        name: c.name.trim() || t("productModal.componentDefaultName"),
-      }));
-    onSave(product, nextComponents);
+    const kept = lines.filter(
+      (l) => l.component.name.trim() || l.component.purchasePricePerUnit > 0,
+    );
+    const components = kept.map((l) => ({
+      ...l.component,
+      name: l.component.name.trim() || t("productModal.componentDefaultName"),
+    }));
+    const links = kept.map((l) => ({
+      ...l.link,
+      productId: product.id,
+      componentId: l.component.id,
+      quantityPerProductUnit: Math.max(l.link.quantityPerProductUnit, 0),
+    }));
+    onSave(product, components, links);
     onClose();
   }
 
   function addComponent() {
-    setComponents((prev) => [...prev, emptyComponent(draft!.id)]);
+    const component = emptyComponent();
+    setLines((prev) => [
+      ...prev,
+      {
+        component,
+        link: emptyProductComponent(draft!.id, component.id),
+      },
+    ]);
   }
 
-  function updateComponent(id: string, patch: Partial<Component>) {
-    setComponents((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+  function updateLine(
+    linkId: string,
+    patch: { component?: Partial<Component>; link?: Partial<ProductComponent> },
+  ) {
+    setLines((prev) =>
+      prev.map((row) =>
+        row.link.id === linkId
+          ? {
+              component: { ...row.component, ...patch.component },
+              link: { ...row.link, ...patch.link },
+            }
+          : row,
+      ),
     );
   }
 
-  function removeComponent(id: string) {
-    setComponents((prev) => prev.filter((c) => c.id !== id));
+  function removeLine(linkId: string) {
+    setLines((prev) => prev.filter((row) => row.link.id !== linkId));
   }
 
   return (
@@ -165,7 +213,7 @@ export function CatalogProductFormModal({
               placeholder={t("productModal.namePlaceholder")}
             />
           </Field>
-          <Field label={t("productModal.sku")}>
+          <Field label={t("productModal.sku")} required>
             <TextInput
               value={draft.sku}
               onChange={(e) => setDraft({ ...draft, sku: e.target.value })}
@@ -187,31 +235,10 @@ export function CatalogProductFormModal({
             >
               {pricingUnits.map((u) => (
                 <option key={u} value={u}>
-                  {pricingUnitLabel(u, true)} ({pricingUnitLabel(u)})
+                  {pricingUnitLabel(u)}
                 </option>
               ))}
             </Select>
-          </Field>
-          <Field
-            label={t("productModal.listPrice", {
-              unit: pricingUnitLabel(draft.pricingUnit),
-            })}
-            hint={t("productModal.listPriceHint")}
-          >
-            <TextInput
-              type="number"
-              step="0.01"
-              min="0"
-              value={draft.listPrice ?? ""}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  listPrice:
-                    e.target.value === "" ? null : Number(e.target.value),
-                })
-              }
-              placeholder={t("productModal.listPricePlaceholder")}
-            />
           </Field>
           <Field label={t("productModal.currency")}>
             <Select
@@ -227,6 +254,22 @@ export function CatalogProductFormModal({
               ))}
             </Select>
           </Field>
+          <Field label={t("productModal.listPrice")}>
+            <TextInput
+              type="number"
+              step="0.01"
+              min="0"
+              value={draft.listPrice ?? ""}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  listPrice:
+                    e.target.value === "" ? null : Number(e.target.value) || 0,
+                })
+              }
+              placeholder="0.00"
+            />
+          </Field>
           <Field label={t("productModal.status")}>
             <Select
               value={draft.status}
@@ -238,41 +281,14 @@ export function CatalogProductFormModal({
               }
             >
               <option value="active">{t("products.status.active")}</option>
-              <option value="inactive">{t("products.status.inactive")}</option>
+              <option value="inactive">
+                {t("products.status.inactive")}
+              </option>
             </Select>
-          </Field>
-          <Field label={t("productModal.category")}>
-            <TextInput
-              value={draft.category}
-              onChange={(e) =>
-                setDraft({ ...draft, category: e.target.value })
-              }
-              placeholder={t("productModal.categoryPlaceholder")}
-            />
-          </Field>
-          <Field
-            label={t("productModal.targetMargin")}
-            hint={t("productModal.targetMarginHint")}
-          >
-            <TextInput
-              type="number"
-              step="0.1"
-              min="0"
-              max="100"
-              value={draft.targetMarginPercent ?? ""}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  targetMarginPercent:
-                    e.target.value === "" ? null : Number(e.target.value),
-                })
-              }
-              placeholder={t("productModal.targetMarginPlaceholder")}
-            />
           </Field>
         </div>
 
-        <div className="rounded-[10px] border border-line bg-surface-faint p-3">
+        <div className="rounded-[10px] border border-line p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
             <div>
               <p className="text-[13px] font-medium text-foreground">
@@ -287,29 +303,39 @@ export function CatalogProductFormModal({
             </Button>
           </div>
 
-          {components.length === 0 ? (
+          {lines.length === 0 ? (
             <p className="py-3 text-center text-[12px] text-muted">
               {t("productModal.componentsEmpty")}
             </p>
           ) : (
             <div className="space-y-2">
-              {components.map((c) => (
+              {lines.map((row) => (
                 <div
-                  key={c.id}
+                  key={row.link.id}
                   className="grid gap-2 rounded-[8px] border border-line bg-white p-2 sm:grid-cols-[1.2fr_1fr_0.7fr_0.7fr_auto]"
                 >
                   <TextInput
-                    value={c.name}
+                    value={row.component.name}
                     onChange={(e) =>
-                      updateComponent(c.id, { name: e.target.value })
+                      updateLine(row.link.id, {
+                        component: { name: e.target.value },
+                      })
                     }
                     placeholder={t("productModal.componentName")}
                   />
                   <Select
-                    value={c.supplierId}
-                    onChange={(e) =>
-                      updateComponent(c.id, { supplierId: e.target.value })
-                    }
+                    value={row.component.supplierId}
+                    onChange={(e) => {
+                      const supplierId = e.target.value;
+                      updateLine(row.link.id, {
+                        component: {
+                          supplierId,
+                          currency: supplierId
+                            ? null
+                            : row.component.currency ?? "EUR",
+                        },
+                      });
+                    }}
                   >
                     <option value="">
                       {t("productModal.componentSupplier")}
@@ -326,10 +352,12 @@ export function CatalogProductFormModal({
                     type="number"
                     step="0.01"
                     min="0"
-                    value={c.purchasePricePerUnit || ""}
+                    value={row.component.purchasePricePerUnit || ""}
                     onChange={(e) =>
-                      updateComponent(c.id, {
-                        purchasePricePerUnit: Number(e.target.value) || 0,
+                      updateLine(row.link.id, {
+                        component: {
+                          purchasePricePerUnit: Number(e.target.value) || 0,
+                        },
                       })
                     }
                     placeholder={t("productModal.componentPrice")}
@@ -338,10 +366,12 @@ export function CatalogProductFormModal({
                     type="number"
                     step="0.01"
                     min="0"
-                    value={c.quantityPerProductUnit || ""}
+                    value={row.link.quantityPerProductUnit || ""}
                     onChange={(e) =>
-                      updateComponent(c.id, {
-                        quantityPerProductUnit: Number(e.target.value) || 0,
+                      updateLine(row.link.id, {
+                        link: {
+                          quantityPerProductUnit: Number(e.target.value) || 0,
+                        },
                       })
                     }
                     placeholder={t("productModal.componentQty")}
@@ -350,7 +380,7 @@ export function CatalogProductFormModal({
                     type="button"
                     variant="danger"
                     className="h-9 px-2"
-                    onClick={() => removeComponent(c.id)}
+                    onClick={() => removeLine(row.link.id)}
                   >
                     ×
                   </Button>
@@ -381,7 +411,10 @@ export function CatalogProductFormModal({
           <Button variant="secondary" onClick={onClose}>
             {t("common.cancel")}
           </Button>
-          <Button onClick={handleSave} disabled={!draft.name.trim()}>
+          <Button
+            onClick={handleSave}
+            disabled={!draft.name.trim() || !draft.sku.trim()}
+          >
             {t("common.save")}
           </Button>
         </div>

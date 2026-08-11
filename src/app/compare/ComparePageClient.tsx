@@ -133,9 +133,13 @@ export default function ComparePage() {
       const supplierIds = product
         ? [
             ...new Set(
-              data.components
-                .filter((c) => c.productId === product.id && c.supplierId)
-                .map((c) => c.supplierId),
+              (data.productComponents ?? [])
+                .filter((pc) => pc.productId === product.id)
+                .map((pc) =>
+                  data.components.find((c) => c.id === pc.componentId)
+                    ?.supplierId,
+                )
+                .filter((id): id is string => Boolean(id)),
             ),
           ]
         : [];
@@ -144,7 +148,11 @@ export default function ComparePage() {
       const qty =
         sensitivityQty === "" ? scenario.quantity : Number(sensitivityQty);
       const unitPrice = product
-        ? catalogProductUnitPurchaseCost(product.id, data.components)
+        ? catalogProductUnitPurchaseCost(
+            product.id,
+            data.components,
+            data.productComponents ?? [],
+          )
         : 0;
       const sellPrice = sellPriceFor(scenario, dealer);
       const econ = calculateUnitEconomics({
@@ -322,15 +330,24 @@ export default function ComparePage() {
                           a.name.localeCompare(b.name, locale),
                         )
                         .map((p) => {
-                          const comps = data.components.filter(
-                            (c) => c.productId === p.id && c.supplierId,
-                          );
+                          const comps = (data.productComponents ?? [])
+                            .filter((pc) => pc.productId === p.id)
+                            .map((pc) =>
+                              data.components.find(
+                                (c) => c.id === pc.componentId,
+                              ),
+                            )
+                            .filter(
+                              (c): c is NonNullable<typeof c> =>
+                                Boolean(c?.supplierId),
+                            );
                           const supplierNames = [
                             ...new Set(
                               comps.map(
                                 (c) =>
-                                  data.suppliers.find((s) => s.id === c.supplierId)
-                                    ?.name ?? "?",
+                                  data.suppliers.find(
+                                    (s) => s.id === c.supplierId,
+                                  )?.name ?? "?",
                               ),
                             ),
                           ].join(", ");

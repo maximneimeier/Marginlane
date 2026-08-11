@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import type { AppData } from "@/lib/types";
 import {
   clearWorkspaceData,
   getWorkspaceData,
   saveWorkspaceData,
 } from "@/lib/db/workspace";
+import { parseAndValidateAppData } from "@/lib/validateAppData";
 
 export const runtime = "nodejs";
 
@@ -23,8 +23,19 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
-    const body = (await request.json()) as AppData;
-    const data = await saveWorkspaceData(body);
+    const body: unknown = await request.json();
+    const parsed = parseAndValidateAppData(body);
+    if (!parsed.ok) {
+      return NextResponse.json(
+        {
+          error: "Validation failed",
+          issues: parsed.issues.slice(0, 50),
+          issueCount: parsed.issues.length,
+        },
+        { status: 400 },
+      );
+    }
+    const data = await saveWorkspaceData(parsed.data);
     return NextResponse.json(data);
   } catch (error) {
     console.error("PUT /api/workspace failed", error);

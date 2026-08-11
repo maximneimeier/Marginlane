@@ -7,6 +7,7 @@ import type {
   CostItem,
   CommercialTerms,
   Dealer,
+  ProductComponent,
   Sale,
   SalesData,
   Supplier,
@@ -21,7 +22,13 @@ import {
 } from "./migrateAppData";
 import { createId } from "./format";
 
-export type TermSource = "batch" | "product" | "supplier" | "dealer" | "none";
+export type TermSource =
+  | "batch"
+  | "product"
+  | "component"
+  | "supplier"
+  | "dealer"
+  | "none";
 
 export type ResolvedField<T> = {
   value: T;
@@ -114,10 +121,31 @@ export function resolveCommercial(
   };
 }
 
+/** Standardwährung ohne Lieferant / Workspace-Fallback */
+export const WORKSPACE_DEFAULT_CURRENCY = "EUR";
+
+/**
+ * Komponenten-Währung: explizit gesetzt, sonst Lieferant, sonst Workspace-Default.
+ * `component.currency === null` und vorhandener Lieferant → erben.
+ */
+export function resolveComponentCurrency(
+  component: Pick<Component, "supplierId" | "currency">,
+  supplier: Supplier | undefined,
+): ResolvedField<string> {
+  if (component.currency !== null && component.currency !== undefined) {
+    return { value: component.currency, source: "component" };
+  }
+  if (component.supplierId && supplier?.currency) {
+    return { value: supplier.currency, source: "supplier" };
+  }
+  return { value: WORKSPACE_DEFAULT_CURRENCY, source: "none" };
+}
+
 /** EK pro Einheit: Batch-Override oder BOM-Summe */
 export function resolveUnitPurchasePrice(
   productId: string | undefined,
   components: Component[],
+  productComponents: ProductComponent[],
   batch: Batch | null | undefined,
 ): ResolvedField<number> {
   if (
@@ -130,7 +158,11 @@ export function resolveUnitPurchasePrice(
     return { value: 0, source: "none" };
   }
   return {
-    value: catalogProductUnitPurchaseCost(productId, components),
+    value: catalogProductUnitPurchaseCost(
+      productId,
+      components,
+      productComponents,
+    ),
     source: "product",
   };
 }
@@ -271,8 +303,12 @@ export function resolveBatchEconomicsInput(
   const catalogProduct = data.catalogProducts.find(
     (p) => p.id === batch.productId,
   );
-  const components = data.components.filter(
-    (c) => c.productId === batch.productId,
+  const links = (data.productComponents ?? []).filter(
+    (pc) => pc.productId === batch.productId,
+  );
+  const linkComponentIds = new Set(links.map((pc) => pc.componentId));
+  const components = data.components.filter((c) =>
+    linkComponentIds.has(c.id),
   );
   const primarySupplierId =
     batch.supplierId ||
@@ -288,6 +324,7 @@ export function resolveBatchEconomicsInput(
   const purchase = resolveUnitPurchasePrice(
     batch.productId,
     data.components,
+    data.productComponents ?? [],
     batch,
   );
 

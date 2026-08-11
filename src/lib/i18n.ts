@@ -5,6 +5,7 @@ export type MessageKey = keyof typeof de;
 const de = {
   "common.loading": "Laden…",
   "common.cancel": "Abbrechen",
+  "common.close": "Schließen",
   "common.save": "Speichern",
   "common.delete": "Löschen",
   "common.edit": "Bearbeiten",
@@ -205,7 +206,13 @@ const de = {
   "salesVolume.footer":
     "Aktives Szenario steuert Plan-Gemeinkosten. Plan-VK: Zeilenpreis → Händler-Default → Listenpreis.",
   "components.description":
-    "Bestellbare Komponenten — EK, MOQ und Landed Cost über Lieferanten.",
+    "Wiederverwendbare Beschaffungs-Teile. Zuordnung zu Produkten über die BOM (Menge pro Produkteinheit).",
+  "components.col.products": "Produkte",
+  "components.col.totalQty": "Σ Menge",
+  "components.deleteBlockedTitle": "Komponente ist noch verknüpft",
+  "components.deleteBlockedDescription":
+    "„{name}“ wird noch in folgenden Produkten verwendet: {products}. Entferne zuerst die Verknüpfungen am Produkt.",
+  "components.hintProducts": "BOM-Zuordnung auch unter Produkte bearbeiten →",
   "products.add": "+ Produkt",
   "components.add": "+ Komponente",
   "products.deleteTitle": "Produkt löschen?",
@@ -273,12 +280,35 @@ const de = {
     "Name, EK und optionale Lieferanten-Zuordnung.",
   "componentModal.bomDescription":
     "BOM-Komponente eines Verkaufsprodukts: Lieferant, EK und Menge pro Produkteinheit.",
+  "componentModal.mode.create": "Neue Komponente anlegen",
+  "componentModal.mode.link": "Bestehende verwenden",
+  "componentModal.existing": "Komponente aus Katalog",
+  "componentModal.existingPlaceholder": "Komponente wählen…",
+  "componentModal.productOptionalEditHint":
+    "Optional — nur setzen, um die Komponente einem weiteren Produkt zuzuordnen.",
+  "componentModal.priceOverride": "Sonderpreis (optional)",
+  "componentModal.priceOverrideHint":
+    "Leer = Standard-EK der Komponente für dieses Produkt.",
+  "componentModal.priceOverridePlaceholder": "Standard-EK",
   "componentModal.product": "Produkt",
   "componentModal.productPlaceholder": "Produkt wählen…",
-  "componentModal.purchasePrice": "Einkaufspreis / Einheit (€)",
+  "componentModal.purchasePrice": "Einkaufspreis / Einheit",
   "componentModal.qtyPerProduct": "Menge pro Produkteinheit",
   "componentModal.qtyPerProductHint":
     "Wie viele Einheiten dieser Komponente stecken in einer Verkaufseinheit?",
+  "componentModal.componentSku": "Komponenten-SKU / Artikelnummer",
+  "componentModal.componentSkuHint":
+    "Optional — Artikelnummer beim Lieferanten, unabhängig von der Produkt-SKU.",
+  "componentModal.componentSkuPlaceholder": "z. B. SUP-ART-4421",
+  "componentModal.currency": "Währung",
+  "componentModal.currencyManualHint":
+    "Kein Lieferant gewählt — Währung manuell setzen (Workspace-Standard: EUR).",
+  "componentModal.currencyInheritedHint":
+    "Vom Lieferanten {supplier}: {currency}",
+  "componentModal.notes": "Notizen",
+  "componentModal.notesHint":
+    "Optional — z. B. Verpackungseinheiten oder Besonderheiten beim Lieferanten.",
+  "componentModal.notesPlaceholder": "z. B. 12 Stück / Karton",
   "componentModal.needProduct":
     "Lege zuerst unter Produkte ein Verkaufsprodukt an, bevor du Komponenten zuordnen kannst.",
   "productModal.noDraft": "Kein Entwurf geladen.",
@@ -797,6 +827,13 @@ const de = {
   "settings.savedLocally": "Wird lokal in diesem Browser gespeichert.",
   "settings.lang.de": "Deutsch",
   "settings.lang.en": "Englisch",
+  "settings.export.title": "Datenexport",
+  "settings.export.hint":
+    "CSV-Download deiner Stammdaten und Chargen (inkl. Marge) — Semikolon-getrennt, Excel-tauglich.",
+  "settings.export.suppliers": "Lieferanten CSV",
+  "settings.export.products": "Produkte CSV",
+  "settings.export.components": "Komponenten CSV",
+  "settings.export.batches": "Chargen CSV",
 
   "dealer.channel.b2b": "B2B / Fachhandel",
   "dealer.channel.retail": "Retail",
@@ -824,6 +861,7 @@ const de = {
   "costType.Fracht": "Fracht",
   "costType.Zoll": "Zoll",
   "costType.QC / Inspection": "QC / Inspection",
+  "costType.Montage / Repacking": "Montage / Repacking",
   "costType.Verpackung": "Verpackung",
   "costType.Lager": "Lager",
   "costType.Versicherung": "Versicherung",
@@ -845,7 +883,8 @@ const de = {
   "legalForm.Andere": "Andere",
 
   "costEditor.add": "+ Kostenposten",
-  "costEditor.empty": "Noch keine Kostenposten. Typen sind frei erweiterbar.",
+  "costEditor.empty":
+    "Noch keine Kostenposten. z. B. Fracht, Zoll, QC, Montage/Repacking — Typen sind frei erweiterbar.",
   "costEditor.type": "Typ",
   "costEditor.label": "Bezeichnung",
   "costEditor.labelPlaceholder": "Optional anders benennen",
@@ -918,7 +957,7 @@ const de = {
     "Nächste Stufe ab {minQty} {unit} (−{percent}) — noch {remaining} {unit} bis dahin.",
   "batchModal.overridePrice": "EK / {unit} überschreiben (€)",
   "batchModal.overrideHint": "Optional — sonst gilt der berechnete Preis.",
-  "batchModal.procurementCosts": "Beschaffungskosten",
+  "batchModal.procurementCosts": "Beschaffungskosten (z. B. Fracht, Zoll, QC, Montage/Repacking)",
   "batchModal.section.sales": "Verkauf",
   "batchModal.salesSpecHint":
     "Verkaufsseite der Charge (Spec: Batch ↔ SalesData). Händler ist optional nur Vorlage.",
@@ -1012,6 +1051,7 @@ const de = {
 const en: Record<MessageKey, string> = {
   "common.loading": "Loading…",
   "common.cancel": "Cancel",
+  "common.close": "Close",
   "common.save": "Save",
   "common.delete": "Delete",
   "common.edit": "Edit",
@@ -1212,7 +1252,13 @@ const en: Record<MessageKey, string> = {
   "salesVolume.footer":
     "Active scenario drives plan overhead. Plan price: row → dealer default → list price.",
   "components.description":
-    "Orderable components — purchase price, MOQ and landed cost across suppliers.",
+    "Reusable purchase parts. Link them to products via the BOM (qty per product unit).",
+  "components.col.products": "Products",
+  "components.col.totalQty": "Σ qty",
+  "components.deleteBlockedTitle": "Component still linked",
+  "components.deleteBlockedDescription":
+    "“{name}” is still used in: {products}. Remove the product links first.",
+  "components.hintProducts": "Edit BOM links under Products →",
   "products.add": "+ Product",
   "components.add": "+ Component",
   "products.deleteTitle": "Delete product?",
@@ -1279,12 +1325,35 @@ const en: Record<MessageKey, string> = {
   "componentModal.description": "Set name, price and an optional supplier.",
   "componentModal.bomDescription":
     "BOM component of a sell product: supplier, purchase price and qty per product unit.",
+  "componentModal.mode.create": "Create new component",
+  "componentModal.mode.link": "Use existing",
+  "componentModal.existing": "Component from catalog",
+  "componentModal.existingPlaceholder": "Select component…",
+  "componentModal.productOptionalEditHint":
+    "Optional — set only to link this component to another product.",
+  "componentModal.priceOverride": "Price override (optional)",
+  "componentModal.priceOverrideHint":
+    "Empty = use the component’s standard purchase price for this product.",
+  "componentModal.priceOverridePlaceholder": "Standard price",
   "componentModal.product": "Product",
   "componentModal.productPlaceholder": "Select product…",
-  "componentModal.purchasePrice": "Purchase price / unit (€)",
+  "componentModal.purchasePrice": "Purchase price / unit",
   "componentModal.qtyPerProduct": "Qty per product unit",
   "componentModal.qtyPerProductHint":
     "How many units of this component go into one sell unit?",
+  "componentModal.componentSku": "Component SKU / article number",
+  "componentModal.componentSkuHint":
+    "Optional — supplier article number, independent of the product SKU.",
+  "componentModal.componentSkuPlaceholder": "e.g. SUP-ART-4421",
+  "componentModal.currency": "Currency",
+  "componentModal.currencyManualHint":
+    "No supplier selected — set currency manually (workspace default: EUR).",
+  "componentModal.currencyInheritedHint":
+    "From supplier {supplier}: {currency}",
+  "componentModal.notes": "Notes",
+  "componentModal.notesHint":
+    "Optional — e.g. packaging units or supplier specifics.",
+  "componentModal.notesPlaceholder": "e.g. 12 pcs / carton",
   "componentModal.needProduct":
     "Create a sell product under Products first before assigning components.",
   "productModal.noDraft": "No draft loaded.",
@@ -1802,6 +1871,13 @@ const en: Record<MessageKey, string> = {
   "settings.savedLocally": "Saved locally in this browser.",
   "settings.lang.de": "German",
   "settings.lang.en": "English",
+  "settings.export.title": "Data export",
+  "settings.export.hint":
+    "CSV download of master data and batches (incl. margin) — semicolon-separated, Excel-friendly.",
+  "settings.export.suppliers": "Suppliers CSV",
+  "settings.export.products": "Products CSV",
+  "settings.export.components": "Components CSV",
+  "settings.export.batches": "Batches CSV",
 
   "dealer.channel.b2b": "B2B / Trade",
   "dealer.channel.retail": "Retail",
@@ -1829,6 +1905,7 @@ const en: Record<MessageKey, string> = {
   "costType.Fracht": "Freight",
   "costType.Zoll": "Customs",
   "costType.QC / Inspection": "QC / Inspection",
+  "costType.Montage / Repacking": "Assembly / repacking",
   "costType.Verpackung": "Packaging",
   "costType.Lager": "Warehousing",
   "costType.Versicherung": "Insurance",
@@ -1850,7 +1927,8 @@ const en: Record<MessageKey, string> = {
   "legalForm.Andere": "Other",
 
   "costEditor.add": "+ Cost item",
-  "costEditor.empty": "No cost items yet. Types are freely extensible.",
+  "costEditor.empty":
+    "No cost items yet. e.g. freight, customs, QC, assembly/repacking — types are freely extensible.",
   "costEditor.type": "Type",
   "costEditor.label": "Label",
   "costEditor.labelPlaceholder": "Optional custom name",
@@ -1923,7 +2001,8 @@ const en: Record<MessageKey, string> = {
     "Next tier from {minQty} {unit} (−{percent}) — {remaining} {unit} to go.",
   "batchModal.overridePrice": "Override purchase / {unit} (€)",
   "batchModal.overrideHint": "Optional — otherwise the calculated price applies.",
-  "batchModal.procurementCosts": "Procurement costs",
+  "batchModal.procurementCosts":
+    "Procurement costs (e.g. freight, customs, QC, assembly/repacking)",
   "batchModal.section.sales": "Sales",
   "batchModal.salesSpecHint":
     "Batch sales side (Spec: Batch ↔ SalesData). Dealer is an optional template only.",
