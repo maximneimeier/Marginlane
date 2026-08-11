@@ -228,7 +228,7 @@ function sliceBatch(data: AppData, batch: Batch): BatchSlice {
   return {
     batch,
     productId: batch.productId,
-    productName: resolved.product?.name ?? batch.productId,
+    productName: resolved.catalogProduct?.name ?? batch.productId,
     supplierId: resolved.supplier?.id ?? batch.supplierId,
     supplierName: resolved.supplier?.name ?? batch.supplierId,
     revenue,

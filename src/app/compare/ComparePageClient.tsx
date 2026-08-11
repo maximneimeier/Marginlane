@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useStore } from "@/context/StoreContext";
-import type { CostItem, Dealer, Product } from "@/lib/types";
+import type { CostItem, Dealer } from "@/lib/types";
 import {
   calculateUnitEconomics,
-  effectiveUnitPrice,
 } from "@/lib/calc";
+import { catalogProductUnitPurchaseCost } from "@/lib/migrateAppData";
 import { formatEuro, formatNumber, formatPercent } from "@/lib/format";
 import { useI18n } from "@/hooks/useI18n";
 import {
@@ -109,40 +109,42 @@ export default function ComparePage() {
   const [sensitivityQty, setSensitivityQty] = useState<number | "">("");
   const [initialized, setInitialized] = useState(false);
 
-  /** Prefill: gleiches Produkt bei unterschiedlichen Lieferanten, sonst erste Produkte */
+  /** Prefill: gleiches Katalogprodukt in mehreren Szenarien */
   useEffect(() => {
-    if (!ready || initialized || data.products.length === 0) return;
+    if (!ready || initialized || data.catalogProducts.length === 0) return;
 
-    const byName = new Map<string, Product[]>();
-    for (const p of data.products) {
-      const key = p.name.trim().toLowerCase();
-      const list = byName.get(key) ?? [];
-      list.push(p);
-      byName.set(key, list);
-    }
-    const multiSupplier = [...byName.values()].find((list) => list.length >= 2);
-
+    const first = data.catalogProducts[0];
     setScenarios((prev) =>
-      prev.map((s, i) => {
-        if (multiSupplier && multiSupplier[i]) {
-          return { ...s, productId: multiSupplier[i].id };
-        }
-        const product = data.products[Math.min(i, data.products.length - 1)];
-        return { ...s, productId: product.id };
-      }),
+      prev.map((s, i) => ({
+        ...s,
+        productId:
+          data.catalogProducts[Math.min(i, data.catalogProducts.length - 1)]
+            ?.id ?? first.id,
+      })),
     );
     setInitialized(true);
-  }, [ready, initialized, data.products]);
+  }, [ready, initialized, data.catalogProducts]);
 
   const columns = useMemo(() => {
     return scenarios.map((scenario, index) => {
-      const product = data.products.find((p) => p.id === scenario.productId);
-      const supplier = data.suppliers.find((s) => s.id === product?.supplierId);
+      const product = data.catalogProducts.find(
+        (p) => p.id === scenario.productId,
+      );
+      const supplierIds = product
+        ? [
+            ...new Set(
+              data.components
+                .filter((c) => c.productId === product.id && c.supplierId)
+                .map((c) => c.supplierId),
+            ),
+          ]
+        : [];
+      const supplier = data.suppliers.find((s) => s.id === supplierIds[0]);
       const dealer = data.dealers.find((d) => d.id === scenario.dealerId);
       const qty =
         sensitivityQty === "" ? scenario.quantity : Number(sensitivityQty);
       const unitPrice = product
-        ? effectiveUnitPrice(product.unitPrice, qty, product.discountTiers)
+        ? catalogProductUnitPurchaseCost(product.id, data.components)
         : 0;
       const sellPrice = sellPriceFor(scenario, dealer);
       const econ = calculateUnitEconomics({
@@ -314,17 +316,28 @@ export default function ComparePage() {
                       }
                     >
                       <option value="">{t("compare.selectProduct")}</option>
-                      {[...data.products]
+                      {[...data.catalogProducts]
+                        .filter((p) => p.status === "active")
                         .sort((a, b) =>
                           a.name.localeCompare(b.name, locale),
                         )
                         .map((p) => {
-                          const s = data.suppliers.find(
-                            (x) => x.id === p.supplierId,
+                          const comps = data.components.filter(
+                            (c) => c.productId === p.id && c.supplierId,
                           );
+                          const supplierNames = [
+                            ...new Set(
+                              comps.map(
+                                (c) =>
+                                  data.suppliers.find((s) => s.id === c.supplierId)
+                                    ?.name ?? "?",
+                              ),
+                            ),
+                          ].join(", ");
                           return (
                             <option key={p.id} value={p.id}>
-                              {p.name} — {s?.name ?? "?"}
+                              {p.name}
+                              {supplierNames ? ` — ${supplierNames}` : ""}
                             </option>
                           );
                         })}

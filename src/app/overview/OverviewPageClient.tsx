@@ -15,6 +15,7 @@ import { formatEuro, formatPercent } from "@/lib/format";
 import { useI18n } from "@/hooks/useI18n";
 import { OverviewWaterfallChart } from "@/components/OverviewWaterfallChart";
 import { OverviewSankeyChart } from "@/components/OverviewSankeyChart";
+import { SalesPlanOverviewStrip } from "@/components/SalesPlanOverviewStrip";
 import { ProductFilterDropdown } from "@/components/ProductFilterDropdown";
 import { Card, Field, PageHeader, Select, TextInput } from "@/components/ui";
 
@@ -40,8 +41,9 @@ export default function OverviewPage() {
   const [breakdownMode, setBreakdownMode] = useState<BreakdownMode>("product");
 
   const products = useMemo(
-    () => [...data.products].sort((a, b) => a.name.localeCompare(b.name)),
-    [data.products],
+    () =>
+      [...data.catalogProducts].sort((a, b) => a.name.localeCompare(b.name)),
+    [data.catalogProducts],
   );
 
   /** KPIs: all products in date range */
@@ -175,6 +177,8 @@ export default function OverviewPage() {
               positive={kpiReport.kpis.marginPercent >= 0}
             />
           </div>
+
+          <SalesPlanOverviewStrip range={range} />
 
           <Card>
             <ChartHeader

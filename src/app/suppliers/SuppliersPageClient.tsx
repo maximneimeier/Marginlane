@@ -2,15 +2,14 @@
 
 import { useState } from "react";
 import { useStore } from "@/context/StoreContext";
-import type { Product, Supplier } from "@/lib/types";
+import type { CatalogProduct, Component, Supplier } from "@/lib/types";
 import {
   SupplierFormModal,
   emptySupplier,
 } from "@/components/SupplierFormModal";
 import {
-  ComponentFormModal,
-  emptyComponent,
-} from "@/components/ComponentFormModal";
+  CatalogProductFormModal,
+} from "@/components/CatalogProductFormModal";
 import { SuppliersOverview } from "@/components/SuppliersOverview";
 import { useI18n } from "@/hooks/useI18n";
 
@@ -20,7 +19,9 @@ export default function LieferantenPage() {
     data,
     upsertSupplier,
     deleteSupplier,
-    upsertProduct,
+    upsertCatalogProduct,
+    upsertComponent,
+    deleteComponent,
     clearData,
   } = useStore();
   const { t } = useI18n();
@@ -29,7 +30,7 @@ export default function LieferantenPage() {
     draft: Supplier | null;
     isEdit: boolean;
   }>({ open: false, draft: null, isEdit: false });
-  const [productDraft, setProductDraft] = useState<Product | null>(null);
+  const [productDraft, setProductDraft] = useState<CatalogProduct | null>(null);
 
   if (!ready) return <p className="text-[13px] text-muted">{t("common.loading")}</p>;
 
@@ -42,8 +43,24 @@ export default function LieferantenPage() {
   }
 
   const isEditProduct = Boolean(
-    productDraft && data.products.some((p) => p.id === productDraft.id),
+    productDraft &&
+      data.catalogProducts.some((p) => p.id === productDraft.id),
   );
+
+  function saveProduct(
+    product: CatalogProduct,
+    components: Component[],
+  ) {
+    upsertCatalogProduct(product);
+    const nextIds = new Set(components.map((c) => c.id));
+    for (const c of data.components.filter((x) => x.productId === product.id)) {
+      if (!nextIds.has(c.id)) deleteComponent(c.id);
+    }
+    for (const c of components) {
+      upsertComponent(c);
+    }
+    setProductDraft(null);
+  }
 
   return (
     <div>
@@ -57,20 +74,18 @@ export default function LieferantenPage() {
         onSave={(supplier) => {
           upsertSupplier(supplier);
         }}
-        onAddProduct={(supplierId) => {
-          setProductDraft(emptyComponent(supplierId));
+        onAddProduct={() => {
+          /* BOM-Komponenten werden über Produkte gepflegt */
         }}
       />
 
-      <ComponentFormModal
+      <CatalogProductFormModal
         open={Boolean(productDraft)}
         initial={productDraft}
-        suppliers={data.suppliers}
         isEdit={isEditProduct}
+        data={data}
         onClose={() => setProductDraft(null)}
-        onSave={(product) => {
-          upsertProduct(product);
-        }}
+        onSave={saveProduct}
       />
 
       <SuppliersOverview
@@ -80,18 +95,22 @@ export default function LieferantenPage() {
         onDelete={(supplier) => {
           deleteSupplier(supplier.id);
         }}
-        onAddProduct={(supplierId) => {
-          setProductDraft(emptyComponent(supplierId));
+        onAddProduct={() => {
+          /* siehe Link auf /products */
         }}
-        onEditProduct={(product) => {
-          setProductDraft(product);
+        onEditProduct={(component) => {
+          const product = data.catalogProducts.find(
+            (p) => p.id === component.productId,
+          );
+          if (product) setProductDraft(product);
         }}
         onClearData={() => {
           void clearData();
         }}
-        productsOf={(supplierId) =>
-          data.products.filter((p) => p.supplierId === supplierId)
+        componentsOf={(supplierId) =>
+          data.components.filter((c) => c.supplierId === supplierId)
         }
+        addProductHref="/products"
       />
     </div>
   );

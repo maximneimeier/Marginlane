@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Dealer, DealerChannel, DealerStatus } from "@/lib/types";
 import { COUNTRIES, SALES_PHASES } from "@/lib/types";
+import { CURRENCIES } from "@/lib/types";
 import { createId, formatEuro } from "@/lib/format";
 import { useI18n } from "@/hooks/useI18n";
 import { CostItemEditor } from "@/components/CostItemEditor";
@@ -25,6 +26,7 @@ export function emptyDealer(): Dealer {
     phone: "",
     channel: "b2b",
     paymentTerms: "30 Tage",
+    currency: "EUR",
     defaultSellPrice: 0,
     salesCostItems: [],
     status: "active",
@@ -174,6 +176,20 @@ export function DealerFormModal({
               }
               placeholder={t("dealerModal.paymentTermsPlaceholder")}
             />
+          </Field>
+          <Field label={t("dealerModal.currency")}>
+            <Select
+              value={draft.currency}
+              onChange={(e) =>
+                setDraft({ ...draft, currency: e.target.value })
+              }
+            >
+              {CURRENCIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </Select>
           </Field>
           <Field
             label={t("dealerModal.defaultSellPrice")}

@@ -3,59 +3,90 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useStore } from "@/context/StoreContext";
-import type { Product } from "@/lib/types";
-import { formatDate, formatEuro, formatNumber, formatPercent } from "@/lib/format";
+import type { Component } from "@/lib/types";
+import { formatEuro } from "@/lib/format";
 import { buildProductMetrics } from "@/lib/supplierRows";
 import { useI18n } from "@/hooks/useI18n";
 import { CountryFlag } from "@/components/CountryFlag";
 import {
   ComponentFormModal,
-  emptyComponent,
+  emptyBomComponent,
 } from "@/components/ComponentFormModal";
 import {
   Button,
-  ConfirmDialog,
   PageHeader,
   Select,
   TextInput,
 } from "@/components/ui";
 
 export default function ComponentsPage() {
-  const { ready, data, upsertProduct, deleteProduct } = useStore();
+  const { ready, data, upsertComponent } = useStore();
   const { t, plural, locale, lang, pricingUnitLabel } = useI18n();
   const [query, setQuery] = useState("");
   const [filterSupplier, setFilterSupplier] = useState("");
-  const [draft, setDraft] = useState<Product | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
+  const [draft, setDraft] = useState<Component | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return data.products
-      .filter((p) => {
+    return data.components
+      .map((component) => {
+        const product = data.catalogProducts.find(
+          (p) => p.id === component.productId,
+        );
+        const supplier = data.suppliers.find(
+          (s) => s.id === component.supplierId,
+        );
+        return { component, product, supplier };
+      })
+      .filter(({ component, product, supplier }) => {
         if (filterSupplier === "__none__") {
-          if (p.supplierId) return false;
-        } else if (filterSupplier && p.supplierId !== filterSupplier) {
+          if (component.supplierId) return false;
+        } else if (filterSupplier && component.supplierId !== filterSupplier) {
           return false;
         }
         if (!q) return true;
-        const supplier = data.suppliers.find((s) => s.id === p.supplierId);
         return (
-          p.name.toLowerCase().includes(q) ||
-          p.sku.toLowerCase().includes(q) ||
+          component.name.toLowerCase().includes(q) ||
+          (product?.name.toLowerCase().includes(q) ?? false) ||
+          (product?.sku.toLowerCase().includes(q) ?? false) ||
           (supplier?.name.toLowerCase().includes(q) ?? false)
         );
       })
-      .map((product) => {
-        const supplier = data.suppliers.find((s) => s.id === product.supplierId);
-        const metrics = buildProductMetrics(product.id, data);
-        return { product, supplier, metrics };
-      })
-      .sort((a, b) => a.product.name.localeCompare(b.product.name, lang));
+      .sort((a, b) => {
+        const nameA = a.component.name || a.product?.name || "";
+        const nameB = b.component.name || b.product?.name || "";
+        return nameA.localeCompare(nameB, lang);
+      });
   }, [data, query, filterSupplier, lang]);
 
-  if (!ready) return <p className="text-[13px] text-muted">{t("common.loading")}</p>;
+  if (!ready) {
+    return <p className="text-[13px] text-muted">{t("common.loading")}</p>;
+  }
 
-  const isEdit = Boolean(draft && data.products.some((p) => p.id === draft.id));
+  const isEdit = Boolean(
+    draft && data.components.some((c) => c.id === draft.id),
+  );
+
+  function openCreate() {
+    setDraft(
+      emptyBomComponent(
+        data.catalogProducts[0]?.id ?? "",
+        data.suppliers[0]?.id ?? "",
+      ),
+    );
+    setModalOpen(true);
+  }
+
+  function openEdit(component: Component) {
+    setDraft(structuredClone(component));
+    setModalOpen(true);
+  }
+
+  function closeModal() {
+    setModalOpen(false);
+    setDraft(null);
+  }
 
   return (
     <div>
@@ -63,35 +94,19 @@ export default function ComponentsPage() {
         title={t("components.title")}
         description={t("components.description")}
         action={
-          <Button onClick={() => setDraft(emptyComponent())}>
-            {t("components.add")}
-          </Button>
+          <Button onClick={openCreate}>{t("components.add")}</Button>
         }
-      />
-
-      <ConfirmDialog
-        open={Boolean(deleteTarget)}
-        onClose={() => setDeleteTarget(null)}
-        title={t("components.deleteTitle")}
-        description={
-          deleteTarget
-            ? t("components.deleteDescription", { name: deleteTarget.name })
-            : ""
-        }
-        confirmLabel={t("common.deleteConfirm")}
-        onConfirm={() => {
-          if (deleteTarget) deleteProduct(deleteTarget.id);
-        }}
       />
 
       <ComponentFormModal
-        open={Boolean(draft)}
+        open={modalOpen}
         initial={draft}
-        suppliers={data.suppliers}
+        data={data}
         isEdit={isEdit}
-        onClose={() => setDraft(null)}
-        onSave={(product) => {
-          upsertProduct(product);
+        onClose={closeModal}
+        onSave={(component) => {
+          upsertComponent(component);
+          closeModal();
         }}
       />
 
@@ -127,145 +142,116 @@ export default function ComponentsPage() {
           {t("components.empty")}
         </div>
       ) : (
-            <div className="overflow-hidden rounded-[12px] border border-line bg-white shadow-[var(--shadow-sm)]">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[900px] text-left text-[13px]">
-                  <thead>
-                    <tr className="border-b border-line bg-surface-faint text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
-                      <th className="px-4 py-2.5 font-medium">
-                        {t("components.col.product")}
-                      </th>
-                      <th className="px-4 py-2.5 font-medium">
-                        {t("components.col.sku")}
-                      </th>
-                      <th className="px-4 py-2.5 font-medium">
-                        {t("components.col.supplier")}
-                      </th>
-                      <th className="px-4 py-2.5 text-right font-medium">
-                        {t("components.col.price")}
-                      </th>
-                      <th className="px-4 py-2.5 text-right font-medium">
-                        {t("components.col.moq")}
-                      </th>
-                      <th className="px-4 py-2.5 text-right font-medium">
-                        {t("components.col.avgLanded")}
-                      </th>
-                      <th className="px-4 py-2.5 text-right font-medium">
-                        {t("components.col.batches")}
-                      </th>
-                      <th className="px-4 py-2.5 font-medium">
-                        {t("components.col.lastOrder")}
-                      </th>
-                      <th className="px-4 py-2.5 text-right font-medium">
-                        {t("components.col.avgMargin")}
-                      </th>
-                      <th className="w-24 px-3 py-2.5" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map(({ product, supplier, metrics }) => (
-                      <tr
-                        key={product.id}
-                        className="group border-b border-line last:border-0 hover:bg-surface-faint"
-                      >
-                        <td className="px-4 py-3">
-                          <button
-                            type="button"
-                            onClick={() => setDraft(product)}
-                            className="text-left font-medium text-foreground hover:text-accent"
+        <div className="overflow-hidden rounded-[12px] border border-line bg-white shadow-[var(--shadow-sm)]">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] text-left text-[13px]">
+              <thead>
+                <tr className="border-b border-line bg-surface-faint text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
+                  <th className="px-4 py-2.5 font-medium">
+                    {t("productModal.componentName")}
+                  </th>
+                  <th className="px-4 py-2.5 font-medium">
+                    {t("components.col.product")}
+                  </th>
+                  <th className="px-4 py-2.5 font-medium">
+                    {t("components.col.supplier")}
+                  </th>
+                  <th className="px-4 py-2.5 text-right font-medium">
+                    {t("productModal.componentPrice")}
+                  </th>
+                  <th className="px-4 py-2.5 text-right font-medium">
+                    {t("productModal.componentQty")}
+                  </th>
+                  <th className="px-4 py-2.5 text-right font-medium">
+                    {t("products.col.batches")}
+                  </th>
+                  <th className="w-24 px-3 py-2.5" />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(({ component, product, supplier }) => {
+                  const metrics = product
+                    ? buildProductMetrics(product.id, data)
+                    : null;
+                  const unit = product
+                    ? pricingUnitLabel(product.pricingUnit)
+                    : pricingUnitLabel("pcs");
+                  return (
+                    <tr
+                      key={component.id}
+                      className="group border-b border-line last:border-0 hover:bg-surface-faint"
+                    >
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          onClick={() => openEdit(component)}
+                          className="text-left font-medium text-foreground hover:text-accent"
+                        >
+                          {component.name || t("common.emDash")}
+                        </button>
+                      </td>
+                      <td className="px-4 py-3 text-muted">
+                        {product ? (
+                          <Link
+                            href="/products"
+                            className="hover:text-accent"
                           >
                             {product.name}
-                          </button>
-                        </td>
-                        <td className="px-4 py-3 text-muted">
-                          {product.sku || t("common.emDash")}
-                        </td>
-                        <td className="px-4 py-3">
-                          {supplier ? (
-                            <span className="inline-flex items-center gap-2 text-muted">
-                              <CountryFlag code={supplier.country} />
-                              {supplier.name}
-                            </span>
-                          ) : (
-                            t("common.emDash")
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums">
-                          {t("components.priceWithUnit", {
-                            price: formatEuro(product.unitPrice, locale),
-                            unit: pricingUnitLabel(product.pricingUnit),
-                          })}
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums text-muted">
-                          {t("components.moqWithUnit", {
-                            count: formatNumber(product.moq, locale),
-                            unit: pricingUnitLabel(product.pricingUnit),
-                          })}
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums">
-                          {metrics.avgLandedCost != null
-                            ? formatEuro(metrics.avgLandedCost, locale)
-                            : t("common.emDash")}
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums text-muted">
-                          {metrics.batchCount}
-                        </td>
-                        <td className="px-4 py-3 text-muted">
-                          {formatDate(metrics.lastOrderAt, locale)}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          {metrics.avgMarginEuro != null ? (
-                            <span
-                              className={`tabular-nums ${
-                                metrics.avgMarginEuro >= 0
-                                  ? "text-success"
-                                  : "text-danger"
-                              }`}
+                          </Link>
+                        ) : (
+                          t("common.emDash")
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {supplier ? (
+                          <span className="inline-flex items-center gap-2 text-muted">
+                            <CountryFlag code={supplier.country} />
+                            {supplier.name}
+                          </span>
+                        ) : (
+                          t("common.emDash")
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums">
+                        {formatEuro(component.purchasePricePerUnit, locale)}
+                        <span className="ml-1 text-[11px] text-muted-soft">
+                          / {unit}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-muted">
+                        {component.quantityPerProductUnit}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-muted">
+                        {metrics?.batchCount ?? 0}
+                      </td>
+                      <td className="px-2 py-3">
+                        <div className="flex justify-end gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
+                          {product ? (
+                            <Link
+                              href={`/batches?new=1&product=${product.id}`}
                             >
-                              {formatEuro(metrics.avgMarginEuro, locale)}
-                              <span className="ml-1 text-[12px] text-muted-soft">
-                                {formatPercent(
-                                  metrics.avgMarginPercent ?? 0,
-                                  locale,
-                                )}
-                              </span>
-                            </span>
-                          ) : (
-                            <span className="text-muted-soft">
-                              {t("common.emDash")}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-2 py-3">
-                          <div className="flex justify-end gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
-                            <Link href={`/batches?new=1&product=${product.id}`}>
                               <Button variant="ghost" className="h-7 px-2">
                                 {t("components.action.batch")}
                               </Button>
                             </Link>
-                            <Button
-                              variant="ghost"
-                              className="h-7 px-2"
-                              onClick={() => setDraft(product)}
-                            >
-                              {t("components.action.edit")}
-                            </Button>
-                            <Button
-                              variant="danger"
-                              className="h-7 px-2"
-                              onClick={() => setDeleteTarget(product)}
-                            >
-                              ×
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+                          ) : null}
+                          <Button
+                            variant="ghost"
+                            className="h-7 px-2"
+                            onClick={() => openEdit(component)}
+                          >
+                            {t("components.action.edit")}
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

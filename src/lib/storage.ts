@@ -4,24 +4,27 @@ import type {
   Dealer,
   DealerChannel,
   OverheadAllocation,
-  OverheadCategory,
   OverheadItem,
   OverheadPeriod,
   PaymentUnit,
   PricingUnit,
   Product,
+  Sale,
   SalesData,
   Supplier,
 } from "./types";
 import {
   formatPaymentTerms,
   isPricingUnit,
+  migrateOverheadCategory,
+  migrateOverheadCostBehavior,
+  migrateOverheadVariableBasis,
   OVERHEAD_ALLOCATIONS,
-  OVERHEAD_CATEGORIES,
   OVERHEAD_PERIODS,
 } from "./types";
 import { createId } from "./format";
 import { emptyCommercialOverrides } from "./resolve";
+import { emptySale } from "./migrateAppData";
 
 function normalizeSupplier(raw: Partial<Supplier> & { contact?: string }): Supplier {
   const paymentDays = raw.paymentDays ?? 30;
@@ -84,6 +87,7 @@ function normalizeDealer(raw: Partial<Dealer>): Dealer {
     phone: raw.phone || "",
     channel,
     paymentTerms: raw.paymentTerms || "",
+    currency: raw.currency || "EUR",
     defaultSellPrice: raw.defaultSellPrice ?? 0,
     salesCostItems: Array.isArray(raw.salesCostItems)
       ? raw.salesCostItems.map((item) => ({
@@ -220,7 +224,7 @@ export function cloneDealerSalesCosts(dealer: Dealer): CostItem[] {
 }
 
 /**
- * Spec-SalesData ohne Händler-Kopplung — konkrete Werte auf der Charge.
+ * @deprecated Nutze emptySale aus migrateAppData.
  */
 export function emptySalesData(quantity = 0): SalesData {
   return {
@@ -232,11 +236,28 @@ export function emptySalesData(quantity = 0): SalesData {
   };
 }
 
+export { emptySale };
+
 /**
- * Optionale Vorlage: Charge an Händler koppeln.
+ * Optionale Vorlage: Sale an Händler koppeln.
  * VK & Vertriebskosten bleiben `null` (= live vom Händler erben).
- * channel wird als Spec-Feld vorausgefüllt.
  */
+export function saleFromDealer(
+  dealer: Dealer,
+  quantity = 0,
+): Pick<Sale, "dealerId" | "channel" | "salePricePerUnit" | "costItems"> & {
+  quantity: number;
+} {
+  return {
+    dealerId: dealer.id,
+    channel: dealer.name,
+    salePricePerUnit: null,
+    costItems: null,
+    quantity,
+  };
+}
+
+/** @deprecated Alias — nutze saleFromDealer */
 export function salesFromDealer(
   dealer: Dealer,
 ): Pick<SalesData, "dealerId" | "channel" | "sellPrice" | "costItems"> {
@@ -249,8 +270,33 @@ export function salesFromDealer(
 }
 
 /**
- * Händler-Kopplung lösen: geerbte Werte materialisieren,
- * damit SalesData spezkonform konkrete Zahlen behält.
+ * Händler-Kopplung an einem Sale lösen: geerbte Werte materialisieren.
+ */
+export function detachDealerFromSale(
+  sale: Sale,
+  dealer: Dealer | undefined,
+): Sale {
+  const sell =
+    sale.salePricePerUnit !== null && sale.salePricePerUnit !== undefined
+      ? sale.salePricePerUnit
+      : (dealer?.defaultSellPrice ?? 0);
+  const costs =
+    sale.costItems !== null && sale.costItems !== undefined
+      ? sale.costItems
+      : dealer
+        ? cloneDealerSalesCosts(dealer)
+        : [];
+  return {
+    ...sale,
+    dealerId: null,
+    channel: sale.channel || dealer?.name || "",
+    salePricePerUnit: sell,
+    costItems: costs,
+  };
+}
+
+/**
+ * @deprecated Legacy SalesData-Adapter
  */
 export function detachDealerFromSales(
   sales: SalesData,
@@ -318,13 +364,15 @@ function normalizeProduct(raw: Partial<Product> & Record<string, unknown>): Prod
   };
 }
 
-function normalizeSales(
-  raw: Partial<SalesData> | undefined,
+function normalizeOneSale(
+  raw: Partial<Sale & SalesData> | undefined,
   dealers: Dealer[],
+  fallbackQty: number,
   legacySnapshot: boolean,
-): SalesData {
-  const channel = raw?.channel || "";
-  let dealerIdRaw = raw?.dealerId || "";
+): Sale {
+  const channel =
+    (raw && "channel" in raw ? raw.channel : "") || "";
+  let dealerIdRaw = (raw && "dealerId" in raw ? raw.dealerId : "") || "";
   if (!dealerIdRaw && channel) {
     const match = dealers.find(
       (d) => d.name.toLowerCase() === channel.toLowerCase(),
@@ -336,19 +384,26 @@ function normalizeSales(
     ? dealers.find((d) => d.id === dealerId)
     : undefined;
 
-  // null = vom Händler erben (nur sinnvoll mit dealerId).
-  // Legacy-Snapshots behalten Zahlen/Arrays als Charge-Werte.
-  let sellPrice: number | null;
+  let salePricePerUnit: number | null;
   let costItems: CostItem[] | null;
 
-  if (raw && "sellPrice" in raw && raw.sellPrice === null) {
-    sellPrice = null;
-  } else if (raw?.sellPrice != null) {
-    sellPrice = raw.sellPrice;
+  const legacySell =
+    raw && "sellPrice" in raw
+      ? (raw as Partial<SalesData>).sellPrice
+      : undefined;
+  const modernSell =
+    raw && "salePricePerUnit" in raw ? raw.salePricePerUnit : undefined;
+
+  if (modernSell === null || legacySell === null) {
+    salePricePerUnit = null;
+  } else if (typeof modernSell === "number") {
+    salePricePerUnit = modernSell;
+  } else if (typeof legacySell === "number") {
+    salePricePerUnit = legacySell;
   } else if (legacySnapshot) {
-    sellPrice = 0;
+    salePricePerUnit = 0;
   } else {
-    sellPrice = dealerId ? null : 0;
+    salePricePerUnit = dealerId ? null : 0;
   }
 
   if (raw && "costItems" in raw && raw.costItems === null) {
@@ -361,19 +416,43 @@ function normalizeSales(
     costItems = dealerId ? null : [];
   }
 
-  // Spec: ohne Händler-Vorlage hält SalesData konkrete Werte
   if (!dealerId) {
-    if (sellPrice === null) sellPrice = 0;
+    if (salePricePerUnit === null) salePricePerUnit = 0;
     if (costItems === null) costItems = [];
   }
 
   return {
-    sellPrice,
-    quantity: raw?.quantity ?? 0,
+    id: (raw && "id" in raw && raw.id) || createId("sale"),
     dealerId,
+    salePricePerUnit,
+    quantity: raw?.quantity ?? fallbackQty,
     channel: dealer?.name || channel,
     costItems,
   };
+}
+
+function normalizeSalesList(
+  raw: unknown,
+  dealers: Dealer[],
+  fallbackQty: number,
+  legacySnapshot: boolean,
+): Sale[] {
+  if (Array.isArray(raw)) {
+    return raw.map((s) =>
+      normalizeOneSale(s, dealers, fallbackQty, legacySnapshot),
+    );
+  }
+  if (raw && typeof raw === "object") {
+    return [
+      normalizeOneSale(
+        raw as Partial<Sale & SalesData>,
+        dealers,
+        fallbackQty,
+        legacySnapshot,
+      ),
+    ];
+  }
+  return [emptySale(fallbackQty)];
 }
 
 function normalizeBatch(
@@ -382,8 +461,6 @@ function normalizeBatch(
   legacySnapshot: boolean,
 ): Batch {
   const overrides = normalizeCommercialOverrides(raw);
-  // Alte Daten hatten immer eine Zahl → als Override behalten.
-  // Neue Seeds / explizit null → erben vom Produkt.
   let unitPurchasePrice: number | null;
   if ("unitPurchasePrice" in raw && raw.unitPurchasePrice === null) {
     unitPurchasePrice = null;
@@ -393,16 +470,18 @@ function normalizeBatch(
     unitPurchasePrice = legacySnapshot ? 0 : null;
   }
 
+  const quantity = raw.quantity ?? 0;
+
   return {
     id: raw.id || createId("bat"),
     productId: raw.productId || "",
     supplierId: raw.supplierId || "",
     label: raw.label || "",
-    quantity: raw.quantity ?? 0,
+    quantity,
     unitPurchasePrice,
     ...overrides,
     costItems: Array.isArray(raw.costItems) ? raw.costItems : [],
-    sales: normalizeSales(raw.sales, dealers, legacySnapshot),
+    sales: normalizeSalesList(raw.sales, dealers, quantity, legacySnapshot),
     createdAt: raw.createdAt || new Date().toISOString(),
   };
 }
@@ -411,13 +490,6 @@ function isOverheadPeriod(value: unknown): value is OverheadPeriod {
   return (
     typeof value === "string" &&
     (OVERHEAD_PERIODS as string[]).includes(value)
-  );
-}
-
-function isOverheadCategory(value: unknown): value is OverheadCategory {
-  return (
-    typeof value === "string" &&
-    (OVERHEAD_CATEGORIES as string[]).includes(value)
   );
 }
 
@@ -459,10 +531,30 @@ export function normalizeOverheadItem(
     betrag: typeof raw.betrag === "number" ? raw.betrag : 0,
     waehrung: raw.waehrung || "EUR",
     periode: isOverheadPeriod(raw.periode) ? raw.periode : "monatlich",
-    kategorie: isOverheadCategory(raw.kategorie) ? raw.kategorie : "sonstige",
+    kategorie: migrateOverheadCategory(raw.kategorie),
+    kostenart: migrateOverheadCostBehavior(raw.kostenart),
+    variableBasis: migrateOverheadVariableBasis(raw.variableBasis),
+    variableRate:
+      typeof raw.variableRate === "number" && Number.isFinite(raw.variableRate)
+        ? raw.variableRate
+        : null,
     verteilschluessel,
     manuelleAufteilung,
+    gueltigVon:
+      typeof raw.gueltigVon === "string" && raw.gueltigVon
+        ? raw.gueltigVon
+        : null,
+    gueltigBis:
+      typeof raw.gueltigBis === "string" && raw.gueltigBis
+        ? raw.gueltigBis
+        : null,
     createdAt: raw.createdAt || new Date().toISOString(),
+    updatedAt:
+      typeof raw.updatedAt === "string" && raw.updatedAt
+        ? raw.updatedAt
+        : raw.createdAt || new Date().toISOString(),
+    updatedBy:
+      typeof raw.updatedBy === "string" && raw.updatedBy ? raw.updatedBy : null,
   };
 }
 

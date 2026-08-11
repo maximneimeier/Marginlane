@@ -77,7 +77,9 @@ function ChargenPageInner() {
           </div>
           <ul>
             {data.batches.map((batch) => {
-              const product = data.products.find((p) => p.id === batch.productId);
+              const product = data.catalogProducts.find(
+                (p) => p.id === batch.productId,
+              );
               const supplier = data.suppliers.find(
                 (s) => s.id === batch.supplierId,
               );

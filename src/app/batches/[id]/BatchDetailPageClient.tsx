@@ -4,16 +4,18 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/context/StoreContext";
-import type { Batch } from "@/lib/types";
+import type { Batch, Sale } from "@/lib/types";
 import { PROCUREMENT_PHASES, SALES_PHASES } from "@/lib/types";
+import { costItemTotal } from "@/lib/calc";
 import { createId, formatEuro, formatPercent } from "@/lib/format";
+import { emptySale } from "@/lib/migrateAppData";
 import { useI18n } from "@/hooks/useI18n";
-import { detachDealerFromSales, salesFromDealer } from "@/lib/storage";
+import { detachDealerFromSale, saleFromDealer } from "@/lib/storage";
 import {
   calculateResolvedEconomics,
   resolveCommercial,
-  resolveSalesCostItems,
-  resolveSellPrice,
+  resolveSaleCostItems,
+  resolveSalePrice,
   resolveUnitPurchasePrice,
 } from "@/lib/resolve";
 import { CostItemEditor } from "@/components/CostItemEditor";
@@ -31,6 +33,28 @@ import {
   Select,
   TextInput,
 } from "@/components/ui";
+
+function patchSale(batch: Batch, saleId: string, patch: Partial<Sale>): Batch {
+  return {
+    ...batch,
+    sales: batch.sales.map((s) => (s.id === saleId ? { ...s, ...patch } : s)),
+  };
+}
+
+function addSale(batch: Batch): Batch {
+  return {
+    ...batch,
+    sales: [...batch.sales, emptySale(batch.quantity)],
+  };
+}
+
+function removeSale(batch: Batch, saleId: string): Batch {
+  const next = batch.sales.filter((s) => s.id !== saleId);
+  return {
+    ...batch,
+    sales: next.length > 0 ? next : [emptySale(batch.quantity)],
+  };
+}
 
 export default function ChargeDetailPage({ id }: { id: string }) {
   const router = useRouter();
@@ -54,19 +78,19 @@ export default function ChargeDetailPage({ id }: { id: string }) {
     );
   }
 
-  const product = data.products.find((p) => p.id === batch.productId);
+  const catalogProduct = data.catalogProducts.find(
+    (p) => p.id === batch.productId,
+  );
   const supplier = data.suppliers.find((s) => s.id === batch.supplierId);
-  const unit = product
-    ? pricingUnitLabel(product.pricingUnit)
+  const unit = catalogProduct
+    ? pricingUnitLabel(catalogProduct.pricingUnit)
     : pricingUnitLabel("pcs");
   const econ = calculateResolvedEconomics(data, batch);
   const displayPurchase = resolveUnitPurchasePrice(
-    product,
+    batch.productId,
+    data.components,
     batch,
-    batch.quantity,
   );
-  const displaySell = resolveSellPrice(econ.dealer, batch.sales);
-  const displaySalesItems = resolveSalesCostItems(econ.dealer, batch.sales);
 
   function startEdit() {
     setDraft(structuredClone(stored!));
@@ -80,11 +104,31 @@ export default function ChargeDetailPage({ id }: { id: string }) {
     setDraft(null);
   }
 
+  function applyDealerToSale(saleId: string, dealerId: string) {
+    setDraft((prev) => {
+      if (!prev) return prev;
+      const sale = prev.sales.find((s) => s.id === saleId);
+      if (!sale) return prev;
+
+      if (!dealerId) {
+        const current = data.dealers.find((d) => d.id === sale.dealerId);
+        return patchSale(prev, saleId, detachDealerFromSale(sale, current));
+      }
+
+      const next = data.dealers.find((d) => d.id === dealerId);
+      if (!next) return prev;
+      return patchSale(prev, saleId, {
+        ...sale,
+        ...saleFromDealer(next, sale.quantity),
+      });
+    });
+  }
+
   return (
     <main>
       <PageHeader
         title={batch.label}
-        description={`${product?.name ?? t("components.col.product")} · ${supplier?.name ?? t("batchModal.supplier")} · ${t("batches.qty", { count: batch.quantity.toLocaleString(locale), unit })}`}
+        description={`${catalogProduct?.name ?? t("components.col.product")} · ${supplier?.name ?? t("batchModal.supplier")} · ${t("batches.qty", { count: batch.quantity.toLocaleString(locale), unit })}`}
         action={
           <div className="flex gap-2">
             {editing ? (
@@ -181,32 +225,16 @@ export default function ChargeDetailPage({ id }: { id: string }) {
                       }
                     />
                   </Field>
-                  <Field
-                    label={t("unit.qtyLabel", { unit })}
-                    hint={
-                      product?.moq
-                        ? t("batchDetail.moqHint", {
-                            count: product.moq.toLocaleString(locale),
-                            unit,
-                          })
-                        : undefined
-                    }
-                  >
+                  <Field label={t("unit.qtyLabel", { unit })}>
                     <TextInput
                       type="number"
                       min="1"
                       value={draft.quantity || ""}
                       onChange={(e) => {
                         const quantity = Number(e.target.value) || 0;
-                        setDraft((prev) => {
-                          if (!prev) return prev;
-                          return {
-                            ...prev,
-                            quantity,
-                            // EK-Override bleibt; bei Vererbung folgt der Preis der Menge
-                            sales: { ...prev.sales, quantity },
-                          };
-                        });
+                        setDraft((prev) =>
+                          prev ? { ...prev, quantity } : prev,
+                        );
                       }}
                     />
                   </Field>
@@ -221,9 +249,9 @@ export default function ChargeDetailPage({ id }: { id: string }) {
                     <div className="flex h-[34px] items-center rounded-[8px] border border-line bg-surface-faint px-3 text-[13px] tabular-nums text-foreground">
                       {formatEuro(
                         resolveUnitPurchasePrice(
-                          data.products.find((p) => p.id === draft.productId),
+                          draft.productId,
+                          data.components,
                           draft,
-                          draft.quantity,
                         ).value,
                       )}
                     </div>
@@ -233,13 +261,9 @@ export default function ChargeDetailPage({ id }: { id: string }) {
               {supplier ? (
                 <CommercialOverridesEditor
                   value={pickCommercialOverrides(draft)}
-                  inherited={resolveCommercial(supplier, product, null)}
-                  resolved={resolveCommercial(supplier, product, draft)}
-                  parentLabel={
-                    product
-                      ? `${supplier.name} / ${product.name}`
-                      : supplier.name
-                  }
+                  inherited={resolveCommercial(supplier, null, null)}
+                  resolved={resolveCommercial(supplier, null, draft)}
+                  parentLabel={supplier.name}
                   onChange={(next) =>
                     setDraft((prev) => (prev ? { ...prev, ...next } : prev))
                   }
@@ -255,227 +279,229 @@ export default function ChargeDetailPage({ id }: { id: string }) {
                 />
               </Card>
               <Card>
-                <h2 className="mb-4 font-medium">{t("batchDetail.sales")}</h2>
+                <div className="mb-4 flex items-center justify-between gap-2">
+                  <h2 className="font-medium">{t("batchDetail.salesTitle")}</h2>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() =>
+                      setDraft((prev) => (prev ? addSale(prev) : prev))
+                    }
+                  >
+                    {t("batchDetail.addSale")}
+                  </Button>
+                </div>
                 <p className="mb-4 text-[12px] text-muted">
                   {t("batchDetail.salesSpecHint")}
                 </p>
-                <div className="mb-5 grid gap-4 sm:grid-cols-2">
-                  <Field
-                    label={t("batchDetail.dealer")}
-                    hint={t("batchDetail.dealerHint")}
-                  >
-                    <Select
-                      value={draft.sales.dealerId || ""}
-                      onChange={(e) => {
-                        const id = e.target.value;
-                        setDraft((prev) => {
-                          if (!prev) return prev;
-                          if (!id) {
-                            const current = data.dealers.find(
-                              (d) => d.id === prev.sales.dealerId,
-                            );
-                            return {
-                              ...prev,
-                              sales: detachDealerFromSales(
-                                prev.sales,
-                                current,
-                              ),
-                            };
-                          }
-                          const next = data.dealers.find((d) => d.id === id);
-                          if (!next) return prev;
-                          return {
-                            ...prev,
-                            sales: {
-                              ...prev.sales,
-                              quantity: prev.quantity,
-                              ...salesFromDealer(next),
-                            },
-                          };
-                        });
-                      }}
-                    >
-                      <option value="">{t("batchDetail.noDealer")}</option>
-                      {data.dealers.map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.name}
-                          {d.defaultSellPrice > 0
-                            ? ` · VK ${formatEuro(d.defaultSellPrice)}`
-                            : ""}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
-                  <Field label={t("batchDetail.channel")}>
-                    <TextInput
-                      value={draft.sales.channel}
-                      onChange={(e) =>
-                        setDraft((prev) =>
-                          prev
-                            ? {
-                                ...prev,
-                                sales: {
-                                  ...prev.sales,
-                                  channel: e.target.value,
-                                },
-                              }
-                            : prev,
-                        )
-                      }
-                      placeholder={t("batchDetail.channelPlaceholder")}
-                    />
-                  </Field>
-                  <Field
-                    label={t("batchDetail.sellPrice", { unit })}
-                    hint={
-                      draft.sales.sellPrice === null && draft.sales.dealerId
-                        ? t("batchDetail.sellPriceInherited")
-                        : t("batchDetail.sellPriceOwn")
-                    }
-                  >
-                    <div className="flex gap-2">
-                      <TextInput
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={
-                          resolveSellPrice(
-                            data.dealers.find(
-                              (d) => d.id === draft.sales.dealerId,
-                            ),
-                            draft.sales,
-                          ).value || ""
-                        }
-                        onChange={(e) =>
-                          setDraft((prev) =>
-                            prev
-                              ? {
-                                  ...prev,
-                                  sales: {
-                                    ...prev.sales,
-                                    sellPrice: Number(e.target.value) || 0,
-                                  },
-                                }
-                              : prev,
-                          )
-                        }
-                      />
-                      {draft.sales.dealerId &&
-                      draft.sales.sellPrice !== null ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          onClick={() =>
-                            setDraft((prev) =>
-                              prev
-                                ? {
-                                    ...prev,
-                                    sales: {
-                                      ...prev.sales,
-                                      sellPrice: null,
-                                    },
-                                  }
-                                : prev,
-                            )
-                          }
-                        >
-                          {t("batchDetail.inheritAgain")}
-                        </Button>
-                      ) : null}
-                    </div>
-                  </Field>
-                </div>
-                {draft.sales.costItems === null && draft.sales.dealerId ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[12px] text-muted">
-                        {t("batchDetail.costsInherited")}
-                      </p>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() =>
-                          setDraft((prev) => {
-                            if (!prev) return prev;
-                            const items = resolveSalesCostItems(
-                              data.dealers.find(
-                                (d) => d.id === prev.sales.dealerId,
-                              ),
-                              prev.sales,
-                            ).value;
-                            return {
-                              ...prev,
-                              sales: {
-                                ...prev.sales,
-                                costItems: items.map((item) => ({
-                                  ...item,
-                                  id: createId("cost"),
-                                })),
-                              },
-                            };
-                          })
-                        }
+                <div className="space-y-6">
+                  {draft.sales.map((sale, index) => {
+                    const saleDealer = data.dealers.find(
+                      (d) => d.id === sale.dealerId,
+                    );
+                    const resolvedSell = resolveSalePrice(saleDealer, sale);
+                    const resolvedCosts = resolveSaleCostItems(saleDealer, sale);
+                    const costsInherited =
+                      sale.costItems === null && Boolean(sale.dealerId);
+                    const sellInherited =
+                      sale.salePricePerUnit === null && Boolean(sale.dealerId);
+
+                    return (
+                      <div
+                        key={sale.id}
+                        className="rounded-[10px] border border-line p-4"
                       >
-                        {t("batchDetail.overrideCosts")}
-                      </Button>
-                    </div>
-                    <SalesCostsReadonly
-                      items={
-                        resolveSalesCostItems(
-                          data.dealers.find(
-                            (d) => d.id === draft.sales.dealerId,
-                          ),
-                          draft.sales,
-                        ).value
-                      }
-                      emptyHint={t("salesCosts.emptyHint")}
-                      unitLabel={unit}
-                    />
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {draft.sales.dealerId ? (
-                      <div className="flex justify-end">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          onClick={() =>
-                            setDraft((prev) =>
-                              prev
-                                ? {
-                                    ...prev,
-                                    sales: {
-                                      ...prev.sales,
-                                      costItems: null,
-                                    },
-                                  }
-                                : prev,
-                            )
-                          }
-                        >
-                          {t("batchDetail.inheritAgain")}
-                        </Button>
-                      </div>
-                    ) : null}
-                    <CostItemEditor
-                      title={t("batchDetail.salesCosts")}
-                      items={draft.sales.costItems ?? []}
-                      onChange={(costItems) =>
-                        setDraft((prev) =>
-                          prev
-                            ? {
-                                ...prev,
-                                sales: { ...prev.sales, costItems },
+                        <div className="mb-4 flex items-center justify-between gap-2">
+                          <h3 className="text-[13px] font-medium">
+                            {t("batchDetail.saleN", { n: index + 1 })}
+                          </h3>
+                          {draft.sales.length > 1 ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="h-7 px-2 text-[12px]"
+                              onClick={() =>
+                                setDraft((prev) =>
+                                  prev ? removeSale(prev, sale.id) : prev,
+                                )
                               }
-                            : prev,
-                        )
-                      }
-                      allowedPhases={SALES_PHASES}
-                      percentOfRevenue
-                      unitLabel={unit}
-                    />
-                  </div>
-                )}
+                            >
+                              {t("batchDetail.removeSale")}
+                            </Button>
+                          ) : null}
+                        </div>
+                        <div className="mb-5 grid gap-4 sm:grid-cols-2">
+                          <Field
+                            label={t("batchDetail.dealer")}
+                            hint={t("batchDetail.dealerHint")}
+                          >
+                            <Select
+                              value={sale.dealerId || ""}
+                              onChange={(e) =>
+                                applyDealerToSale(sale.id, e.target.value)
+                              }
+                            >
+                              <option value="">{t("batchDetail.noDealer")}</option>
+                              {data.dealers.map((d) => (
+                                <option key={d.id} value={d.id}>
+                                  {d.name}
+                                  {d.defaultSellPrice > 0
+                                    ? ` · VK ${formatEuro(d.defaultSellPrice)}`
+                                    : ""}
+                                </option>
+                              ))}
+                            </Select>
+                          </Field>
+                          <Field label={t("batchDetail.channel")}>
+                            <TextInput
+                              value={sale.channel}
+                              onChange={(e) =>
+                                setDraft((prev) =>
+                                  prev
+                                    ? patchSale(prev, sale.id, {
+                                        channel: e.target.value,
+                                      })
+                                    : prev,
+                                )
+                              }
+                              placeholder={t("batchDetail.channelPlaceholder")}
+                            />
+                          </Field>
+                          <Field label={t("unit.qtyLabel", { unit })}>
+                            <TextInput
+                              type="number"
+                              min="0"
+                              value={sale.quantity || ""}
+                              onChange={(e) =>
+                                setDraft((prev) =>
+                                  prev
+                                    ? patchSale(prev, sale.id, {
+                                        quantity: Number(e.target.value) || 0,
+                                      })
+                                    : prev,
+                                )
+                              }
+                            />
+                          </Field>
+                          <Field
+                            label={t("batchDetail.sellPrice", { unit })}
+                            hint={
+                              sellInherited
+                                ? t("batchDetail.sellPriceInherited")
+                                : t("batchDetail.sellPriceOwn")
+                            }
+                          >
+                            <div className="flex gap-2">
+                              <TextInput
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={resolvedSell.value || ""}
+                                onChange={(e) =>
+                                  setDraft((prev) =>
+                                    prev
+                                      ? patchSale(prev, sale.id, {
+                                          salePricePerUnit:
+                                            Number(e.target.value) || 0,
+                                        })
+                                      : prev,
+                                  )
+                                }
+                              />
+                              {sale.dealerId && sale.salePricePerUnit !== null ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  onClick={() =>
+                                    setDraft((prev) =>
+                                      prev
+                                        ? patchSale(prev, sale.id, {
+                                            salePricePerUnit: null,
+                                          })
+                                        : prev,
+                                    )
+                                  }
+                                >
+                                  {t("batchDetail.inheritAgain")}
+                                </Button>
+                              ) : null}
+                            </div>
+                          </Field>
+                        </div>
+                        {costsInherited ? (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-[12px] text-muted">
+                                {t("batchDetail.costsInherited")}
+                              </p>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={() =>
+                                  setDraft((prev) => {
+                                    if (!prev) return prev;
+                                    const items = resolvedCosts.value.map(
+                                      (item) => ({
+                                        ...item,
+                                        id: createId("cost"),
+                                      }),
+                                    );
+                                    return patchSale(prev, sale.id, {
+                                      costItems: items,
+                                    });
+                                  })
+                                }
+                              >
+                                {t("batchDetail.overrideCosts")}
+                              </Button>
+                            </div>
+                            <SalesCostsReadonly
+                              items={resolvedCosts.value}
+                              emptyHint={t("salesCosts.emptyHint")}
+                              unitLabel={unit}
+                            />
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {sale.dealerId ? (
+                              <div className="flex justify-end">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  onClick={() =>
+                                    setDraft((prev) =>
+                                      prev
+                                        ? patchSale(prev, sale.id, {
+                                            costItems: null,
+                                          })
+                                        : prev,
+                                    )
+                                  }
+                                >
+                                  {t("batchDetail.inheritAgain")}
+                                </Button>
+                              </div>
+                            ) : null}
+                            <CostItemEditor
+                              title={t("batchDetail.salesCosts")}
+                              items={sale.costItems ?? []}
+                              onChange={(costItems) =>
+                                setDraft((prev) =>
+                                  prev
+                                    ? patchSale(prev, sale.id, { costItems })
+                                    : prev,
+                                )
+                              }
+                              allowedPhases={SALES_PHASES}
+                              percentOfRevenue
+                              unitLabel={unit}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </Card>
             </>
           ) : (
@@ -521,43 +547,62 @@ export default function ChargeDetailPage({ id }: { id: string }) {
                   </ul>
                 )}
               </Card>
-              <Card>
-                <h2 className="mb-3 font-medium">
-                  {t("batchDetail.sales")}
-                  {batch.sales.channel || econ.dealer?.name
-                    ? ` — ${batch.sales.channel || econ.dealer?.name}`
-                    : ""}
-                  {displaySell.source === "dealer" ||
-                  displaySalesItems.source === "dealer" ? (
-                    <span className="ml-2 text-xs font-normal text-muted-soft">
-                      ({t("batchDetail.fromDealer")})
-                    </span>
-                  ) : null}
-                </h2>
-                <p className="mb-3 text-sm text-muted">
-                  {t("batchDetail.sellPrice", { unit })}:{" "}
-                  {formatEuro(econ.sellPrice)}
-                </p>
-                {econ.salesBreakdown.length === 0 ? (
+              {econ.salesAggregate.rows.length === 0 ? (
+                <Card>
+                  <h2 className="mb-3 font-medium">{t("batchDetail.sales")}</h2>
                   <p className="text-sm text-muted">
                     {t("batchDetail.noSalesCosts")}
                   </p>
-                ) : (
-                  <ul className="space-y-2 text-sm">
-                    {econ.salesBreakdown.map((row) => (
-                      <li
-                        key={row.item.id}
-                        className="flex justify-between gap-3 border-b border-line/60 py-2 last:border-0"
-                      >
-                        <span>{row.item.label}</span>
-                        <span className="tabular-nums">
-                          {formatEuro(row.perUnit)}
+                </Card>
+              ) : (
+                econ.salesAggregate.rows.map((row, index) => (
+                  <Card key={row.sale.id}>
+                    <h2 className="mb-3 font-medium">
+                      {t("batchDetail.saleN", { n: index + 1 })}
+                      {row.sale.channel || row.dealer?.name
+                        ? ` — ${row.sale.channel || row.dealer?.name}`
+                        : ""}
+                    </h2>
+                    <p className="mb-3 text-sm text-muted">
+                      {t("batchDetail.sellPrice", { unit })}:{" "}
+                      {formatEuro(row.sellPrice)}
+                      {row.sale.quantity > 0 ? (
+                        <span className="ml-2">
+                          · {t("unit.qtyLabel", { unit })}:{" "}
+                          {row.sale.quantity.toLocaleString(locale)}
                         </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Card>
+                      ) : null}
+                    </p>
+                    {row.salesItems.length === 0 ? (
+                      <p className="text-sm text-muted">
+                        {t("batchDetail.noSalesCosts")}
+                      </p>
+                    ) : (
+                      <ul className="space-y-2 text-sm">
+                        {row.salesItems.map((item) => (
+                          <li
+                            key={item.id}
+                            className="flex justify-between gap-3 border-b border-line/60 py-2 last:border-0"
+                          >
+                            <span>{item.label}</span>
+                            <span className="tabular-nums">
+                              {formatEuro(
+                                batch.quantity > 0
+                                  ? costItemTotal(
+                                      item,
+                                      row.sale.quantity,
+                                      row.revenue,
+                                    ) / batch.quantity
+                                  : 0,
+                              )}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </Card>
+                ))
+              )}
             </>
           )}
         </div>

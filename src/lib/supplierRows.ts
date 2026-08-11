@@ -10,7 +10,7 @@ export type SupplierRow = {
 
 export function buildSupplierRows(data: AppData): SupplierRow[] {
   return data.suppliers.map((supplier) => {
-    const products = data.products.filter((p) => p.supplierId === supplier.id);
+    const products = data.components.filter((p) => p.supplierId === supplier.id);
     const batches = data.batches.filter((b) => b.supplierId === supplier.id);
 
     let avgLandedCost: number | null = null;

@@ -65,8 +65,8 @@ export default function HaendlerPage() {
         );
       })
       .map((dealer) => {
-        const linked = data.batches.filter(
-          (b) => b.sales.dealerId === dealer.id,
+        const linked = data.batches.filter((b) =>
+          b.sales.some((s) => s.dealerId === dealer.id),
         );
         let marginSum = 0;
         let marginCount = 0;

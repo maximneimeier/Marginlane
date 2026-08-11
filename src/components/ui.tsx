@@ -69,7 +69,7 @@ export function Button({
     ghost:
       "border border-transparent bg-transparent text-muted hover:bg-surface-soft hover:text-foreground",
     danger:
-      "border border-transparent bg-transparent text-danger hover:bg-red-50",
+      "border border-red-300 bg-red-50 text-danger hover:border-red-400 hover:bg-red-100",
   };
   return (
     <button
@@ -235,11 +235,6 @@ export function ConfirmDialog({
         </Button>
         <Button
           variant={danger ? "danger" : "primary"}
-          className={
-            danger
-              ? "border border-red-200 bg-red-50 text-danger hover:bg-red-100"
-              : ""
-          }
           onClick={() => {
             onConfirm();
             onClose();

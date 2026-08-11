@@ -4,7 +4,7 @@ export type SupplierStatus = "active" | "inactive" | "review";
 export type PaymentUnit = "Tage" | "Wochen";
 
 /**
- * Preisenheit für Product.unitPrice und Batch.quantity.
+ * Preisenheit für Mengen und Preise.
  * Kalkulation bleibt immer quantity × unit_price — die Einheit ist nur Semantik.
  */
 export type PricingUnit = "pcs" | "g" | "kg" | "ml" | "l" | "m";
@@ -50,7 +50,7 @@ export type CommercialTerms = {
 };
 
 /**
- * Nullable Overrides — `null` = vom Parent erben (Supplier → Product → Batch).
+ * Nullable Overrides — `null` = vom Parent erben (Supplier → Batch).
  * Nie den Parent-Wert beim Anlegen kopieren.
  */
 export type CommercialOverrides = {
@@ -89,22 +89,20 @@ export type Supplier = {
   createdAt: string;
 };
 
+/**
+ * @deprecated Alte Beschaffungs-Entität (vor BOM-Komponenten).
+ * Nach Migration leer; nur noch für Typ-Kompat / Legacy-Imports.
+ */
 export type Product = {
   id: string;
   supplierId: string;
   name: string;
   sku: string;
-  /**
-   * Listenpreis **pro `pricingUnit`** (z. B. €/g oder €/Stk.).
-   * Charge-Menge und Staffeln sind in derselben Einheit.
-   */
+  /** @deprecated Einkaufspreis — ersetzt durch Component.purchasePricePerUnit */
   unitPrice: number;
-  /** Mindestabnahme in `pricingUnit` */
   moq: number;
   discountTiers: DiscountTier[];
-  /** Einheit für Preis, Menge, MOQ und Staffeln */
   pricingUnit: PricingUnit;
-  /** Overrides der Supplier-Konditionen (`null` = erben) */
   currency: string | null;
   paymentDays: number | null;
   paymentUnit: PaymentUnit | null;
@@ -121,8 +119,11 @@ export type CatalogProduct = {
   id: string;
   name: string;
   sku: string;
-  /** Verkaufspreis pro pricingUnit */
-  sellPrice: number;
+  /**
+   * Optionaler Listen-/Katalogpreis (MSRP).
+   * Operativer Verkaufspreis sitzt auf Sale, nicht hier.
+   */
+  listPrice: number | null;
   pricingUnit: PricingUnit;
   currency: string;
   status: CatalogProductStatus;
@@ -134,38 +135,86 @@ export type CatalogProduct = {
 };
 
 /**
- * Spec-ER: Batch 1 — 1 SalesData.
- * Verkaufspreis, Menge, Kanal und Vertriebskosten sitzen hier —
- * nicht am Händler. Händler (`dealerId`) ist optionale Vorlage außerhalb
- * der Kernkette und liefert Defaults nur solange Felder `null` sind.
+ * Geplante Absatzmenge: Produkt × Händler × Kalendermonat × Szenario.
+ * `dealerId: null` = Direktverkauf / ohne Händler.
  */
-export type SalesData = {
-  /**
-   * Verkaufspreis pro Preisenheit.
-   * `null` = optional vom verknüpften Händler erben (nur wenn dealerId gesetzt).
-   */
-  sellPrice: number | null;
-  /** Verkaufsmenge (typisch = Batch.quantity) */
-  quantity: number;
-  /** Verkaufskanal / Label (Spec-Feld; kann Händlername sein) */
-  channel: string;
-  /**
-   * Optionaler Verweis auf Händler-Stammdaten (Vorlage).
-   * `null` = reine SalesData ohne Stammdaten-Kopplung.
-   */
+export type SalesPlanScenario = "base" | "upside" | "downside";
+
+export type SalesPlanCell = {
+  productId: string;
+  /** null = Direkt / ohne Händler */
   dealerId: string | null;
-  /**
-   * Vertriebskosten der Charge.
-   * `null` = optional vom Händler erben; Array (auch leer) = Charge-Werte.
-   */
-  costItems: CostItem[] | null;
+  /** Kalendermonat YYYY-MM */
+  month: string;
+  /** Geplante Stückzahl in Preisenheit des Produkts */
+  quantity: number;
+  scenario: SalesPlanScenario;
+};
+
+/** Plan-VK und Annahme je Produkt × Händler × Szenario */
+export type SalesPlanRowMeta = {
+  productId: string;
+  dealerId: string | null;
+  scenario: SalesPlanScenario;
+  /** Plan-Verkaufspreis / Einheit; null = Fallback Listenpreis / Händler-Default */
+  unitPrice: number | null;
+  note: string;
+};
+
+export type SalesPlanSettings = {
+  activeScenario: SalesPlanScenario;
+  /** Freigegebene Pläne als `${year}:${scenario}` */
+  frozen: string[];
+};
+
+export const SALES_PLAN_SCENARIOS: SalesPlanScenario[] = [
+  "base",
+  "upside",
+  "downside",
+];
+
+export const EMPTY_SALES_PLAN_SETTINGS: SalesPlanSettings = {
+  activeScenario: "base",
+  frozen: [],
 };
 
 /**
- * Optionale Stammdaten-Vorlage außerhalb des Spec-Kern-ER
- * (Supplier → Product → Batch → SalesData).
- * Füllt SalesData-Defaults per Inheritance, speichert sie aber nicht.
+ * BOM-Komponente eines Verkaufsprodukts.
+ * Gesamteinkaufspreis = Σ (purchasePricePerUnit × quantityPerProductUnit).
  */
+export type Component = {
+  id: string;
+  productId: string;
+  supplierId: string;
+  name: string;
+  purchasePricePerUnit: number;
+  quantityPerProductUnit: number;
+};
+
+/**
+ * @deprecated Einzelnes SalesData-Objekt (vor Multi-Sale).
+ * Wird bei Migration in Sale[] umgewandelt.
+ */
+export type SalesData = {
+  sellPrice: number | null;
+  quantity: number;
+  channel: string;
+  dealerId: string | null;
+  costItems: CostItem[] | null;
+};
+
+/** Verkaufseintrag einer Charge — mehrere pro Batch möglich */
+export type Sale = {
+  id: string;
+  dealerId: string | null;
+  salePricePerUnit: number | null;
+  quantity: number;
+  /** Verkaufskanal / Label */
+  channel: string;
+  /** Provision, CAC, etc. — null = optional vom Händler erben */
+  costItems: CostItem[] | null;
+};
+
 export type DealerStatus = "active" | "inactive";
 
 export type DealerChannel =
@@ -183,8 +232,11 @@ export type Dealer = {
   email: string;
   phone: string;
   channel: DealerChannel;
+  /** Standard-Zahlungsziel (Freitext, analog Supplier.paymentTerms) */
   paymentTerms: string;
-  /** Vorlage: Standard-VK für SalesData (wenn sellPrice null) */
+  /** Standard-Währung */
+  currency: string;
+  /** Vorlage: Standard-VK für Sale (wenn salePricePerUnit null) */
   defaultSellPrice: number;
   /** Vorlage: Standard-Vertriebskosten (wenn costItems null) */
   salesCostItems: CostItem[];
@@ -195,20 +247,19 @@ export type Dealer = {
 
 export type Batch = {
   id: string;
+  /** Verweis auf CatalogProduct */
   productId: string;
   supplierId: string;
   label: string;
   /**
-   * Menge in `Product.pricingUnit` (Stück, Gramm, Meter, …).
-   * Unit Economics = quantity × unit_price in derselben Einheit.
+   * Menge in CatalogProduct.pricingUnit.
    */
   quantity: number;
   /**
-   * `null` = EK aus Produktlistenpreis + Staffel zur Menge.
+   * `null` = EK aus BOM-Komponenten-Summe.
    * Zahl = Charge-Override.
    */
   unitPurchasePrice: number | null;
-  /** Overrides der Product/Supplier-Konditionen (`null` = erben) */
   currency: string | null;
   paymentDays: number | null;
   paymentUnit: PaymentUnit | null;
@@ -216,17 +267,23 @@ export type Batch = {
   skontoDays: number | null;
   incoterm: string | null;
   costItems: CostItem[];
-  /**
-   * Spec: genau eine Verkaufsseite pro Charge (1—1).
-   * Händler nur optional über sales.dealerId.
-   */
-  sales: SalesData;
+  /** Mehrere Verkäufe an unterschiedliche Dealer/Preise */
+  sales: Sale[];
   createdAt: string;
 };
 
 /** Wiederkehrende Gemeinkosten-Position (Unternehmensoverhead) */
 export type OverheadPeriod = "monatlich" | "quartalsweise" | "jaehrlich";
-export type OverheadCategory = "verwaltung" | "vertrieb_fix" | "sonstige";
+/** Klassische Gemeinkostenarten (Kostenrechnung) */
+export type OverheadCategory =
+  | "materialgemeinkosten"
+  | "fertigungsgemeinkosten"
+  | "verwaltungsgemeinkosten"
+  | "vertriebsgemeinkosten";
+/** Beeinflussbarkeit / Kostenverhalten */
+export type OverheadCostBehavior = "fix" | "variabel" | "semi_variabel";
+/** Bezugsgröße für den variablen Anteil */
+export type OverheadVariableBasis = "stueck" | "umsatz";
 export type OverheadAllocation =
   | "gleichmaessig"
   | "nach_umsatzanteil"
@@ -245,21 +302,77 @@ export type OverheadItem = {
   waehrung: string;
   periode: OverheadPeriod;
   kategorie: OverheadCategory;
+  /** Fix / variabel / semi-variabel — für Break-even & Szenarien */
+  kostenart: OverheadCostBehavior;
+  /**
+   * Bezugsgröße des variablen Anteils.
+   * Nur relevant bei kostenart variabel / semi_variabel.
+   */
+  variableBasis: OverheadVariableBasis | null;
+  /**
+   * Rate: bei `stueck` = € je Stück, bei `umsatz` = Prozent vom Umsatz.
+   */
+  variableRate: number | null;
   verteilschluessel: OverheadAllocation;
   /** Nur bei verteilschluessel = manuell; Summe der Prozente = 100 */
   manuelleAufteilung: OverheadManualShare[] | null;
+  /**
+   * Optionale Gültigkeit (YYYY-MM-DD).
+   * `null` = unbefristet (von Anfang / bis unendlich).
+   */
+  gueltigVon: string | null;
+  gueltigBis: string | null;
   createdAt: string;
+  /** Letzte Änderung (ISO) — Audit */
+  updatedAt: string;
+  /** Anzeigename bei letzter Änderung, falls bekannt */
+  updatedBy: string | null;
+};
+
+/**
+ * Tatsächlich erfasste Gemeinkosten-Ausgabe (Ist).
+ * Mehrere benannte Positionen je Monat/Kategorie möglich.
+ * Optional an eine Plan-Position (`overheadItemId`) gekoppelt.
+ */
+export type OverheadActual = {
+  id: string;
+  /** Bezeichnung der Ausgabe, z. B. „Büromiete“ */
+  name: string;
+  /** YYYY-MM */
+  month: string;
+  kategorie: OverheadCategory;
+  betrag: number;
+  /** Optional: Bezug zur Plan-Position */
+  overheadItemId: string | null;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+  updatedBy: string | null;
 };
 
 export type AppData = {
   suppliers: Supplier[];
-  /** Beschaffungs-Komponenten (bestellbar) */
+  /**
+   * @deprecated Nach Migration immer leer.
+   * Alte Beschaffungs-„Produkte“ wurden zu CatalogProduct + Component.
+   */
   products: Product[];
   /** Verkaufskatalog */
   catalogProducts: CatalogProduct[];
+  /** BOM-Komponenten (1:n zu CatalogProduct, n:1 zu Supplier) */
+  components: Component[];
   dealers: Dealer[];
   batches: Batch[];
+  /** Plan: budgetierte wiederkehrende Positionen */
   overheadItems: OverheadItem[];
+  /** Ist: tatsächlich erfasste, benannte Ausgaben */
+  overheadActuals: OverheadActual[];
+  /** Absatzplan: Stück je Produkt × Händler × Monat × Szenario */
+  salesPlan: SalesPlanCell[];
+  /** Plan-VK und Notizen je Zeile */
+  salesPlanRowMeta: SalesPlanRowMeta[];
+  /** Aktives Szenario + Freeze-Status */
+  salesPlanSettings: SalesPlanSettings;
 };
 
 export const COST_TYPE_PRESETS = [
@@ -389,10 +502,52 @@ export const OVERHEAD_PERIODS: OverheadPeriod[] = [
 ];
 
 export const OVERHEAD_CATEGORIES: OverheadCategory[] = [
-  "verwaltung",
-  "vertrieb_fix",
-  "sonstige",
+  "materialgemeinkosten",
+  "fertigungsgemeinkosten",
+  "verwaltungsgemeinkosten",
+  "vertriebsgemeinkosten",
 ];
+
+export const OVERHEAD_COST_BEHAVIORS: OverheadCostBehavior[] = [
+  "fix",
+  "variabel",
+  "semi_variabel",
+];
+
+export const OVERHEAD_VARIABLE_BASES: OverheadVariableBasis[] = [
+  "stueck",
+  "umsatz",
+];
+
+/** Alte Kategorie-Keys → aktuelles Schema */
+export function migrateOverheadCategory(value: unknown): OverheadCategory {
+  if (value === "materialgemeinkosten") return "materialgemeinkosten";
+  if (value === "fertigungsgemeinkosten") return "fertigungsgemeinkosten";
+  if (value === "verwaltungsgemeinkosten" || value === "verwaltung") {
+    return "verwaltungsgemeinkosten";
+  }
+  if (value === "vertriebsgemeinkosten" || value === "vertrieb_fix") {
+    return "vertriebsgemeinkosten";
+  }
+  if (value === "sonstige") return "materialgemeinkosten";
+  return "verwaltungsgemeinkosten";
+}
+
+export function migrateOverheadCostBehavior(
+  value: unknown,
+): OverheadCostBehavior {
+  if (value === "fix" || value === "variabel" || value === "semi_variabel") {
+    return value;
+  }
+  return "fix";
+}
+
+export function migrateOverheadVariableBasis(
+  value: unknown,
+): OverheadVariableBasis | null {
+  if (value === "stueck" || value === "umsatz") return value;
+  return null;
+}
 
 export const OVERHEAD_ALLOCATIONS: OverheadAllocation[] = [
   "gleichmaessig",
@@ -405,9 +560,14 @@ export const EMPTY_DATA: AppData = {
   suppliers: [],
   products: [],
   catalogProducts: [],
+  components: [],
   dealers: [],
   batches: [],
   overheadItems: [],
+  overheadActuals: [],
+  salesPlan: [],
+  salesPlanRowMeta: [],
+  salesPlanSettings: { activeScenario: "base", frozen: [] },
 };
 
 export function formatPaymentTerms(s: {

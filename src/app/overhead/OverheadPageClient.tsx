@@ -8,9 +8,22 @@ import {
   type DatePreset,
   type DateRange,
 } from "@/lib/overview";
+import {
+  buildOverheadPeriodCsv,
+  downloadOverheadCsv,
+} from "@/lib/overhead";
 import { useI18n } from "@/hooks/useI18n";
+import type { MessageKey } from "@/lib/i18n";
 import { OverviewOverheadPanel } from "@/components/OverviewOverheadPanel";
-import { Card, Field, PageHeader, Select, TextInput } from "@/components/ui";
+import { OverheadRunRateStrip } from "@/components/OverheadRunRateStrip";
+import {
+  Button,
+  Card,
+  Field,
+  PageHeader,
+  Select,
+  TextInput,
+} from "@/components/ui";
 
 export default function OverheadPageClient() {
   const { ready, data } = useStore();
@@ -34,11 +47,59 @@ export default function OverheadPageClient() {
     setRange((prev) => ({ ...prev, ...partial }));
   }
 
+  function exportCsv() {
+    const csv = buildOverheadPeriodCsv(data, range, {
+      sectionMeta: t("overhead.export.section.meta"),
+      sectionPositions: t("overhead.export.section.positions"),
+      sectionCategory: t("overhead.export.section.category"),
+      sectionProducts: t("overhead.export.section.products"),
+      sectionActuals: t("overhead.export.section.actuals"),
+      rangeFrom: t("overviewPage.from"),
+      rangeTo: t("overviewPage.to"),
+      exportedAt: t("overhead.export.exportedAt"),
+      name: t("overhead.col.name"),
+      amount: t("overhead.col.betrag"),
+      currency: t("overhead.field.waehrung"),
+      period: t("overhead.col.periode"),
+      category: t("overhead.col.kategorie"),
+      costBehavior: t("overhead.col.kostenart"),
+      allocation: t("overhead.col.verteilschluessel"),
+      periodAmount: t("overhead.col.periodAmount"),
+      validFrom: t("overhead.field.gueltigVon"),
+      validTo: t("overhead.field.gueltigBis"),
+      createdAt: t("overhead.export.createdAt"),
+      updatedAt: t("overhead.export.updatedAt"),
+      updatedBy: t("overhead.export.updatedBy"),
+      plan: t("overhead.planVsActual.plan"),
+      actual: t("overhead.planVsActual.actual"),
+      delta: t("overhead.planVsActual.delta"),
+      product: t("overhead.distribution.product"),
+      overhead: t("overhead.distribution.overhead"),
+      db3: t("overhead.distribution.db3"),
+      after: t("overhead.distribution.after"),
+      month: t("overhead.planVsActual.month"),
+      labelCategory: (k) => t(`overhead.category.${k}` as MessageKey),
+      labelPeriod: (p) => t(`overhead.period.${p}` as MessageKey),
+      labelCostBehavior: (c) => t(`overhead.costBehavior.${c}` as MessageKey),
+      labelAllocation: (a) => t(`overhead.allocation.${a}` as MessageKey),
+    });
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadOverheadCsv(
+      `gemeinkosten_${range.from}_${range.to}_${stamp}.csv`,
+      csv,
+    );
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
         title={t("overhead.title")}
         description={t("overhead.description")}
+        action={
+          <Button variant="secondary" onClick={exportCsv}>
+            {t("overhead.export.csv")}
+          </Button>
+        }
       />
 
       <Card className="!p-4">
@@ -80,6 +141,11 @@ export default function OverheadPageClient() {
             {t("overhead.itemCount", { count: data.overheadItems.length })}
           </p>
         </div>
+        <OverheadRunRateStrip
+          items={data.overheadItems}
+          range={range}
+          data={data}
+        />
       </Card>
 
       <OverviewOverheadPanel range={range} hidePageHeader />

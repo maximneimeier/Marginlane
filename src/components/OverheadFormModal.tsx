@@ -3,14 +3,18 @@
 import { useEffect, useMemo, useState } from "react";
 import type {
   OverheadAllocation,
+  OverheadCostBehavior,
   OverheadItem,
-  Product,
+  OverheadVariableBasis,
+  CatalogProduct,
 } from "@/lib/types";
 import {
   CURRENCIES,
   OVERHEAD_ALLOCATIONS,
   OVERHEAD_CATEGORIES,
+  OVERHEAD_COST_BEHAVIORS,
   OVERHEAD_PERIODS,
+  OVERHEAD_VARIABLE_BASES,
 } from "@/lib/types";
 import {
   emptyOverheadItem,
@@ -19,6 +23,7 @@ import {
 } from "@/lib/overhead";
 import { useI18n } from "@/hooks/useI18n";
 import type { MessageKey } from "@/lib/i18n";
+import { usePrefs } from "@/context/PreferencesContext";
 import {
   Button,
   Field,
@@ -30,7 +35,7 @@ import {
 type Props = {
   open: boolean;
   initial: OverheadItem | null;
-  products: Product[];
+  products: CatalogProduct[];
   isEdit: boolean;
   defaultCurrency?: string;
   onClose: () => void;
@@ -47,7 +52,12 @@ export function OverheadFormModal({
   onSave,
 }: Props) {
   const { t } = useI18n();
+  const { prefs } = usePrefs();
   const [draft, setDraft] = useState<OverheadItem | null>(null);
+  /** Anzeige-Strings für %-Felder — leer erlaubt, gilt als 0 */
+  const [percentInputs, setPercentInputs] = useState<Record<string, string>>(
+    {},
+  );
 
   const sortedProducts = useMemo(
     () => [...products].sort((a, b) => a.name.localeCompare(b.name)),
@@ -58,9 +68,15 @@ export function OverheadFormModal({
     if (!open) return;
     if (initial) {
       setDraft(structuredClone(initial));
+      const inputs: Record<string, string> = {};
+      for (const row of initial.manuelleAufteilung ?? []) {
+        inputs[row.productId] = String(row.percent);
+      }
+      setPercentInputs(inputs);
       return;
     }
     setDraft(emptyOverheadItem(defaultCurrency));
+    setPercentInputs({});
   }, [open, initial, defaultCurrency]);
 
   useEffect(() => {
@@ -88,42 +104,83 @@ export function OverheadFormModal({
   const manualOk =
     draft.verteilschluessel !== "manuell" ||
     isManualAllocationValid(draft.manuelleAufteilung);
+  const kostenart = draft.kostenart ?? "fix";
+  const needsVariable =
+    kostenart === "variabel" || kostenart === "semi_variabel";
+  const fixedOk =
+    kostenart === "variabel"
+      ? Number.isFinite(draft.betrag) && draft.betrag >= 0
+      : Number.isFinite(draft.betrag) && draft.betrag > 0;
+  const variableOk =
+    !needsVariable ||
+    (Boolean(draft.variableBasis) &&
+      draft.variableRate != null &&
+      Number.isFinite(draft.variableRate) &&
+      draft.variableRate > 0);
   const canSave =
-    Boolean(draft.name.trim()) &&
-    Number.isFinite(draft.betrag) &&
-    draft.betrag > 0 &&
-    manualOk;
+    Boolean(draft.name.trim()) && fixedOk && variableOk && manualOk;
 
-  function setAllocation(next: OverheadAllocation) {
-    setDraft((prev) => {
-      if (!prev) return prev;
-      if (next === "manuell") {
-        const existing = new Map(
-          (prev.manuelleAufteilung ?? []).map((row) => [
-            row.productId,
-            row.percent,
-          ]),
-        );
-        const equal =
-          sortedProducts.length > 0 ? 100 / sortedProducts.length : 0;
-        return {
-          ...prev,
-          verteilschluessel: next,
-          manuelleAufteilung: sortedProducts.map((p) => ({
-            productId: p.id,
-            percent: existing.get(p.id) ?? equal,
-          })),
-        };
-      }
-      return {
-        ...prev,
-        verteilschluessel: next,
-        manuelleAufteilung: null,
-      };
+  function setKostenart(next: OverheadCostBehavior) {
+    if (!draft) return;
+    if (next === "fix") {
+      setDraft({
+        ...draft,
+        kostenart: next,
+        variableBasis: null,
+        variableRate: null,
+      });
+      return;
+    }
+    setDraft({
+      ...draft,
+      kostenart: next,
+      variableBasis: draft.variableBasis ?? "stueck",
+      variableRate:
+        draft.variableRate != null && Number.isFinite(draft.variableRate)
+          ? draft.variableRate
+          : null,
     });
   }
 
-  function updateManualPercent(productId: string, percent: number) {
+  function setAllocation(next: OverheadAllocation) {
+    if (!draft) return;
+    if (next === "manuell") {
+      const existing = new Map(
+        (draft.manuelleAufteilung ?? []).map((row) => [
+          row.productId,
+          row.percent,
+        ]),
+      );
+      const equal =
+        sortedProducts.length > 0 ? 100 / sortedProducts.length : 0;
+      const rows = sortedProducts.map((p) => ({
+        productId: p.id,
+        percent: existing.get(p.id) ?? equal,
+      }));
+      const inputs: Record<string, string> = {};
+      for (const row of rows) {
+        inputs[row.productId] = String(row.percent);
+      }
+      setPercentInputs(inputs);
+      setDraft({
+        ...draft,
+        verteilschluessel: next,
+        manuelleAufteilung: rows,
+      });
+      return;
+    }
+    setPercentInputs({});
+    setDraft({
+      ...draft,
+      verteilschluessel: next,
+      manuelleAufteilung: null,
+    });
+  }
+
+  function updateManualPercentInput(productId: string, raw: string) {
+    setPercentInputs((prev) => ({ ...prev, [productId]: raw }));
+    const percent =
+      raw.trim() === "" ? 0 : Math.max(0, Number(raw) || 0);
     setDraft((prev) => {
       if (!prev?.manuelleAufteilung) return prev;
       return {
@@ -137,9 +194,26 @@ export function OverheadFormModal({
 
   function handleSave() {
     if (!draft || !canSave) return;
+    const von = draft.gueltigVon || null;
+    const bis = draft.gueltigBis || null;
+    // Wenn beide gesetzt und von > bis: tauschen
+    const gueltigVon =
+      von && bis && von > bis ? bis : von;
+    const gueltigBis =
+      von && bis && von > bis ? von : bis;
+    const nextKostenart = draft.kostenart ?? "fix";
+    const isVariable =
+      nextKostenart === "variabel" || nextKostenart === "semi_variabel";
     onSave({
       ...draft,
       name: draft.name.trim(),
+      kostenart: nextKostenart,
+      betrag: nextKostenart === "variabel" ? 0 : draft.betrag,
+      variableBasis: isVariable ? draft.variableBasis : null,
+      variableRate: isVariable ? draft.variableRate : null,
+      gueltigVon,
+      gueltigBis,
+      updatedBy: prefs.displayName?.trim() || null,
       manuelleAufteilung:
         draft.verteilschluessel === "manuell"
           ? draft.manuelleAufteilung
@@ -166,20 +240,34 @@ export function OverheadFormModal({
               autoFocus
             />
           </Field>
-          <Field label={t("overhead.field.betrag")} required>
-            <TextInput
-              type="number"
-              min={0}
-              step="0.01"
-              value={draft.betrag || ""}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  betrag: e.target.value === "" ? 0 : Number(e.target.value),
-                })
+          {kostenart !== "variabel" ? (
+            <Field
+              label={
+                kostenart === "semi_variabel"
+                  ? t("overhead.field.betragFix")
+                  : t("overhead.field.betrag")
               }
-            />
-          </Field>
+              hint={
+                kostenart === "semi_variabel"
+                  ? t("overhead.field.betragFixHint")
+                  : undefined
+              }
+              required
+            >
+              <TextInput
+                type="number"
+                min={0}
+                step="0.01"
+                value={draft.betrag || ""}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    betrag: e.target.value === "" ? 0 : Number(e.target.value),
+                  })
+                }
+              />
+            </Field>
+          ) : null}
           <Field label={t("overhead.field.waehrung")} required>
             <Select
               value={draft.waehrung}
@@ -211,7 +299,13 @@ export function OverheadFormModal({
               ))}
             </Select>
           </Field>
-          <Field label={t("overhead.field.kategorie")} required>
+          <Field
+            label={t("overhead.field.kategorie")}
+            hint={t(
+              `overhead.categoryHint.${draft.kategorie}` as MessageKey,
+            )}
+            required
+          >
             <Select
               value={draft.kategorie}
               onChange={(e) =>
@@ -227,6 +321,108 @@ export function OverheadFormModal({
                 </option>
               ))}
             </Select>
+          </Field>
+          <Field
+            label={t("overhead.field.kostenart")}
+            hint={t(
+              `overhead.costBehaviorHint.${kostenart}` as MessageKey,
+            )}
+            required
+          >
+            <Select
+              value={kostenart}
+              onChange={(e) =>
+                setKostenart(e.target.value as OverheadCostBehavior)
+              }
+            >
+              {OVERHEAD_COST_BEHAVIORS.map((c) => (
+                <option key={c} value={c}>
+                  {t(`overhead.costBehavior.${c}` as MessageKey)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          {needsVariable ? (
+            <>
+              <Field
+                label={t("overhead.field.variableBasis")}
+                hint={t("overhead.field.variableBasisHint")}
+                required
+              >
+                <Select
+                  value={draft.variableBasis ?? "stueck"}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      variableBasis: e.target.value as OverheadVariableBasis,
+                    })
+                  }
+                >
+                  {OVERHEAD_VARIABLE_BASES.map((b) => (
+                    <option key={b} value={b}>
+                      {t(`overhead.variableBasis.${b}` as MessageKey)}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field
+                label={
+                  draft.variableBasis === "umsatz"
+                    ? t("overhead.field.variableRatePercent")
+                    : t("overhead.field.variableRatePerUnit")
+                }
+                hint={
+                  draft.variableBasis === "umsatz"
+                    ? t("overhead.field.variableRatePercentHint")
+                    : t("overhead.field.variableRatePerUnitHint")
+                }
+                required
+              >
+                <TextInput
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={draft.variableRate ?? ""}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      variableRate:
+                        e.target.value === "" ? null : Number(e.target.value),
+                    })
+                  }
+                />
+              </Field>
+            </>
+          ) : null}
+          <Field
+            label={t("overhead.field.gueltigVon")}
+            hint={t("overhead.field.gueltigHint")}
+          >
+            <TextInput
+              type="date"
+              value={draft.gueltigVon ?? ""}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  gueltigVon: e.target.value === "" ? null : e.target.value,
+                })
+              }
+            />
+          </Field>
+          <Field
+            label={t("overhead.field.gueltigBis")}
+            hint={t("overhead.field.gueltigHint")}
+          >
+            <TextInput
+              type="date"
+              value={draft.gueltigBis ?? ""}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  gueltigBis: e.target.value === "" ? null : e.target.value,
+                })
+              }
+            />
           </Field>
         </div>
 
@@ -301,13 +497,14 @@ export function OverheadFormModal({
                           min={0}
                           max={100}
                           step="0.1"
-                          value={row?.percent ?? 0}
+                          value={
+                            percentInputs[product.id] ??
+                            (row ? String(row.percent) : "")
+                          }
                           onChange={(e) =>
-                            updateManualPercent(
+                            updateManualPercentInput(
                               product.id,
-                              e.target.value === ""
-                                ? 0
-                                : Number(e.target.value),
+                              e.target.value,
                             )
                           }
                           className="!w-[88px] text-right"

@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Product, Supplier } from "@/lib/types";
+import type { Component, Supplier } from "@/lib/types";
 import { INCOTERMS, type SupplierStatus } from "@/lib/types";
 import { CountryFlag } from "@/components/CountryFlag";
 import { formatDate, formatEuro, formatPercent } from "@/lib/format";
@@ -34,9 +35,10 @@ type Props = {
   onEdit: (supplier: Supplier) => void;
   onDelete: (supplier: Supplier) => void;
   onAddProduct: (supplierId: string) => void;
-  onEditProduct: (product: Product) => void;
+  onEditProduct: (component: Component) => void;
   onClearData: () => void;
-  productsOf: (supplierId: string) => Product[];
+  componentsOf: (supplierId: string) => Component[];
+  addProductHref?: string;
 };
 
 export function SuppliersOverview({
@@ -47,7 +49,8 @@ export function SuppliersOverview({
   onAddProduct,
   onEditProduct,
   onClearData,
-  productsOf,
+  componentsOf,
+  addProductHref,
 }: Props) {
   const { t, plural, locale, supplierStatusLabel, optionalColLabel, countryLabel, pricingUnitLabel } =
     useI18n();
@@ -322,8 +325,9 @@ export function SuppliersOverview({
                     )
                   }
                   expanded={expandedId === row.supplier.id}
-                  products={productsOf(row.supplier.id)}
+                  components={componentsOf(row.supplier.id)}
                   data={data}
+                  addProductHref={addProductHref}
                   onAddProduct={() => onAddProduct(row.supplier.id)}
                   onEditProduct={onEditProduct}
                   countryLabel={countryLabel}
@@ -531,9 +535,10 @@ export function SuppliersOverview({
                             <tr className="border-b border-line bg-surface-faint">
                               <td colSpan={99} className="p-0">
                                 <MobileExtras row={row} locale={locale} />
-                                <ExpandedProducts
-                                  products={productsOf(s.id)}
+                                <ExpandedComponents
+                                  components={componentsOf(s.id)}
                                   data={data}
+                                  addProductHref={addProductHref}
                                   onAddProduct={() => onAddProduct(s.id)}
                                   onEditProduct={onEditProduct}
                                   locale={locale}
@@ -707,102 +712,87 @@ function MobileExtras({
   );
 }
 
-function ExpandedProducts({
-  products,
+function ExpandedComponents({
+  components,
   data,
   onAddProduct,
   onEditProduct,
+  addProductHref,
   locale,
 }: {
-  products: Product[];
+  components: Component[];
   data: AppData;
   onAddProduct: () => void;
-  onEditProduct: (product: Product) => void;
+  onEditProduct: (component: Component) => void;
+  addProductHref?: string;
   locale: string;
 }) {
   const { t, pricingUnitLabel } = useI18n();
   return (
     <div className="border-t border-line">
-      {products.length === 0 ? (
+      {components.length === 0 ? (
         <p className="px-3 py-3 text-[13px] text-muted-soft">
           {t("suppliers.noProducts")}
         </p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[780px] text-left text-[12px]">
+          <table className="w-full min-w-[680px] text-left text-[12px]">
             <thead>
               <tr className="border-b border-line text-[10px] font-medium uppercase tracking-[0.04em] text-muted-soft">
-                <th className="px-3 py-2 font-medium">{t("components.col.product")}</th>
-                <th className="px-3 py-2 font-medium">{t("components.col.sku")}</th>
-                <th className="px-3 py-2 text-right font-medium">{t("components.col.price")}</th>
-                <th className="px-3 py-2 text-right font-medium">{t("components.col.moq")}</th>
-                <th className="px-3 py-2 text-right font-medium">
-                  {t("components.col.avgLanded")}
+                <th className="px-3 py-2 font-medium">
+                  {t("productModal.componentName")}
                 </th>
-                <th className="px-3 py-2 text-right font-medium">{t("components.col.batches")}</th>
-                <th className="px-3 py-2 font-medium">{t("components.col.lastOrder")}</th>
-                <th className="px-3 py-2 text-right font-medium">{t("components.col.avgMargin")}</th>
+                <th className="px-3 py-2 font-medium">
+                  {t("components.col.product")}
+                </th>
+                <th className="px-3 py-2 text-right font-medium">
+                  {t("productModal.componentPrice")}
+                </th>
+                <th className="px-3 py-2 text-right font-medium">
+                  {t("productModal.componentQty")}
+                </th>
+                <th className="px-3 py-2 text-right font-medium">
+                  {t("components.col.batches")}
+                </th>
               </tr>
             </thead>
             <tbody>
-              {products.map((p) => {
-                const m = buildProductMetrics(p.id, data);
-                const unit = pricingUnitLabel(p.pricingUnit);
+              {components.map((c) => {
+                const product = data.catalogProducts.find(
+                  (p) => p.id === c.productId,
+                );
+                const m = product
+                  ? buildProductMetrics(product.id, data)
+                  : null;
+                const unit = product
+                  ? pricingUnitLabel(product.pricingUnit)
+                  : pricingUnitLabel("pcs");
                 return (
                   <tr
-                    key={p.id}
+                    key={c.id}
                     className="border-b border-line/70 last:border-0 hover:bg-white/60"
                   >
                     <td className="px-3 py-2">
                       <button
                         type="button"
-                        onClick={() => onEditProduct(p)}
+                        onClick={() => onEditProduct(c)}
                         className="text-left font-medium text-foreground hover:text-accent"
                       >
-                        {p.name}
+                        {c.name || t("common.emDash")}
                       </button>
                     </td>
-                    <td className="px-3 py-2 text-muted">{p.sku || t("common.emDash")}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {t("components.priceWithUnit", {
-                        price: formatEuro(p.unitPrice),
-                        unit,
-                      })}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-muted">
-                      {t("components.moqWithUnit", {
-                        count: p.moq.toLocaleString(locale),
-                        unit,
-                      })}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {m.avgLandedCost != null
-                        ? formatEuro(m.avgLandedCost)
-                        : t("common.emDash")}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-muted">
-                      {m.batchCount}
-                    </td>
                     <td className="px-3 py-2 text-muted">
-                      {formatDate(m.lastOrderAt, locale)}
+                      {product?.name ?? t("common.emDash")}
                     </td>
-                    <td className="px-3 py-2 text-right">
-                      {m.avgMarginEuro != null ? (
-                        <span
-                          className={`tabular-nums ${
-                            m.avgMarginEuro >= 0
-                              ? "text-success"
-                              : "text-danger"
-                          }`}
-                        >
-                          {formatEuro(m.avgMarginEuro)}
-                          <span className="ml-1 text-muted-soft">
-                            {formatPercent(m.avgMarginPercent ?? 0)}
-                          </span>
-                        </span>
-                      ) : (
-                        <span className="text-muted-soft">{t("common.emDash")}</span>
-                      )}
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {formatEuro(c.purchasePricePerUnit, locale)}
+                      <span className="ml-1 text-muted-soft">/ {unit}</span>
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-muted">
+                      {c.quantityPerProductUnit}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-muted">
+                      {m?.batchCount ?? 0}
                     </td>
                   </tr>
                 );
@@ -813,13 +803,22 @@ function ExpandedProducts({
       )}
 
       <div className="px-3 py-2.5">
-        <button
-          type="button"
-          onClick={onAddProduct}
-          className="inline-flex items-center rounded-full border border-line bg-white px-2.5 py-1 text-[12px] font-medium text-muted transition-colors hover:border-line-strong hover:text-foreground"
-        >
-          {t("suppliers.addProduct")}
-        </button>
+        {addProductHref ? (
+          <Link
+            href={addProductHref}
+            className="inline-flex items-center rounded-full border border-line bg-white px-2.5 py-1 text-[12px] font-medium text-muted transition-colors hover:border-line-strong hover:text-foreground"
+          >
+            {t("suppliers.addProduct")}
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={onAddProduct}
+            className="inline-flex items-center rounded-full border border-line bg-white px-2.5 py-1 text-[12px] font-medium text-muted transition-colors hover:border-line-strong hover:text-foreground"
+          >
+            {t("suppliers.addProduct")}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -831,10 +830,11 @@ function SupplierCard({
   onDelete,
   onOpen,
   expanded,
-  products,
+  components,
   data,
   onAddProduct,
   onEditProduct,
+  addProductHref,
   countryLabel,
   supplierStatusLabel,
   locale,
@@ -844,10 +844,11 @@ function SupplierCard({
   onDelete: () => void;
   onOpen: () => void;
   expanded: boolean;
-  products: Product[];
+  components: Component[];
   data: AppData;
   onAddProduct: () => void;
-  onEditProduct: (product: Product) => void;
+  onEditProduct: (component: Component) => void;
+  addProductHref?: string;
   countryLabel: (code: string) => string;
   supplierStatusLabel: (status: SupplierStatus) => string;
   locale: string;
@@ -897,9 +898,10 @@ function SupplierCard({
       </div>
       {expanded ? (
         <div className="mt-3 border-t border-line pt-3">
-          <ExpandedProducts
-            products={products}
+          <ExpandedComponents
+            components={components}
             data={data}
+            addProductHref={addProductHref}
             onAddProduct={onAddProduct}
             onEditProduct={onEditProduct}
             locale={locale}

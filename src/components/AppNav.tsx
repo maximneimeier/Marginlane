@@ -12,6 +12,11 @@ const links = [
   { href: "/overview", key: "nav.overview" as const, icon: OverviewIcon },
   { href: "/suppliers", key: "nav.suppliers" as const, icon: SuppliersIcon },
   { href: "/products", key: "nav.products" as const, icon: ProductsIcon },
+  {
+    href: "/sales-volume",
+    key: "nav.salesVolume" as const,
+    icon: SalesVolumeIcon,
+  },
   { href: "/components", key: "nav.components" as const, icon: ComponentsIcon },
   { href: "/overhead", key: "nav.overhead" as const, icon: OverheadIcon },
   { href: "/dealers", key: "nav.dealers" as const, icon: DealersIcon },
@@ -182,6 +187,20 @@ function ProductsIcon({ active }: { active: boolean }) {
         strokeLinejoin="round"
       />
       <path d="M7.5 7.5V13.1M7.5 7.5 2.7 5.1M7.5 7.5l4.8-2.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function SalesVolumeIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={active ? "text-accent" : "text-muted-soft"}>
+      <path
+        d="M3 11.5V7.5M6.5 11.5V4.5M10 11.5V6M12.5 11.5V8.5"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
+      <path d="M2.5 12.5h10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   );
 }

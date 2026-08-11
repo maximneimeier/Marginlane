@@ -3,22 +3,22 @@
 import { useEffect, useMemo, useState } from "react";
 import type { AppData, Batch, CommercialOverrides, CostItem } from "@/lib/types";
 import { PROCUREMENT_PHASES, SALES_PHASES } from "@/lib/types";
+import { calculateUnitEconomics } from "@/lib/calc";
+import { createId, formatEuro } from "@/lib/format";
 import {
-  calculateUnitEconomics,
-  resolvePurchasePrice,
-} from "@/lib/calc";
-import { createId, formatEuro, formatPercent } from "@/lib/format";
+  catalogProductUnitPurchaseCost,
+  emptySale,
+} from "@/lib/migrateAppData";
 import { useI18n } from "@/hooks/useI18n";
 import {
-  detachDealerFromSales,
-  emptySalesData,
-  salesFromDealer,
+  detachDealerFromSale,
+  saleFromDealer,
 } from "@/lib/storage";
 import {
   emptyCommercialOverrides,
   resolveCommercial,
-  resolveSalesCostItems,
-  resolveSellPrice,
+  resolveSaleCostItems,
+  resolveSalePrice,
 } from "@/lib/resolve";
 import { CostItemEditor } from "@/components/CostItemEditor";
 import { SalesCostsReadonly } from "@/components/SalesCostsReadonly";
@@ -34,7 +34,6 @@ import {
 type Props = {
   open: boolean;
   data: AppData;
-  /** Optional vorausgewähltes Produkt */
   initialProductId?: string;
   onClose: () => void;
   onSave: (batch: Batch) => void;
@@ -56,7 +55,6 @@ export function BatchFormModal({
   const [costItems, setCostItems] = useState<CostItem[]>([]);
   const [dealerId, setDealerId] = useState("");
   const [channel, setChannel] = useState("");
-  /** null = vom Händler erben (nur mit dealerId) */
   const [sellPrice, setSellPrice] = useState<number | null>(0);
   const [salesItems, setSalesItems] = useState<CostItem[] | null>([]);
   const [commercialOverrides, setCommercialOverrides] =
@@ -64,16 +62,25 @@ export function BatchFormModal({
   const [priceManual, setPriceManual] = useState(false);
 
   const supplier = data.suppliers.find((s) => s.id === supplierId);
-  const product = data.products.find((p) => p.id === productId);
+  const product = data.catalogProducts.find((p) => p.id === productId);
   const dealer = data.dealers.find((d) => d.id === dealerId);
+
+  const bomPurchase = useMemo(
+    () =>
+      productId
+        ? catalogProductUnitPurchaseCost(productId, data.components)
+        : 0,
+    [productId, data.components],
+  );
 
   const unit = product
     ? pricingUnitLabel(product.pricingUnit)
     : pricingUnitLabel("pcs");
 
-  const salesDraft = useMemo(
+  const saleDraft = useMemo(
     () => ({
-      sellPrice,
+      id: "draft",
+      salePricePerUnit: sellPrice,
       quantity,
       channel,
       dealerId: dealerId || null,
@@ -82,53 +89,47 @@ export function BatchFormModal({
     [sellPrice, quantity, channel, dealerId, salesItems],
   );
 
-  const resolvedSell = resolveSellPrice(dealer, salesDraft).value;
-  const resolvedSalesItems = resolveSalesCostItems(dealer, salesDraft).value;
+  const resolvedSell = resolveSalePrice(dealer, saleDraft).value;
+  const resolvedSalesItems = resolveSaleCostItems(dealer, saleDraft).value;
   const sellInherited = Boolean(dealer && sellPrice === null);
   const costsInherited = Boolean(dealer && salesItems === null);
 
   const commercial = useMemo(
-    () => resolveCommercial(supplier, product, commercialOverrides),
-    [supplier, product, commercialOverrides],
+    () => resolveCommercial(supplier, null, commercialOverrides),
+    [supplier, commercialOverrides],
   );
   const inheritedCommercial = useMemo(
-    () => resolveCommercial(supplier, product, null),
-    [supplier, product],
+    () => resolveCommercial(supplier, null, null),
+    [supplier],
   );
 
-  const supplierProducts = useMemo(
+  const catalogOptions = useMemo(
     () =>
-      data.products
-        .filter((p) => p.supplierId === supplierId)
+      [...data.catalogProducts]
+        .filter((p) => p.status === "active")
         .sort((a, b) => a.name.localeCompare(b.name, locale)),
-    [data.products, supplierId, locale],
+    [data.catalogProducts, locale],
   );
-
-  const pricing = useMemo(() => {
-    if (!product) return null;
-    return resolvePurchasePrice(
-      product.unitPrice,
-      quantity,
-      product.discountTiers,
-    );
-  }, [product, quantity]);
 
   useEffect(() => {
     if (!open) return;
     const initialProduct = initialProductId
-      ? data.products.find((p) => p.id === initialProductId)
+      ? data.catalogProducts.find((p) => p.id === initialProductId)
       : undefined;
-    const nextSupplierId = initialProduct?.supplierId ?? "";
-    const nextProductId = initialProduct?.id ?? "";
+    const comps = initialProduct
+      ? data.components.filter((c) => c.productId === initialProduct.id)
+      : [];
+    const nextSupplierId =
+      comps.find((c) => c.supplierId)?.supplierId ??
+      data.suppliers[0]?.id ??
+      "";
 
     setSupplierId(nextSupplierId);
-    setProductId(nextProductId);
+    setProductId(initialProduct?.id ?? "");
     setLabel(
       `PO-${new Date().getFullYear()}-${String(data.batches.length + 1).padStart(3, "0")}`,
     );
-    setQuantity(
-      initialProduct && initialProduct.moq > 0 ? initialProduct.moq : 500,
-    );
+    setQuantity(500);
     setUnitPrice(0);
     setCostItems([]);
     setDealerId("");
@@ -140,7 +141,8 @@ export function BatchFormModal({
   }, [
     open,
     initialProductId,
-    data.products,
+    data.catalogProducts,
+    data.components,
     data.suppliers,
     data.batches.length,
   ]);
@@ -155,9 +157,9 @@ export function BatchFormModal({
   }, [open]);
 
   useEffect(() => {
-    if (!open || !pricing || priceManual) return;
-    setUnitPrice(pricing.unitPrice);
-  }, [open, pricing, priceManual]);
+    if (!open || priceManual) return;
+    setUnitPrice(bomPurchase);
+  }, [open, bomPurchase, priceManual]);
 
   const preview = calculateUnitEconomics({
     quantity,
@@ -169,79 +171,62 @@ export function BatchFormModal({
 
   function applyDealer(id: string) {
     if (!id) {
-      const detached = detachDealerFromSales(salesDraft, dealer);
+      const detached = detachDealerFromSale(saleDraft, dealer);
       setDealerId("");
       setChannel(detached.channel);
-      setSellPrice(detached.sellPrice);
+      setSellPrice(detached.salePricePerUnit);
       setSalesItems(detached.costItems);
       return;
     }
     const next = data.dealers.find((d) => d.id === id);
     if (!next) return;
-    const linked = salesFromDealer(next);
+    const linked = saleFromDealer(next, quantity);
     setDealerId(next.id);
     setChannel(linked.channel);
-    setSellPrice(linked.sellPrice);
+    setSellPrice(linked.salePricePerUnit);
     setSalesItems(linked.costItems);
-  }
-
-  function handleSupplierChange(id: string) {
-    setSupplierId(id);
-    setProductId("");
-    setPriceManual(false);
-    setUnitPrice(0);
   }
 
   function handleProductChange(id: string) {
     setProductId(id);
     setPriceManual(false);
-    const p = data.products.find((x) => x.id === id);
-    if (p && p.moq > 0) setQuantity(p.moq);
+    const comps = data.components.filter((c) => c.productId === id);
+    const fromBom = comps.find((c) => c.supplierId)?.supplierId;
+    if (fromBom) setSupplierId(fromBom);
   }
 
   function handleSave() {
-    if (!product || !supplier || !label.trim() || quantity <= 0) return;
+    if (!product || !label.trim() || quantity <= 0) return;
 
-    const sales = dealerId
-      ? {
-          quantity,
-          channel: channel.trim() || dealer?.name || "",
-          dealerId: dealerId as string,
-          sellPrice,
-          costItems: salesItems,
-        }
-      : {
-          ...emptySalesData(quantity),
-          channel: channel.trim(),
-          sellPrice: sellPrice ?? 0,
-          costItems: salesItems ?? [],
-        };
+    const sale = emptySale(quantity);
+    if (dealerId) {
+      sale.dealerId = dealerId;
+      sale.channel = channel.trim() || dealer?.name || "";
+      sale.salePricePerUnit = sellPrice;
+      sale.costItems = salesItems;
+    } else {
+      sale.channel = channel.trim();
+      sale.salePricePerUnit = sellPrice ?? 0;
+      sale.costItems = salesItems ?? [];
+    }
 
     const batch: Batch = {
       id: createId("bat"),
       productId: product.id,
-      supplierId: supplier.id,
+      supplierId: supplierId || "",
       label: label.trim(),
       quantity,
       unitPurchasePrice: priceManual ? unitPrice : null,
       ...commercialOverrides,
       costItems,
-      sales,
+      sales: [sale],
       createdAt: new Date().toISOString(),
     };
     onSave(batch);
     onClose();
   }
 
-  const canSave = Boolean(
-    supplier && product && label.trim() && quantity > 0,
-  );
-
-  const nextTier = product
-    ? [...product.discountTiers]
-        .filter((tier) => quantity < tier.minQty)
-        .sort((a, b) => a.minQty - b.minQty)[0]
-    : undefined;
+  const canSave = Boolean(product && label.trim() && quantity > 0);
 
   return (
     <Modal
@@ -251,302 +236,115 @@ export function BatchFormModal({
       description={t("batchModal.description")}
       wide
     >
-      <form
-        className="space-y-6"
-        onSubmit={(e) => {
-          e.preventDefault();
-          handleSave();
-        }}
-      >
-        <div className="grid gap-3 rounded-[10px] border border-line bg-surface-faint px-3.5 py-3 sm:grid-cols-2">
-          <div>
-            <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
-              {t("batchModal.landedCostPerUnit", { unit })}
-            </p>
-            <p className="mt-0.5 text-[18px] font-semibold tabular-nums tracking-tight">
-              {formatEuro(preview.landedCostPerUnit)}
-            </p>
-          </div>
-          <div>
-            <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
-              {t("batchModal.marginPerUnit", { unit })}
-            </p>
-            <p
-              className={`mt-0.5 text-[18px] font-semibold tabular-nums tracking-tight ${
-                preview.contributionPerUnit >= 0 ? "text-success" : "text-danger"
-              }`}
+      <div className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label={t("batchModal.product")} required>
+            <Select
+              value={productId}
+              onChange={(e) => handleProductChange(e.target.value)}
             >
-              {formatEuro(preview.contributionPerUnit)}
-            </p>
-          </div>
-        </div>
-
-        <section>
-          <h3 className="mb-3 text-[12px] font-semibold uppercase tracking-[0.04em] text-muted-soft">
-            {t("batchModal.section.order")}
-          </h3>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label={t("batchModal.supplier")} required>
-              <Select
-                value={supplierId}
-                onChange={(e) => handleSupplierChange(e.target.value)}
-                autoFocus={!initialProductId}
-              >
-                <option value="">{t("batchModal.selectSupplier")}</option>
-                {[...data.suppliers]
-                  .sort((a, b) => a.name.localeCompare(b.name, locale))
-                  .map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                      {s.incoterm ? ` · ${s.incoterm}` : ""}
-                    </option>
-                  ))}
-              </Select>
-            </Field>
-            <Field label={t("batchModal.product")} required>
-              <Select
-                value={productId}
-                onChange={(e) => handleProductChange(e.target.value)}
-                disabled={!supplierId}
-              >
-                <option value="">
-                  {supplierId
-                    ? t("batchModal.selectProduct")
-                    : t("batchModal.selectSupplierFirst")}
+              <option value="">{t("batchModal.selectProduct")}</option>
+              {catalogOptions.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                  {p.sku ? ` (${p.sku})` : ""}
                 </option>
-                {supplierProducts.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                    {p.sku ? ` (${p.sku})` : ""}
+              ))}
+            </Select>
+          </Field>
+          <Field label={t("batchModal.supplier")}>
+            <Select
+              value={supplierId}
+              onChange={(e) => setSupplierId(e.target.value)}
+            >
+              <option value="">{t("batchModal.noSupplier")}</option>
+              {[...data.suppliers]
+                .sort((a, b) => a.name.localeCompare(b.name, locale))
+                .map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
                   </option>
                 ))}
-              </Select>
-            </Field>
-            <Field label={t("batchModal.label")} required>
-              <TextInput
-                value={label}
-                onChange={(e) => setLabel(e.target.value)}
-              />
-            </Field>
-            <Field
-              label={t("unit.qtyLabel", { unit })}
-              required
-              hint={
-                product?.moq
-                  ? t("batchModal.moqHint", {
-                      count: product.moq.toLocaleString(locale),
-                      unit,
-                    })
-                  : undefined
-              }
-            >
-              <TextInput
-                type="number"
-                min="1"
-                value={quantity || ""}
-                onChange={(e) => {
-                  setQuantity(Number(e.target.value) || 0);
-                  setPriceManual(false);
-                }}
-              />
-            </Field>
-          </div>
-        </section>
+            </Select>
+          </Field>
+          <Field label={t("batchModal.label")} required>
+            <TextInput
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+            />
+          </Field>
+          <Field label={t("batchModal.quantity", { unit })} required>
+            <TextInput
+              type="number"
+              min="0"
+              value={quantity || ""}
+              onChange={(e) => setQuantity(Number(e.target.value) || 0)}
+            />
+          </Field>
+        </div>
 
-        {supplier ? (
-          <CommercialOverridesEditor
-            value={commercialOverrides}
-            inherited={inheritedCommercial}
-            resolved={commercial}
-            parentLabel={
-              product
-                ? `${supplier.name} / ${product.name}`
-                : supplier.name
-            }
-            onChange={setCommercialOverrides}
-          />
-        ) : null}
-
-        <section className="rounded-[12px] border border-line bg-white p-4">
-          <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-            <div>
-              <h3 className="text-[13px] font-semibold text-foreground">
-                {t("batchModal.purchasePrice")}
-              </h3>
-              <p className="mt-0.5 text-[12px] text-muted">
-                {t("batchModal.purchaseHint")}
-              </p>
-            </div>
-            {priceManual ? (
-              <button
+        <div className="rounded-[10px] border border-line bg-surface-faint p-3">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[13px] font-medium">
+              {t("batchModal.purchasePrice", { unit })}
+            </p>
+            {!priceManual ? (
+              <Button
                 type="button"
-                className="text-[12px] font-medium text-accent hover:underline"
-                onClick={() => setPriceManual(false)}
+                variant="ghost"
+                className="h-7 px-2 text-[12px]"
+                onClick={() => setPriceManual(true)}
               >
-                {t("batchModal.restoreAuto")}
-              </button>
+                {t("batchModal.overridePrice")}
+              </Button>
             ) : (
-              <span className="rounded-[6px] bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
-                {t("batchModal.automatic")}
-              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-7 px-2 text-[12px]"
+                onClick={() => {
+                  setPriceManual(false);
+                  setUnitPrice(bomPurchase);
+                }}
+              >
+                {t("batchModal.useBomPrice")}
+              </Button>
             )}
           </div>
-
-          {!product ? (
-            <p className="text-[13px] text-muted">
-              {t("batchModal.selectProductForPrice")}
-            </p>
-          ) : (
-            <>
-              <dl className="mb-4 grid gap-2 text-[13px] sm:grid-cols-2">
-                <div className="flex justify-between gap-3 sm:block">
-                  <dt className="text-muted">{t("batchModal.listPrice")}</dt>
-                  <dd className="font-medium tabular-nums sm:mt-0.5">
-                    {formatEuro(pricing?.listPrice ?? product.unitPrice)}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-3 sm:block">
-                  <dt className="text-muted">{t("batchModal.discount")}</dt>
-                  <dd className="font-medium tabular-nums sm:mt-0.5">
-                    {pricing && pricing.discountPercent > 0 ? (
-                      <>
-                        −{formatPercent(pricing.discountPercent)}
-                        {pricing.tierMinQty != null ? (
-                          <span className="ml-1 text-[12px] font-normal text-muted-soft">
-                            (
-                            {t("batchModal.fromQty", {
-                              count: pricing.tierMinQty.toLocaleString(locale),
-                              unit,
-                            })}
-                            )
-                          </span>
-                        ) : null}
-                      </>
-                    ) : (
-                      <span className="text-muted-soft">
-                        {t("batchModal.noTierDiscount")}
-                      </span>
-                    )}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-3 sm:block">
-                  <dt className="text-muted">{t("batchModal.unitPurchase", { unit })}</dt>
-                  <dd className="text-[15px] font-semibold tabular-nums text-foreground sm:mt-0.5">
-                    {formatEuro(unitPrice)}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-3 sm:block">
-                  <dt className="text-muted">{t("batchModal.goodsValue")}</dt>
-                  <dd className="font-medium tabular-nums sm:mt-0.5">
-                    {formatEuro(unitPrice * Math.max(quantity, 0))}
-                    {pricing && pricing.savingsPerUnit > 0 ? (
-                      <span className="ml-1 text-[12px] font-normal text-success">
-                        (−
-                        {formatEuro(
-                          pricing.savingsPerUnit * Math.max(quantity, 0),
-                        )}{" "}
-                        {t("batchModal.vsList")})
-                      </span>
-                    ) : null}
-                  </dd>
-                </div>
-              </dl>
-
-              {product.discountTiers.length > 0 ? (
-                <div className="mb-4 rounded-[8px] border border-line bg-surface-faint px-3 py-2.5">
-                  <p className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
-                    {t("batchModal.discountTiers")}
-                  </p>
-                  <ul className="space-y-1">
-                    {[...product.discountTiers]
-                      .sort((a, b) => a.minQty - b.minQty)
-                      .map((tier) => {
-                        const active =
-                          pricing?.tierMinQty === tier.minQty &&
-                          pricing.discountPercent === tier.discountPercent;
-                        return (
-                          <li
-                            key={`${tier.minQty}-${tier.discountPercent}`}
-                            className={`flex justify-between gap-3 text-[12px] ${
-                              active
-                                ? "font-medium text-foreground"
-                                : "text-muted"
-                            }`}
-                          >
-                            <span>
-                              {t("batchModal.fromQty", {
-                                count: tier.minQty.toLocaleString(locale),
-                                unit,
-                              })}
-                              {active ? ` · ${t("batchModal.tierActive")}` : ""}
-                            </span>
-                            <span className="tabular-nums">
-                              −{formatPercent(tier.discountPercent)} →{" "}
-                              {formatEuro(
-                                product.unitPrice *
-                                  (1 - tier.discountPercent / 100),
-                              )}
-                            </span>
-                          </li>
-                        );
-                      })}
-                  </ul>
-                  {nextTier ? (
-                    <p className="mt-2 text-[12px] text-muted">
-                      {t("batchModal.nextTier", {
-                        minQty: nextTier.minQty.toLocaleString(locale),
-                        percent: formatPercent(nextTier.discountPercent),
-                        remaining: (
-                          nextTier.minQty - quantity
-                        ).toLocaleString(locale),
-                        unit,
-                      })}
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
-
-              <Field
-                label={t("batchModal.overridePrice", { unit })}
-                hint={t("batchModal.overrideHint")}
-              >
-                <TextInput
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={unitPrice || ""}
-                  onChange={(e) => {
-                    setPriceManual(true);
-                    setUnitPrice(Number(e.target.value) || 0);
-                  }}
-                />
-              </Field>
-            </>
-          )}
-        </section>
-
-        <section>
-          <CostItemEditor
-            title={t("batchModal.procurementCosts")}
-            items={costItems}
-            onChange={setCostItems}
-            allowedPhases={PROCUREMENT_PHASES}
-            unitLabel={unit}
-          />
-        </section>
-
-        <section>
-          <h3 className="mb-3 text-[12px] font-semibold uppercase tracking-[0.04em] text-muted-soft">
-            {t("batchModal.section.sales")}
-          </h3>
-          <p className="mb-3 text-[12px] text-muted">
-            {t("batchModal.salesSpecHint")}
+          <p className="mb-2 text-[12px] text-muted">
+            {t("batchModal.bomHint", { price: formatEuro(bomPurchase, locale) })}
           </p>
-          <div className="mb-4 grid gap-3 sm:grid-cols-2">
-            <Field
-              label={t("batchModal.dealer")}
-              hint={t("batchModal.dealerHint")}
-            >
+          <TextInput
+            type="number"
+            step="0.01"
+            min="0"
+            disabled={!priceManual}
+            value={unitPrice || ""}
+            onChange={(e) => setUnitPrice(Number(e.target.value) || 0)}
+          />
+        </div>
+
+        <CommercialOverridesEditor
+          value={commercialOverrides}
+          inherited={inheritedCommercial}
+          resolved={commercial}
+          parentLabel={supplier?.name ?? t("batchModal.supplier")}
+          onChange={setCommercialOverrides}
+        />
+
+        <CostItemEditor
+          items={costItems}
+          onChange={setCostItems}
+          allowedPhases={PROCUREMENT_PHASES}
+          title={t("batchModal.procurementCosts")}
+        />
+
+        <div className="rounded-[10px] border border-line p-3">
+          <p className="mb-3 text-[13px] font-medium">
+            {t("batchModal.salesSection")}
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label={t("batchModal.dealer")}>
               <Select
                 value={dealerId}
                 onChange={(e) => applyDealer(e.target.value)}
@@ -558,9 +356,6 @@ export function BatchFormModal({
                   .map((d) => (
                     <option key={d.id} value={d.id}>
                       {d.name}
-                      {d.defaultSellPrice > 0
-                        ? ` · VK ${formatEuro(d.defaultSellPrice)}`
-                        : ""}
                     </option>
                   ))}
               </Select>
@@ -587,87 +382,89 @@ export function BatchFormModal({
                   type="number"
                   step="0.01"
                   min="0"
-                  value={resolvedSell || ""}
+                  value={sellPrice ?? ""}
                   onChange={(e) =>
-                    setSellPrice(Number(e.target.value) || 0)
+                    setSellPrice(
+                      e.target.value === "" ? null : Number(e.target.value),
+                    )
+                  }
+                  placeholder={
+                    sellInherited
+                      ? String(dealer?.defaultSellPrice ?? "")
+                      : undefined
                   }
                 />
-                {dealer && !sellInherited ? (
+                {dealerId && sellPrice !== null ? (
                   <Button
                     type="button"
                     variant="ghost"
+                    className="shrink-0"
                     onClick={() => setSellPrice(null)}
                   >
-                    {t("batchModal.inheritAgain")}
+                    {t("batchModal.inherit")}
                   </Button>
                 ) : null}
               </div>
             </Field>
           </div>
 
-          {costsInherited ? (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[12px] text-muted">
-                  {t("batchModal.costsInherited", {
-                    name: dealer?.name ?? "",
-                  })}
-                </p>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() =>
-                    setSalesItems(
-                      resolvedSalesItems.map((item) => ({
-                        ...item,
-                        id: createId("cost"),
-                      })),
-                    )
-                  }
-                >
-                  {t("batchModal.overrideCosts")}
-                </Button>
-              </div>
-              <SalesCostsReadonly
-                items={resolvedSalesItems}
-                emptyHint={t("salesCosts.emptyHint")}
-                unitLabel={unit}
-              />
+          {costsInherited && dealer ? (
+            <div className="mt-3">
+              <SalesCostsReadonly items={resolvedSalesItems} />
+              <Button
+                type="button"
+                variant="ghost"
+                className="mt-2 h-7 px-2 text-[12px]"
+                onClick={() => setSalesItems(resolvedSalesItems)}
+              >
+                {t("batchModal.overrideCosts")}
+              </Button>
             </div>
           ) : (
-            <div className="space-y-2">
-              {dealer ? (
-                <div className="flex justify-end">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setSalesItems(null)}
-                  >
-                    {t("batchModal.inheritAgain")}
-                  </Button>
-                </div>
-              ) : null}
+            <div className="mt-3">
               <CostItemEditor
-                title={t("batchModal.salesCosts")}
                 items={salesItems ?? []}
                 onChange={(items) => setSalesItems(items)}
                 allowedPhases={SALES_PHASES}
-                percentOfRevenue
-                unitLabel={unit}
+                title={t("batchModal.salesCosts")}
               />
+              {dealerId ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="mt-2 h-7 px-2 text-[12px]"
+                  onClick={() => setSalesItems(null)}
+                >
+                  {t("batchModal.inheritCosts")}
+                </Button>
+              ) : null}
             </div>
           )}
-        </section>
+        </div>
+
+        <div className="rounded-[10px] border border-line bg-surface-faint p-3 text-[13px]">
+          <p className="font-medium">{t("batchModal.preview")}</p>
+          <p className="mt-1 text-muted">
+            {t("batchModal.previewLanded")}:{" "}
+            {formatEuro(preview.landedCostPerUnit, locale)} ·{" "}
+            {t("batchModal.previewMargin")}:{" "}
+            {formatEuro(preview.contributionPerUnit, locale)}
+          </p>
+          <p className="text-[12px] text-muted-soft">
+            {commercial.currency} · {commercial.paymentTerms} ·{" "}
+            {commercial.incoterm}
+          </p>
+        </div>
 
         <div className="flex justify-end gap-2 border-t border-line pt-4">
-          <Button type="button" variant="secondary" onClick={onClose}>
+          <Button variant="secondary" onClick={onClose}>
             {t("common.cancel")}
           </Button>
-          <Button type="submit" disabled={!canSave}>
-            {t("batchModal.saveBatch")}
+          <Button onClick={handleSave} disabled={!canSave}>
+            {t("common.save")}
           </Button>
         </div>
-      </form>
+      </div>
     </Modal>
   );
 }

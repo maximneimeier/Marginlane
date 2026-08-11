@@ -1,14 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { DiscountTier, PricingUnit, Product, Supplier } from "@/lib/types";
-import { createId } from "@/lib/format";
+import { useLayoutEffect, useEffect, useState } from "react";
+import type { AppData, Component } from "@/lib/types";
+import { emptyComponent as createEmptyComponent } from "@/lib/migrateAppData";
 import { useI18n } from "@/hooks/useI18n";
-import { emptyCommercialOverrides, resolveCommercial } from "@/lib/resolve";
-import {
-  CommercialOverridesEditor,
-  pickCommercialOverrides,
-} from "@/components/CommercialOverridesEditor";
 import {
   Button,
   Field,
@@ -17,48 +12,44 @@ import {
   TextInput,
 } from "@/components/ui";
 
-export function emptyComponent(supplierId = ""): Product {
-  return {
-    id: createId("prd"),
-    supplierId,
-    name: "",
-    sku: "",
-    unitPrice: 0,
-    moq: 0,
-    discountTiers: [],
-    pricingUnit: "pcs",
-    ...emptyCommercialOverrides(),
-    createdAt: new Date().toISOString(),
-  };
+export function emptyBomComponent(
+  productId = "",
+  supplierId = "",
+): Component {
+  return createEmptyComponent(productId, supplierId);
 }
 
 type Props = {
   open: boolean;
-  initial: Product | null;
-  suppliers: Supplier[];
+  initial: Component | null;
+  data: AppData;
   isEdit: boolean;
   onClose: () => void;
-  onSave: (product: Product) => void;
-  /** Wenn true: Lieferant ist fix und nicht wählbar */
-  lockSupplier?: boolean;
+  onSave: (component: Component) => void;
 };
 
 export function ComponentFormModal({
   open,
   initial,
-  suppliers,
+  data,
   isEdit,
   onClose,
   onSave,
-  lockSupplier = false,
 }: Props) {
-  const { t, pricingUnitLabel, pricingUnits } = useI18n();
-  const [draft, setDraft] = useState<Product | null>(null);
+  const { t, locale } = useI18n();
+  const [draft, setDraft] = useState<Component | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
-    setDraft(initial ? structuredClone(initial) : null);
-  }, [open, initial]);
+    setDraft(
+      initial
+        ? structuredClone(initial)
+        : emptyBomComponent(
+            data.catalogProducts[0]?.id ?? "",
+            data.suppliers[0]?.id ?? "",
+          ),
+    );
+  }, [open, initial, data.catalogProducts, data.suppliers]);
 
   useEffect(() => {
     if (!open) return;
@@ -81,213 +72,125 @@ export function ComponentFormModal({
     );
   }
 
-  const supplier = suppliers.find((s) => s.id === draft.supplierId);
-  const inherited = resolveCommercial(supplier, null, null);
-  const commercial = resolveCommercial(supplier, draft, null);
-
-  function updateTier(index: number, patch: Partial<DiscountTier>) {
-    setDraft((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        discountTiers: prev.discountTiers.map((tier, i) =>
-          i === index ? { ...tier, ...patch } : tier,
-        ),
-      };
-    });
-  }
-
   function handleSave() {
-    if (!draft || !draft.name.trim()) return;
-    onSave({ ...draft, name: draft.name.trim(), supplierId: draft.supplierId || "" });
+    if (!draft || !draft.name.trim() || !draft.productId) return;
+    onSave({
+      ...draft,
+      name: draft.name.trim(),
+      quantityPerProductUnit: Math.max(draft.quantityPerProductUnit, 0),
+      purchasePricePerUnit: Math.max(draft.purchasePricePerUnit, 0),
+    });
     onClose();
   }
+
+  const canSave = Boolean(draft.name.trim() && draft.productId);
 
   return (
     <Modal
       open={open}
       onClose={onClose}
       title={title}
-      description={t("componentModal.description")}
-      wide
+      description={t("componentModal.bomDescription")}
     >
       <div className="space-y-4">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field
-            label={t("componentModal.supplier")}
-            hint={t("componentModal.supplierOptionalHint")}
+        <Field label={t("componentModal.product")} required>
+          <Select
+            value={draft.productId}
+            onChange={(e) =>
+              setDraft({ ...draft, productId: e.target.value })
+            }
           >
-            <Select
-              value={draft.supplierId}
-              onChange={(e) =>
-                setDraft({ ...draft, supplierId: e.target.value })
-              }
-              disabled={lockSupplier}
-            >
-              <option value="">{t("componentModal.supplierNone")}</option>
-              {suppliers.map((s) => (
+            <option value="">{t("componentModal.productPlaceholder")}</option>
+            {[...data.catalogProducts]
+              .sort((a, b) => a.name.localeCompare(b.name, locale))
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                  {p.sku ? ` (${p.sku})` : ""}
+                </option>
+              ))}
+          </Select>
+        </Field>
+
+        <Field label={t("componentModal.name")} required>
+          <TextInput
+            autoFocus
+            value={draft.name}
+            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+            placeholder={t("componentModal.namePlaceholder")}
+          />
+        </Field>
+
+        <Field
+          label={t("componentModal.supplier")}
+          hint={t("componentModal.supplierOptionalHint")}
+        >
+          <Select
+            value={draft.supplierId}
+            onChange={(e) =>
+              setDraft({ ...draft, supplierId: e.target.value })
+            }
+          >
+            <option value="">{t("componentModal.supplierNone")}</option>
+            {[...data.suppliers]
+              .sort((a, b) => a.name.localeCompare(b.name, locale))
+              .map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
                 </option>
               ))}
-            </Select>
-          </Field>
-          <Field label={t("componentModal.name")} required>
-            <TextInput
-              autoFocus
-              value={draft.name}
-              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-              placeholder={t("componentModal.namePlaceholder")}
-            />
-          </Field>
-          <Field label={t("componentModal.sku")}>
-            <TextInput
-              value={draft.sku}
-              onChange={(e) => setDraft({ ...draft, sku: e.target.value })}
-              placeholder={t("componentModal.skuPlaceholder")}
-            />
-          </Field>
-          <Field
-            label={t("componentModal.pricingUnit")}
-            hint={t("componentModal.pricingUnitHint")}
-          >
-            <Select
-              value={draft.pricingUnit}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  pricingUnit: e.target.value as PricingUnit,
-                })
-              }
-            >
-              {pricingUnits.map((u) => (
-                <option key={u} value={u}>
-                  {pricingUnitLabel(u, true)} ({pricingUnitLabel(u)})
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field
-            label={t("componentModal.unitPrice", {
-              unit: pricingUnitLabel(draft.pricingUnit),
-            })}
-          >
+          </Select>
+        </Field>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label={t("componentModal.purchasePrice")} required>
             <TextInput
               type="number"
-              step="0.0001"
+              step="0.01"
               min="0"
-              value={draft.unitPrice || ""}
+              value={draft.purchasePricePerUnit || ""}
               onChange={(e) =>
                 setDraft({
                   ...draft,
-                  unitPrice: Number(e.target.value) || 0,
+                  purchasePricePerUnit: Number(e.target.value) || 0,
                 })
               }
               placeholder="0.00"
             />
           </Field>
           <Field
-            label={t("unit.moqLabel", {
-              unit: pricingUnitLabel(draft.pricingUnit),
-            })}
+            label={t("componentModal.qtyPerProduct")}
+            hint={t("componentModal.qtyPerProductHint")}
           >
             <TextInput
               type="number"
+              step="0.01"
               min="0"
-              value={draft.moq || ""}
+              value={draft.quantityPerProductUnit || ""}
               onChange={(e) =>
-                setDraft({ ...draft, moq: Number(e.target.value) || 0 })
+                setDraft({
+                  ...draft,
+                  quantityPerProductUnit: Number(e.target.value) || 0,
+                })
               }
-              placeholder={t("componentModal.moqPlaceholder")}
+              placeholder="1"
             />
           </Field>
         </div>
 
-        <CommercialOverridesEditor
-          value={pickCommercialOverrides(draft)}
-          inherited={inherited}
-          resolved={commercial}
-          parentLabel={
-            supplier?.name ?? t("componentModal.defaultTermsParent")
-          }
-          onChange={(next) => setDraft({ ...draft, ...next })}
-        />
-
-        <div>
-          <div className="mb-2 flex items-center justify-between">
-            <p className="text-[12px] font-medium text-muted">
-              {t("componentModal.tiers")}
-            </p>
-            <Button
-              variant="ghost"
-              onClick={() =>
-                setDraft({
-                  ...draft,
-                  discountTiers: [
-                    ...draft.discountTiers,
-                    { minQty: 0, discountPercent: 0 },
-                  ],
-                })
-              }
-            >
-              {t("componentModal.addTier")}
-            </Button>
-          </div>
-          {draft.discountTiers.length === 0 ? (
-            <p className="text-[13px] text-muted-soft">
-              {t("componentModal.noTiers")}
-            </p>
-          ) : (
-            <ul className="space-y-2">
-              {draft.discountTiers.map((tier, i) => (
-                <li key={i} className="flex flex-wrap items-end gap-2">
-                  <Field label={t("componentModal.tierMinQty")}>
-                    <TextInput
-                      type="number"
-                      value={tier.minQty || ""}
-                      onChange={(e) =>
-                        updateTier(i, {
-                          minQty: Number(e.target.value) || 0,
-                        })
-                      }
-                    />
-                  </Field>
-                  <Field label={t("componentModal.tierDiscount")}>
-                    <TextInput
-                      type="number"
-                      step="0.1"
-                      value={tier.discountPercent || ""}
-                      onChange={(e) =>
-                        updateTier(i, {
-                          discountPercent: Number(e.target.value) || 0,
-                        })
-                      }
-                    />
-                  </Field>
-                  <Button
-                    variant="danger"
-                    onClick={() =>
-                      setDraft({
-                        ...draft,
-                        discountTiers: draft.discountTiers.filter(
-                          (_, j) => j !== i,
-                        ),
-                      })
-                    }
-                  >
-                    ×
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        {data.catalogProducts.length === 0 ? (
+          <p className="rounded-[8px] border border-dashed border-line px-3 py-2 text-[12px] text-muted">
+            {t("componentModal.needProduct")}
+          </p>
+        ) : null}
 
         <div className="flex justify-end gap-2 border-t border-line pt-4">
           <Button variant="secondary" onClick={onClose}>
             {t("common.cancel")}
           </Button>
-          <Button onClick={handleSave}>{t("common.save")}</Button>
+          <Button onClick={handleSave} disabled={!canSave}>
+            {t("common.save")}
+          </Button>
         </div>
       </div>
     </Modal>

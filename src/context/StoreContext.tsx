@@ -14,29 +14,59 @@ import type {
   AppData,
   Batch,
   CatalogProduct,
+  Component,
   Dealer,
+  OverheadActual,
   OverheadItem,
   Product,
+  SalesPlanCell,
+  SalesPlanRowMeta,
+  SalesPlanScenario,
+  SalesPlanSettings,
   Supplier,
 } from "@/lib/types";
 import { EMPTY_DATA } from "@/lib/types";
-import { detachDealerFromSales } from "@/lib/storage";
+import { migrateAppData } from "@/lib/migrateAppData";
+import {
+  freezeKey,
+  mergeSalesPlan,
+  mergeSalesPlanRowMeta,
+  scrubDealerFromRowMeta,
+  scrubDealerFromSalesPlan,
+} from "@/lib/salesPlan";
+import { detachDealerFromSale } from "@/lib/storage";
 
 type StoreContextValue = {
   ready: boolean;
   data: AppData;
   upsertSupplier: (supplier: Supplier) => void;
   deleteSupplier: (id: string) => void;
+  /** @deprecated Legacy — nutze upsertComponent */
   upsertProduct: (product: Product) => void;
+  /** @deprecated Legacy — nutze deleteComponent */
   deleteProduct: (id: string) => void;
   upsertCatalogProduct: (product: CatalogProduct) => void;
   deleteCatalogProduct: (id: string) => void;
+  upsertComponent: (component: Component) => void;
+  deleteComponent: (id: string) => void;
   upsertDealer: (dealer: Dealer) => void;
   deleteDealer: (id: string) => void;
   upsertBatch: (batch: Batch) => void;
   deleteBatch: (id: string) => void;
   upsertOverheadItem: (item: OverheadItem) => void;
   deleteOverheadItem: (id: string) => void;
+  upsertOverheadActual: (actual: OverheadActual) => void;
+  deleteOverheadActual: (id: string) => void;
+  /** Zellen mergen; quantity 0 entfernt den Eintrag */
+  applySalesPlanUpdates: (updates: SalesPlanCell[]) => void;
+  upsertSalesPlanRowMeta: (meta: SalesPlanRowMeta) => void;
+  patchSalesPlanSettings: (patch: Partial<SalesPlanSettings>) => void;
+  setSalesPlanFrozen: (
+    year: number,
+    scenario: SalesPlanScenario,
+    frozen: boolean,
+  ) => void;
+  importSalesPlan: (cells: SalesPlanCell[], rowMeta: SalesPlanRowMeta[]) => void;
   /** Clears all workspace data in PostgreSQL (no mock reseed). */
   clearData: () => Promise<void>;
 };
@@ -82,7 +112,7 @@ async function persistWorkspace(data: AppData) {
   if (!res.ok) {
     throw new Error(`Failed to save workspace (${res.status})`);
   }
-  return (await res.json()) as AppData;
+  return migrateAppData(await res.json());
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -108,17 +138,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       try {
         const res = await fetch("/api/workspace");
         if (!res.ok) throw new Error(`Failed to load workspace (${res.status})`);
-        const payload = (await res.json()) as AppData;
-        if (!cancelled) {
-          setData({
-            suppliers: payload.suppliers ?? [],
-            products: payload.products ?? [],
-            catalogProducts: payload.catalogProducts ?? [],
-            dealers: payload.dealers ?? [],
-            batches: payload.batches ?? [],
-            overheadItems: payload.overheadItems ?? [],
-          });
-        }
+        const payload = migrateAppData(await res.json());
+        if (!cancelled) setData(payload);
       } catch (error) {
         console.error(error);
         if (!cancelled) setData({ ...EMPTY_DATA });
@@ -157,22 +178,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const deleteSupplier = useCallback(
     (id: string) => {
-      commit((prev) => {
-        const removedProductIds = new Set(
-          prev.products.filter((p) => p.supplierId === id).map((p) => p.id),
-        );
-        let overheadItems = prev.overheadItems;
-        for (const productId of removedProductIds) {
-          overheadItems = scrubManualShares(overheadItems, productId);
-        }
-        return {
-          ...prev,
-          suppliers: prev.suppliers.filter((s) => s.id !== id),
-          products: prev.products.filter((p) => p.supplierId !== id),
-          batches: prev.batches.filter((b) => b.supplierId !== id),
-          overheadItems,
-        };
-      });
+      commit((prev) => ({
+        ...prev,
+        suppliers: prev.suppliers.filter((s) => s.id !== id),
+        components: prev.components.map((c) =>
+          c.supplierId === id ? { ...c, supplierId: "" } : c,
+        ),
+        batches: prev.batches.map((b) =>
+          b.supplierId === id ? { ...b, supplierId: "" } : b,
+        ),
+      }));
     },
     [commit],
   );
@@ -220,6 +235,37 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       commit((prev) => ({
         ...prev,
         catalogProducts: prev.catalogProducts.filter((p) => p.id !== id),
+        components: prev.components.filter((c) => c.productId !== id),
+        batches: prev.batches.filter((b) => b.productId !== id),
+        salesPlan: (prev.salesPlan ?? []).filter((c) => c.productId !== id),
+        salesPlanRowMeta: (prev.salesPlanRowMeta ?? []).filter(
+          (m) => m.productId !== id,
+        ),
+        overheadItems: scrubManualShares(prev.overheadItems, id),
+      }));
+    },
+    [commit],
+  );
+
+  const upsertComponent = useCallback(
+    (component: Component) => {
+      commit((prev) => ({
+        ...prev,
+        components: prev.components.some((c) => c.id === component.id)
+          ? prev.components.map((c) =>
+              c.id === component.id ? component : c,
+            )
+          : [...prev.components, component],
+      }));
+    },
+    [commit],
+  );
+
+  const deleteComponent = useCallback(
+    (id: string) => {
+      commit((prev) => ({
+        ...prev,
+        components: prev.components.filter((c) => c.id !== id),
       }));
     },
     [commit],
@@ -244,14 +290,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return {
           ...prev,
           dealers: prev.dealers.filter((d) => d.id !== id),
-          batches: prev.batches.map((b) =>
-            b.sales.dealerId === id
-              ? {
-                  ...b,
-                  sales: detachDealerFromSales(b.sales, dealer),
-                }
-              : b,
+          salesPlan: scrubDealerFromSalesPlan(prev.salesPlan ?? [], id),
+          salesPlanRowMeta: scrubDealerFromRowMeta(
+            prev.salesPlanRowMeta ?? [],
+            id,
           ),
+          batches: prev.batches.map((b) => ({
+            ...b,
+            sales: b.sales.map((s) =>
+              s.dealerId === id ? detachDealerFromSale(s, dealer) : s,
+            ),
+          })),
         };
       });
     },
@@ -282,11 +331,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const upsertOverheadItem = useCallback(
     (item: OverheadItem) => {
+      const now = new Date().toISOString();
+      const stamped: OverheadItem = {
+        ...item,
+        updatedAt: now,
+        updatedBy: item.updatedBy ?? null,
+        createdAt: item.createdAt || now,
+      };
       commit((prev) => ({
         ...prev,
-        overheadItems: prev.overheadItems.some((o) => o.id === item.id)
-          ? prev.overheadItems.map((o) => (o.id === item.id ? item : o))
-          : [...prev.overheadItems, item],
+        overheadItems: prev.overheadItems.some((o) => o.id === stamped.id)
+          ? prev.overheadItems.map((o) =>
+              o.id === stamped.id ? stamped : o,
+            )
+          : [...prev.overheadItems, stamped],
       }));
     },
     [commit],
@@ -302,19 +360,124 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [commit],
   );
 
+  const upsertOverheadActual = useCallback(
+    (actual: OverheadActual) => {
+      const now = new Date().toISOString();
+      const stamped: OverheadActual = {
+        ...actual,
+        updatedAt: now,
+        updatedBy: actual.updatedBy ?? null,
+        createdAt: actual.createdAt || now,
+      };
+      commit((prev) => {
+        const list = prev.overheadActuals ?? [];
+        const next = list.some((a) => a.id === stamped.id)
+          ? list.map((a) => (a.id === stamped.id ? stamped : a))
+          : [...list, stamped];
+        return {
+          ...prev,
+          overheadActuals: next.sort((a, b) =>
+            a.month === b.month
+              ? a.name.localeCompare(b.name)
+              : a.month.localeCompare(b.month),
+          ),
+        };
+      });
+    },
+    [commit],
+  );
+
+  const deleteOverheadActual = useCallback(
+    (id: string) => {
+      commit((prev) => ({
+        ...prev,
+        overheadActuals: (prev.overheadActuals ?? []).filter(
+          (a) => a.id !== id,
+        ),
+      }));
+    },
+    [commit],
+  );
+
+  const applySalesPlanUpdates = useCallback(
+    (updates: SalesPlanCell[]) => {
+      commit((prev) => ({
+        ...prev,
+        salesPlan: mergeSalesPlan(prev.salesPlan ?? [], updates),
+      }));
+    },
+    [commit],
+  );
+
+  const upsertSalesPlanRowMeta = useCallback(
+    (meta: SalesPlanRowMeta) => {
+      commit((prev) => ({
+        ...prev,
+        salesPlanRowMeta: mergeSalesPlanRowMeta(prev.salesPlanRowMeta ?? [], [
+          meta,
+        ]),
+      }));
+    },
+    [commit],
+  );
+
+  const patchSalesPlanSettings = useCallback(
+    (patch: Partial<SalesPlanSettings>) => {
+      commit((prev) => ({
+        ...prev,
+        salesPlanSettings: {
+          ...(prev.salesPlanSettings ?? {
+            activeScenario: "base" as const,
+            frozen: [],
+          }),
+          ...patch,
+        },
+      }));
+    },
+    [commit],
+  );
+
+  const setSalesPlanFrozen = useCallback(
+    (year: number, scenario: SalesPlanScenario, frozen: boolean) => {
+      commit((prev) => {
+        const settings = prev.salesPlanSettings ?? {
+          activeScenario: "base" as const,
+          frozen: [],
+        };
+        const key = freezeKey(year, scenario);
+        const nextFrozen = frozen
+          ? settings.frozen.includes(key)
+            ? settings.frozen
+            : [...settings.frozen, key]
+          : settings.frozen.filter((k) => k !== key);
+        return {
+          ...prev,
+          salesPlanSettings: { ...settings, frozen: nextFrozen },
+        };
+      });
+    },
+    [commit],
+  );
+
+  const importSalesPlan = useCallback(
+    (cells: SalesPlanCell[], rowMeta: SalesPlanRowMeta[]) => {
+      commit((prev) => ({
+        ...prev,
+        salesPlan: mergeSalesPlan(prev.salesPlan ?? [], cells),
+        salesPlanRowMeta: mergeSalesPlanRowMeta(
+          prev.salesPlanRowMeta ?? [],
+          rowMeta,
+        ),
+      }));
+    },
+    [commit],
+  );
+
   const clearData = useCallback(async () => {
     clearLegacyLocalStorage();
     const res = await fetch("/api/workspace", { method: "DELETE" });
     if (!res.ok) throw new Error(`Failed to clear workspace (${res.status})`);
-    const payload = (await res.json()) as AppData;
-    setData({
-      suppliers: payload.suppliers ?? [],
-      products: payload.products ?? [],
-      catalogProducts: payload.catalogProducts ?? [],
-      dealers: payload.dealers ?? [],
-      batches: payload.batches ?? [],
-      overheadItems: payload.overheadItems ?? [],
-    });
+    setData(migrateAppData(await res.json()));
   }, []);
 
   const value = useMemo(
@@ -327,12 +490,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteProduct,
       upsertCatalogProduct,
       deleteCatalogProduct,
+      upsertComponent,
+      deleteComponent,
       upsertDealer,
       deleteDealer,
       upsertBatch,
       deleteBatch,
       upsertOverheadItem,
       deleteOverheadItem,
+      upsertOverheadActual,
+      deleteOverheadActual,
+      applySalesPlanUpdates,
+      upsertSalesPlanRowMeta,
+      patchSalesPlanSettings,
+      setSalesPlanFrozen,
+      importSalesPlan,
       clearData,
     }),
     [
@@ -344,12 +516,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteProduct,
       upsertCatalogProduct,
       deleteCatalogProduct,
+      upsertComponent,
+      deleteComponent,
       upsertDealer,
       deleteDealer,
       upsertBatch,
       deleteBatch,
       upsertOverheadItem,
       deleteOverheadItem,
+      upsertOverheadActual,
+      deleteOverheadActual,
+      applySalesPlanUpdates,
+      upsertSalesPlanRowMeta,
+      patchSalesPlanSettings,
+      setSalesPlanFrozen,
+      importSalesPlan,
       clearData,
     ],
   );
