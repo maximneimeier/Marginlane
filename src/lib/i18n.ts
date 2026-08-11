@@ -24,6 +24,10 @@ const de = {
   "common.notFound": "Nicht gefunden",
 
   "nav.workspace": "Workspace",
+  "nav.group.analyse": "Analyse",
+  "nav.group.planung": "Planung",
+  "nav.group.stammdaten": "Stammdaten",
+  "nav.group.abwicklung": "Abwicklung",
   "nav.suppliers": "Lieferanten",
   "nav.products": "Produkte",
   "nav.salesVolume": "Absatzmenge",
@@ -479,6 +483,9 @@ const de = {
   "overviewPage.title": "Overview",
   "overviewPage.description":
     "Deckungsbeitrag, Marge und geplanter Cash-Flow für den gewählten Zeitraum — nur Lesen und Aggregieren.",
+  "overviewPage.descriptionMvp":
+    "Gemeinkosten und Verteilschlüssel für den gewählten Zeitraum — ohne unternehmensweite DB-Konsolidierung.",
+  "overviewPage.rangeForOverhead": "Zeitraum gilt für Gemeinkosten",
   "overviewPage.from": "Von",
   "overviewPage.to": "Bis",
   "overviewPage.preset": "Schnellauswahl",
@@ -1024,6 +1031,10 @@ const en: Record<MessageKey, string> = {
   "common.notFound": "Not found",
 
   "nav.workspace": "Workspace",
+  "nav.group.analyse": "Analysis",
+  "nav.group.planung": "Planning",
+  "nav.group.stammdaten": "Master data",
+  "nav.group.abwicklung": "Operations",
   "nav.suppliers": "Suppliers",
   "nav.products": "Products",
   "nav.salesVolume": "Sales volume",
@@ -1478,6 +1489,9 @@ const en: Record<MessageKey, string> = {
   "overviewPage.title": "Overview",
   "overviewPage.description":
     "Contribution margin, profitability and planned cash flow for the selected period — read-only aggregates.",
+  "overviewPage.descriptionMvp":
+    "Overhead costs and allocation keys for the selected period — without company-wide contribution consolidation.",
+  "overviewPage.rangeForOverhead": "Date range applies to overhead",
   "overviewPage.from": "From",
   "overviewPage.to": "To",
   "overviewPage.preset": "Quick select",

@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { FEATURES } from "@/lib/features";
 import SalesVolumePageClient from "./SalesVolumePageClient";
 
 type PageProps = {
@@ -10,5 +12,8 @@ export default async function SalesVolumePage({
   searchParams,
 }: PageProps) {
   await Promise.all([params, searchParams]);
+  if (!FEATURES.salesVolumePlanning) {
+    redirect("/overview");
+  }
   return <SalesVolumePageClient />;
 }

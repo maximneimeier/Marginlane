@@ -12,10 +12,12 @@ import {
   type DateRange,
 } from "@/lib/overview";
 import { formatEuro, formatPercent } from "@/lib/format";
+import { FEATURES } from "@/lib/features";
 import { useI18n } from "@/hooks/useI18n";
 import { OverviewWaterfallChart } from "@/components/OverviewWaterfallChart";
 import { OverviewSankeyChart } from "@/components/OverviewSankeyChart";
 import { SalesPlanOverviewStrip } from "@/components/SalesPlanOverviewStrip";
+import { OverviewOverheadPanel } from "@/components/OverviewOverheadPanel";
 import { ProductFilterDropdown } from "@/components/ProductFilterDropdown";
 import { Card, Field, PageHeader, Select, TextInput } from "@/components/ui";
 
@@ -40,32 +42,51 @@ export default function OverviewPage() {
   );
   const [breakdownMode, setBreakdownMode] = useState<BreakdownMode>("product");
 
+  const showConsolidation = FEATURES.overviewConsolidation;
+  const showCashflow = FEATURES.overviewCashflow;
+  const showSalesPlan = FEATURES.salesVolumePlanning;
+
   const products = useMemo(
     () =>
       [...data.catalogProducts].sort((a, b) => a.name.localeCompare(b.name)),
     [data.catalogProducts],
   );
 
-  /** KPIs: all products in date range */
+  /** KPIs: all products in date range (Phase 2 consolidation only). */
   const kpiReport = useMemo(
-    () => buildOverview(data, range, { productIds: null }),
-    [data, range],
+    () =>
+      showConsolidation
+        ? buildOverview(data, range, { productIds: null })
+        : null,
+    [data, range, showConsolidation],
   );
   const waterfallReport = useMemo(
-    () => buildOverview(data, range, { productIds: waterfallProducts }),
-    [data, range, waterfallProducts],
+    () =>
+      showConsolidation
+        ? buildOverview(data, range, { productIds: waterfallProducts })
+        : null,
+    [data, range, waterfallProducts, showConsolidation],
   );
   const sankeyReport = useMemo(
-    () => buildOverview(data, range, { productIds: sankeyProducts }),
-    [data, range, sankeyProducts],
+    () =>
+      showConsolidation
+        ? buildOverview(data, range, { productIds: sankeyProducts })
+        : null,
+    [data, range, sankeyProducts, showConsolidation],
   );
   const breakdownReport = useMemo(
-    () => buildOverview(data, range, { productIds: breakdownProducts }),
-    [data, range, breakdownProducts],
+    () =>
+      showConsolidation
+        ? buildOverview(data, range, { productIds: breakdownProducts })
+        : null,
+    [data, range, breakdownProducts, showConsolidation],
   );
   const cashflowReport = useMemo(
-    () => buildOverview(data, range, { productIds: cashflowProducts }),
-    [data, range, cashflowProducts],
+    () =>
+      showCashflow
+        ? buildOverview(data, range, { productIds: cashflowProducts })
+        : null,
+    [data, range, cashflowProducts, showCashflow],
   );
 
   if (!ready) {
@@ -85,12 +106,14 @@ export default function OverviewPage() {
   }
 
   const breakdown =
-    breakdownMode === "product"
-      ? breakdownReport.byProduct
-      : breakdownReport.bySupplier;
+    breakdownReport == null
+      ? []
+      : breakdownMode === "product"
+        ? breakdownReport.byProduct
+        : breakdownReport.bySupplier;
   const maxAbsDb3 = Math.max(...breakdown.map((r) => Math.abs(r.db3)), 1);
   const maxCash = Math.max(
-    ...cashflowReport.cashFlow.flatMap((p) => [p.inflow, p.outflow]),
+    ...(cashflowReport?.cashFlow.flatMap((p) => [p.inflow, p.outflow]) ?? [0]),
     1,
   );
 
@@ -98,7 +121,11 @@ export default function OverviewPage() {
     <div className="space-y-6">
       <PageHeader
         title={t("overviewPage.title")}
-        description={t("overviewPage.description")}
+        description={
+          showConsolidation
+            ? t("overviewPage.description")
+            : t("overviewPage.descriptionMvp")
+        }
       />
 
       <Card className="!p-4">
@@ -123,7 +150,9 @@ export default function OverviewPage() {
                 value={preset}
                 onChange={(e) => applyPreset(e.target.value as DatePreset)}
               >
-                <option value="this_year">{t("overviewPage.preset.thisYear")}</option>
+                <option value="this_year">
+                  {t("overviewPage.preset.thisYear")}
+                </option>
                 <option value="last_quarter">
                   {t("overviewPage.preset.lastQuarter")}
                 </option>
@@ -134,21 +163,31 @@ export default function OverviewPage() {
               </Select>
             </Field>
           </div>
-          <p className="shrink-0 text-[12px] text-muted lg:pb-2">
-            {t("overviewPage.batchCount", { count: kpiReport.kpis.batchCount })}
-          </p>
+          {showConsolidation && kpiReport ? (
+            <p className="shrink-0 text-[12px] text-muted lg:pb-2">
+              {t("overviewPage.batchCount", {
+                count: kpiReport.kpis.batchCount,
+              })}
+            </p>
+          ) : (
+            <p className="shrink-0 text-[12px] text-muted lg:pb-2">
+              {t("overviewPage.rangeForOverhead")}
+            </p>
+          )}
         </div>
       </Card>
 
-      {kpiReport.kpis.uncategorized > 0 ? (
-        <div className="rounded-[10px] border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[13px] text-amber-950">
-          {t("overviewPage.uncategorizedWarning", {
-            amount: formatEuro(kpiReport.kpis.uncategorized, locale),
-          })}
-        </div>
-      ) : null}
+      {showConsolidation && kpiReport ? (
+        <>
+          {kpiReport.kpis.uncategorized > 0 ? (
+            <div className="rounded-[10px] border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[13px] text-amber-950">
+              {t("overviewPage.uncategorizedWarning", {
+                amount: formatEuro(kpiReport.kpis.uncategorized, locale),
+              })}
+            </div>
+          ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <Kpi
               label={t("overviewPage.kpi.revenue")}
               value={formatEuro(kpiReport.kpis.revenue, locale)}
@@ -177,156 +216,171 @@ export default function OverviewPage() {
               positive={kpiReport.kpis.marginPercent >= 0}
             />
           </div>
+        </>
+      ) : null}
 
-          <SalesPlanOverviewStrip range={range} />
+      {showSalesPlan ? <SalesPlanOverviewStrip range={range} /> : null}
 
-          <Card>
-            <ChartHeader
-              title={t("overviewPage.waterfallTitle")}
-              hint={t("overviewPage.waterfallHint")}
-              products={products}
-              productFilter={waterfallProducts}
-              onProductFilterChange={setWaterfallProducts}
-              productLabel={t("overviewPage.products")}
+      {showConsolidation && waterfallReport ? (
+        <Card>
+          <ChartHeader
+            title={t("overviewPage.waterfallTitle")}
+            hint={t("overviewPage.waterfallHint")}
+            products={products}
+            productFilter={waterfallProducts}
+            onProductFilterChange={setWaterfallProducts}
+            productLabel={t("overviewPage.products")}
+          />
+          {waterfallReport.kpis.batchCount === 0 ? (
+            <p className="mt-4 text-[13px] text-muted">
+              {t("overviewPage.empty")}
+            </p>
+          ) : (
+            <div className="mt-5">
+              <OverviewWaterfallChart steps={waterfallReport.waterfall} />
+            </div>
+          )}
+        </Card>
+      ) : null}
+
+      {showConsolidation && sankeyReport ? (
+        <Card>
+          <ChartHeader
+            title={t("overviewPage.sankeyTitle")}
+            hint={t("overviewPage.sankeyHint")}
+            products={products}
+            productFilter={sankeyProducts}
+            onProductFilterChange={setSankeyProducts}
+            productLabel={t("overviewPage.products")}
+          />
+          {sankeyReport.kpis.batchCount === 0 ? (
+            <p className="mt-4 text-[13px] text-muted">
+              {t("overviewPage.empty")}
+            </p>
+          ) : (
+            <OverviewSankeyChart
+              kpis={sankeyReport.kpis}
+              products={sankeyReport.byProduct}
             />
-            {waterfallReport.kpis.batchCount === 0 ? (
-              <p className="mt-4 text-[13px] text-muted">
-                {t("overviewPage.empty")}
-              </p>
-            ) : (
-              <div className="mt-5">
-                <OverviewWaterfallChart steps={waterfallReport.waterfall} />
-              </div>
-            )}
-          </Card>
+          )}
+        </Card>
+      ) : null}
 
-          <Card>
-            <ChartHeader
-              title={t("overviewPage.sankeyTitle")}
-              hint={t("overviewPage.sankeyHint")}
-              products={products}
-              productFilter={sankeyProducts}
-              onProductFilterChange={setSankeyProducts}
-              productLabel={t("overviewPage.products")}
-            />
-            {sankeyReport.kpis.batchCount === 0 ? (
-              <p className="mt-4 text-[13px] text-muted">
-                {t("overviewPage.empty")}
+      {showConsolidation && breakdownReport ? (
+        <Card>
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <h2 className="text-[14px] font-medium text-foreground">
+                {t("overviewPage.breakdownTitle")}
+              </h2>
+              <p className="mt-1 text-[12px] text-muted">
+                {t("overviewPage.breakdownHint")}
               </p>
-            ) : (
-              <OverviewSankeyChart
-                kpis={sankeyReport.kpis}
-                products={sankeyReport.byProduct}
-              />
-            )}
-          </Card>
-
-          <Card>
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0">
-                <h2 className="text-[14px] font-medium text-foreground">
-                  {t("overviewPage.breakdownTitle")}
-                </h2>
-                <p className="mt-1 text-[12px] text-muted">
-                  {t("overviewPage.breakdownHint")}
-                </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:items-end">
+              <div className="w-full sm:w-[220px]">
+                <Field label={t("overviewPage.products")}>
+                  <ProductFilterDropdown
+                    products={products}
+                    value={breakdownProducts}
+                    onChange={setBreakdownProducts}
+                  />
+                </Field>
               </div>
-              <div className="flex flex-col gap-2 sm:items-end">
-                <div className="w-full sm:w-[220px]">
-                  <Field label={t("overviewPage.products")}>
-                    <ProductFilterDropdown
-                      products={products}
-                      value={breakdownProducts}
-                      onChange={setBreakdownProducts}
-                    />
-                  </Field>
-                </div>
-                <div className="flex gap-1 rounded-[8px] border border-line bg-surface-faint p-0.5">
-                  <ModeButton
-                    active={breakdownMode === "product"}
-                    onClick={() => setBreakdownMode("product")}
-                  >
-                    {t("overviewPage.byProduct")}
-                  </ModeButton>
-                  <ModeButton
-                    active={breakdownMode === "supplier"}
-                    onClick={() => setBreakdownMode("supplier")}
-                  >
-                    {t("overviewPage.bySupplier")}
-                  </ModeButton>
-                </div>
+              <div className="flex gap-1 rounded-[8px] border border-line bg-surface-faint p-0.5">
+                <ModeButton
+                  active={breakdownMode === "product"}
+                  onClick={() => setBreakdownMode("product")}
+                >
+                  {t("overviewPage.byProduct")}
+                </ModeButton>
+                <ModeButton
+                  active={breakdownMode === "supplier"}
+                  onClick={() => setBreakdownMode("supplier")}
+                >
+                  {t("overviewPage.bySupplier")}
+                </ModeButton>
               </div>
             </div>
+          </div>
 
-            {breakdown.length === 0 ? (
-              <p className="text-[13px] text-muted">{t("overviewPage.empty")}</p>
-            ) : (
-              <div className="space-y-5">
-                <BreakdownBars
-                  rows={breakdown.slice(0, 8)}
-                  maxAbs={maxAbsDb3}
-                  locale={locale}
-                />
-                <BreakdownTable
-                  rows={breakdown}
-                  mode={breakdownMode}
-                  locale={locale}
-                />
-              </div>
-            )}
-          </Card>
+          {breakdown.length === 0 ? (
+            <p className="text-[13px] text-muted">{t("overviewPage.empty")}</p>
+          ) : (
+            <div className="space-y-5">
+              <BreakdownBars
+                rows={breakdown.slice(0, 8)}
+                maxAbs={maxAbsDb3}
+                locale={locale}
+              />
+              <BreakdownTable
+                rows={breakdown}
+                mode={breakdownMode}
+                locale={locale}
+              />
+            </div>
+          )}
+        </Card>
+      ) : null}
 
-          <Card className="border-dashed">
-            <ChartHeader
-              title={t("overviewPage.cashTitle")}
-              hint={t("overviewPage.cashDisclaimer")}
-              products={products}
-              productFilter={cashflowProducts}
-              onProductFilterChange={setCashflowProducts}
-              productLabel={t("overviewPage.products")}
-            />
-            {cashflowReport.cashFlow.length === 0 ? (
-              <p className="mt-4 text-[13px] text-muted">
-                {t("overviewPage.empty")}
-              </p>
-            ) : (
-              <div className="mt-5 space-y-3">
-                {cashflowReport.cashFlow.map((point) => (
-                  <div key={point.month}>
-                    <div className="mb-1 flex items-baseline justify-between gap-2 text-[12px]">
-                      <span className="font-medium text-foreground">
-                        {formatMonth(point.month, locale)}
-                      </span>
-                      <span
-                        className={`tabular-nums ${
-                          point.net >= 0 ? "text-success" : "text-danger"
-                        }`}
-                      >
-                        {t("overviewPage.cashNet")}:{" "}
-                        {formatEuro(point.net, locale)}
-                      </span>
-                    </div>
-                    <div className="grid gap-1.5">
-                      <CashBar
-                        label={t("overviewPage.cashIn")}
-                        amount={point.inflow}
-                        max={maxCash}
-                        tone="in"
-                        locale={locale}
-                      />
-                      <CashBar
-                        label={t("overviewPage.cashOut")}
-                        amount={point.outflow}
-                        max={maxCash}
-                        tone="out"
-                        locale={locale}
-                      />
-                    </div>
+      {showCashflow && cashflowReport ? (
+        <Card className="border-dashed">
+          <ChartHeader
+            title={t("overviewPage.cashTitle")}
+            hint={t("overviewPage.cashDisclaimer")}
+            products={products}
+            productFilter={cashflowProducts}
+            onProductFilterChange={setCashflowProducts}
+            productLabel={t("overviewPage.products")}
+          />
+          {cashflowReport.cashFlow.length === 0 ? (
+            <p className="mt-4 text-[13px] text-muted">
+              {t("overviewPage.empty")}
+            </p>
+          ) : (
+            <div className="mt-5 space-y-3">
+              {cashflowReport.cashFlow.map((point) => (
+                <div key={point.month}>
+                  <div className="mb-1 flex items-baseline justify-between gap-2 text-[12px]">
+                    <span className="font-medium text-foreground">
+                      {formatMonth(point.month, locale)}
+                    </span>
+                    <span
+                      className={`tabular-nums ${
+                        point.net >= 0 ? "text-success" : "text-danger"
+                      }`}
+                    >
+                      {t("overviewPage.cashNet")}:{" "}
+                      {formatEuro(point.net, locale)}
+                    </span>
                   </div>
-                ))}
-              </div>
-            )}
-          </Card>
+                  <div className="grid gap-1.5">
+                    <CashBar
+                      label={t("overviewPage.cashIn")}
+                      amount={point.inflow}
+                      max={maxCash}
+                      tone="in"
+                      locale={locale}
+                    />
+                    <CashBar
+                      label={t("overviewPage.cashOut")}
+                      amount={point.outflow}
+                      max={maxCash}
+                      tone="out"
+                      locale={locale}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      ) : null}
+
+      {/* MVP: Gemeinkosten als Sektion in der Overview (nicht Top-Level-Nav) */}
+      {!FEATURES.overheadTopLevelNav ? (
+        <OverviewOverheadPanel range={range} />
+      ) : null}
     </div>
   );
 }

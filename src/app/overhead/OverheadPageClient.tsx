@@ -12,6 +12,7 @@ import {
   buildOverheadPeriodCsv,
   downloadOverheadCsv,
 } from "@/lib/overhead";
+import { FEATURES } from "@/lib/features";
 import { useI18n } from "@/hooks/useI18n";
 import type { MessageKey } from "@/lib/i18n";
 import { OverviewOverheadPanel } from "@/components/OverviewOverheadPanel";
@@ -96,9 +97,11 @@ export default function OverheadPageClient() {
         title={t("overhead.title")}
         description={t("overhead.description")}
         action={
-          <Button variant="secondary" onClick={exportCsv}>
-            {t("overhead.export.csv")}
-          </Button>
+          FEATURES.overheadCsvExport ? (
+            <Button variant="secondary" onClick={exportCsv}>
+              {t("overhead.export.csv")}
+            </Button>
+          ) : undefined
         }
       />
 
@@ -141,11 +144,13 @@ export default function OverheadPageClient() {
             {t("overhead.itemCount", { count: data.overheadItems.length })}
           </p>
         </div>
-        <OverheadRunRateStrip
-          items={data.overheadItems}
-          range={range}
-          data={data}
-        />
+        {FEATURES.overheadRunRate ? (
+          <OverheadRunRateStrip
+            items={data.overheadItems}
+            range={range}
+            data={data}
+          />
+        ) : null}
       </Card>
 
       <OverviewOverheadPanel range={range} hidePageHeader />

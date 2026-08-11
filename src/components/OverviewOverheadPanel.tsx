@@ -21,6 +21,7 @@ import {
   ConfirmDialog,
   Select,
 } from "@/components/ui";
+import { FEATURES } from "@/lib/features";
 
 type Props = {
   range: DateRange;
@@ -43,6 +44,16 @@ export function OverviewOverheadPanel({
   const [kostenartFilter, setKostenartFilter] = useState<
     "all" | OverheadCostBehavior
   >("all");
+
+  const showPlanVsActual = FEATURES.overheadPlanVsActual;
+  const showCharts = FEATURES.overheadCharts;
+  const showTabSwitch = showPlanVsActual || showCharts;
+  const activeTab: OverheadTab =
+    tab === "planVsActual" && !showPlanVsActual
+      ? "tables"
+      : tab === "charts" && !showCharts
+        ? "tables"
+        : tab;
 
   const report = useMemo(
     () => buildOverheadReport(data, range),
@@ -78,46 +89,50 @@ export function OverviewOverheadPanel({
   const defaultCurrency =
     data.suppliers.find((s) => s.currency)?.currency ?? "EUR";
 
-  const tabSwitch = (
+  const tabSwitch = showTabSwitch ? (
     <div className="flex rounded-[8px] border border-line bg-white p-0.5">
       <button
         type="button"
         onClick={() => setTab("tables")}
         className={`rounded-[6px] px-2.5 py-1 text-[12px] font-medium ${
-          tab === "tables"
+          activeTab === "tables"
             ? "bg-surface-soft text-foreground"
             : "text-muted hover:text-foreground"
         }`}
       >
         {t("overhead.tab.tables")}
       </button>
-      <button
-        type="button"
-        onClick={() => setTab("planVsActual")}
-        className={`rounded-[6px] px-2.5 py-1 text-[12px] font-medium ${
-          tab === "planVsActual"
-            ? "bg-surface-soft text-foreground"
-            : "text-muted hover:text-foreground"
-        }`}
-      >
-        {t("overhead.tab.planVsActual")}
-      </button>
-      <button
-        type="button"
-        onClick={() => setTab("charts")}
-        className={`rounded-[6px] px-2.5 py-1 text-[12px] font-medium ${
-          tab === "charts"
-            ? "bg-surface-soft text-foreground"
-            : "text-muted hover:text-foreground"
-        }`}
-      >
-        {t("overhead.tab.charts")}
-      </button>
+      {showPlanVsActual ? (
+        <button
+          type="button"
+          onClick={() => setTab("planVsActual")}
+          className={`rounded-[6px] px-2.5 py-1 text-[12px] font-medium ${
+            activeTab === "planVsActual"
+              ? "bg-surface-soft text-foreground"
+              : "text-muted hover:text-foreground"
+          }`}
+        >
+          {t("overhead.tab.planVsActual")}
+        </button>
+      ) : null}
+      {showCharts ? (
+        <button
+          type="button"
+          onClick={() => setTab("charts")}
+          className={`rounded-[6px] px-2.5 py-1 text-[12px] font-medium ${
+            activeTab === "charts"
+              ? "bg-surface-soft text-foreground"
+              : "text-muted hover:text-foreground"
+          }`}
+        >
+          {t("overhead.tab.charts")}
+        </button>
+      ) : null}
     </div>
-  );
+  ) : null;
 
   const addButton =
-    tab === "tables" ? (
+    activeTab === "tables" ? (
       <Button
         onClick={() => setDraft(emptyOverheadItem(defaultCurrency))}
         className="shrink-0"
@@ -175,7 +190,7 @@ export function OverviewOverheadPanel({
         onSave={(item) => upsertOverheadItem(item)}
       />
 
-      {tab === "tables" ? (
+      {activeTab === "tables" ? (
         <div className="space-y-6">
           {report.items.length > 0 ? (
             <div className="grid gap-3 sm:grid-cols-3">
@@ -602,7 +617,7 @@ export function OverviewOverheadPanel({
             </div>
           ) : null}
         </div>
-      ) : tab === "charts" ? (
+      ) : activeTab === "charts" && showCharts ? (
         <div className="space-y-6">
           <OverheadResultWaterfallChart data={data} range={range} />
           <OverheadStackedBarChart
@@ -612,9 +627,9 @@ export function OverviewOverheadPanel({
           />
           <OverheadAllocationSankeyChart data={data} range={range} />
         </div>
-      ) : (
+      ) : activeTab === "planVsActual" && showPlanVsActual ? (
         <OverheadPlanVsActualPanel range={range} />
-      )}
+      ) : null}
     </div>
   );
 }

@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { FEATURES } from "@/lib/features";
 import OverheadPageClient from "./OverheadPageClient";
 
 type PageProps = {
@@ -7,5 +9,8 @@ type PageProps = {
 
 export default async function OverheadPage({ params, searchParams }: PageProps) {
   await Promise.all([params, searchParams]);
+  if (!FEATURES.overheadTopLevelNav) {
+    redirect("/overview");
+  }
   return <OverheadPageClient />;
 }
