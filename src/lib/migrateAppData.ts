@@ -16,11 +16,13 @@ import type {
   OverheadActual,
   Product,
   ProductComponent,
+  ProductDocument,
   Sale,
   SalesData,
   SalesPlanCell,
   SalesPlanRowMeta,
 } from "./types";
+import { MAX_PRODUCT_DOCUMENTS } from "./types";
 import {
   EMPTY_DATA,
   migrateOverheadCategory,
@@ -109,6 +111,9 @@ export function migrateAppData(raw: unknown): AppData {
           category: p.category || "",
           targetMarginPercent: p.targetMarginPercent ?? null,
           notes: p.notes || "",
+          documents: normalizeProductDocuments(
+            (p as { documents?: unknown }).documents,
+          ),
           createdAt: p.createdAt || new Date().toISOString(),
         };
       })
@@ -213,6 +218,7 @@ export function migrateAppData(raw: unknown): AppData {
             category: "",
             targetMarginPercent: null,
             notes: "",
+            documents: [],
             createdAt: legacy.createdAt || new Date().toISOString(),
           });
         }
@@ -562,6 +568,31 @@ export function emptyProductComponent(
     quantityPerProductUnit: 1,
     purchasePriceOverride: null,
   };
+}
+
+export function emptyProductDocument(): ProductDocument {
+  return {
+    id: createId("doc"),
+    title: "",
+    url: "",
+    notes: "",
+  };
+}
+
+export function normalizeProductDocuments(raw: unknown): ProductDocument[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ProductDocument[] = [];
+  for (const item of raw) {
+    if (out.length >= MAX_PRODUCT_DOCUMENTS) break;
+    const d = item as Partial<ProductDocument>;
+    out.push({
+      id: typeof d.id === "string" && d.id ? d.id : createId("doc"),
+      title: typeof d.title === "string" ? d.title : "",
+      url: typeof d.url === "string" ? d.url : "",
+      notes: typeof d.notes === "string" ? d.notes : "",
+    });
+  }
+  return out;
 }
 
 /** Effektiver EK/Einheit für eine BOM-Zeile */

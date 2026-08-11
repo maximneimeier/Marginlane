@@ -88,6 +88,7 @@ describe("allocateOverheadToProducts", () => {
           category: "",
           targetMarginPercent: null,
           notes: "",
+          documents: [],
           createdAt: "2026-01-01",
         },
         {
@@ -101,6 +102,7 @@ describe("allocateOverheadToProducts", () => {
           category: "",
           targetMarginPercent: null,
           notes: "",
+          documents: [],
           createdAt: "2026-01-01",
         },
       ],
@@ -194,6 +196,7 @@ describe("allocateOverheadToProducts", () => {
           category: "",
           targetMarginPercent: null,
           notes: "",
+          documents: [],
           createdAt: "2026-01-01",
         },
         {
@@ -207,6 +210,7 @@ describe("allocateOverheadToProducts", () => {
           category: "",
           targetMarginPercent: null,
           notes: "",
+          documents: [],
           createdAt: "2026-01-01",
         },
       ],

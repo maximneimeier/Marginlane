@@ -16,6 +16,7 @@ import {
   ConfirmDialog,
   PageHeader,
   Select,
+  TableRowActions,
   TextInput,
 } from "@/components/ui";
 
@@ -252,22 +253,12 @@ export default function ComponentsPage() {
                       {totalQty}
                     </td>
                     <td className="px-2 py-3">
-                      <div className="flex justify-end gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
-                        <Button
-                          variant="ghost"
-                          className="h-7 px-2"
-                          onClick={() => openEdit(component)}
-                        >
-                          {t("components.action.edit")}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          className="h-7 px-2 text-danger"
-                          onClick={() => tryDelete(component)}
-                        >
-                          {t("common.delete")}
-                        </Button>
-                      </div>
+                      <TableRowActions
+                        onEdit={() => openEdit(component)}
+                        onDelete={() => tryDelete(component)}
+                        editLabel={t("components.action.edit")}
+                        deleteLabel={t("common.delete")}
+                      />
                     </td>
                   </tr>
                 ))}

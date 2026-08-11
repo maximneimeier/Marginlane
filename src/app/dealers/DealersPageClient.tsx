@@ -18,6 +18,7 @@ import {
   ConfirmDialog,
   PageHeader,
   Select,
+  TableRowActions,
   TextInput,
 } from "@/components/ui";
 
@@ -244,22 +245,12 @@ export default function HaendlerPage() {
                       </Badge>
                     </td>
                     <td className="px-2 py-3">
-                      <div className="flex justify-end gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
-                        <Button
-                          variant="ghost"
-                          className="h-7 px-2"
-                          onClick={() => setDraft(dealer)}
-                        >
-                          {t("dealers.action.edit")}
-                        </Button>
-                        <Button
-                          variant="danger"
-                          className="h-7 px-2"
-                          onClick={() => setDeleteTarget(dealer)}
-                        >
-                          ×
-                        </Button>
-                      </div>
+                      <TableRowActions
+                        onEdit={() => setDraft(dealer)}
+                        onDelete={() => setDeleteTarget(dealer)}
+                        editLabel={t("dealers.action.edit")}
+                        deleteLabel={t("common.delete")}
+                      />
                     </td>
                   </tr>
                 ))}

@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Component, Supplier } from "@/lib/types";
 import { INCOTERMS, type SupplierStatus } from "@/lib/types";
 import { CountryFlag } from "@/components/CountryFlag";
-import { formatDate, formatEuro, formatPercent } from "@/lib/format";
+import { formatDate, formatEuro } from "@/lib/format";
 import {
   buildProductMetrics,
   buildSupplierRows,
@@ -20,14 +20,13 @@ import {
   Badge,
   Button,
   ConfirmDialog,
+  TableRowActions,
   TextInput,
   Select,
 } from "@/components/ui";
 
 const PAGE_SIZE = 50;
 const COLS_KEY = "landed-cost-supplier-cols";
-
-type ViewMode = "table" | "cards";
 
 type Props = {
   data: AppData;
@@ -54,7 +53,6 @@ export function SuppliersOverview({
 }: Props) {
   const { t, plural, locale, supplierStatusLabel, optionalColLabel, countryLabel, pricingUnitLabel } =
     useI18n();
-  const [view, setView] = useState<ViewMode>("table");
   const [query, setQuery] = useState("");
   const [filterCountry, setFilterCountry] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
@@ -180,30 +178,6 @@ export function SuppliersOverview({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded-[8px] border border-line bg-white p-0.5">
-            <button
-              type="button"
-              onClick={() => setView("table")}
-              className={`rounded-[6px] px-2.5 py-1 text-[12px] font-medium ${
-                view === "table"
-                  ? "bg-surface-soft text-foreground"
-                  : "text-muted hover:text-foreground"
-              }`}
-            >
-              {t("suppliers.view.table")}
-            </button>
-            <button
-              type="button"
-              onClick={() => setView("cards")}
-              className={`rounded-[6px] px-2.5 py-1 text-[12px] font-medium ${
-                view === "cards"
-                  ? "bg-surface-soft text-foreground"
-                  : "text-muted hover:text-foreground"
-              }`}
-            >
-              {t("suppliers.view.cards")}
-            </button>
-          </div>
           <Button variant="secondary" onClick={onClearData}>
             {t("suppliers.clearData")}
           </Button>
@@ -310,31 +284,6 @@ export function SuppliersOverview({
           {filtered.length === 0 ? (
             <div className="rounded-[12px] border border-line bg-white px-4 py-10 text-center text-[13px] text-muted">
               {t("suppliers.noFilterResults")}
-            </div>
-          ) : view === "cards" ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {pageRows.map((row) => (
-                <SupplierCard
-                  key={row.supplier.id}
-                  row={row}
-                  onEdit={() => onEdit(row.supplier)}
-                  onDelete={() => setDeleteTarget(row.supplier)}
-                  onOpen={() =>
-                    setExpandedId(
-                      expandedId === row.supplier.id ? null : row.supplier.id,
-                    )
-                  }
-                  expanded={expandedId === row.supplier.id}
-                  components={componentsOf(row.supplier.id)}
-                  data={data}
-                  addProductHref={addProductHref}
-                  onAddProduct={() => onAddProduct(row.supplier.id)}
-                  onEditProduct={onEditProduct}
-                  countryLabel={countryLabel}
-                  supplierStatusLabel={supplierStatusLabel}
-                  locale={locale}
-                />
-              ))}
             </div>
           ) : (
             <div className="overflow-hidden rounded-[12px] border border-line bg-white shadow-[var(--shadow-sm)]">
@@ -514,21 +463,12 @@ export function SuppliersOverview({
                               </td>
                             ) : null}
                             <td className="px-2 py-2.5">
-                              <div className="flex justify-end gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
-                                <IconBtn
-                                  title={t("common.edit")}
-                                  onClick={() => onEdit(s)}
-                                >
-                                  ✎
-                                </IconBtn>
-                                <IconBtn
-                                  title={t("common.delete")}
-                                  danger
-                                  onClick={() => setDeleteTarget(s)}
-                                >
-                                  ×
-                                </IconBtn>
-                              </div>
+                              <TableRowActions
+                                onEdit={() => onEdit(s)}
+                                onDelete={() => setDeleteTarget(s)}
+                                editLabel={t("common.edit")}
+                                deleteLabel={t("common.delete")}
+                              />
                             </td>
                           </tr>
                           {open ? (
@@ -631,33 +571,6 @@ function StatusBadge({
   const tone =
     status === "active" ? "success" : status === "review" ? "accent" : "neutral";
   return <Badge tone={tone}>{label}</Badge>;
-}
-
-function IconBtn({
-  children,
-  title,
-  onClick,
-  danger,
-}: {
-  children: React.ReactNode;
-  title: string;
-  onClick: () => void;
-  danger?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      title={title}
-      onClick={onClick}
-      className={`flex h-7 w-7 items-center justify-center rounded-[6px] text-[13px] ${
-        danger
-          ? "text-danger hover:bg-red-50"
-          : "text-muted hover:bg-surface-soft hover:text-foreground"
-      }`}
-    >
-      {children}
-    </button>
-  );
 }
 
 function Chevron({ open }: { open: boolean }) {
@@ -837,94 +750,6 @@ function ExpandedComponents({
           </button>
         )}
       </div>
-    </div>
-  );
-}
-
-function SupplierCard({
-  row,
-  onEdit,
-  onDelete,
-  onOpen,
-  expanded,
-  components,
-  data,
-  onAddProduct,
-  onEditProduct,
-  addProductHref,
-  countryLabel,
-  supplierStatusLabel,
-  locale,
-}: {
-  row: SupplierRow;
-  onEdit: () => void;
-  onDelete: () => void;
-  onOpen: () => void;
-  expanded: boolean;
-  components: Component[];
-  data: AppData;
-  onAddProduct: () => void;
-  onEditProduct: (component: Component) => void;
-  addProductHref?: string;
-  countryLabel: (code: string) => string;
-  supplierStatusLabel: (status: SupplierStatus) => string;
-  locale: string;
-}) {
-  const { t } = useI18n();
-  const s = row.supplier;
-  return (
-    <div className="rounded-[12px] border border-line bg-white p-4 shadow-[var(--shadow-sm)]">
-      <div className="flex items-start justify-between gap-2">
-        <button type="button" onClick={onOpen} className="min-w-0 text-left">
-          <p className="truncate text-[14px] font-semibold text-foreground hover:text-accent">
-            {s.name}
-          </p>
-          <p className="mt-0.5 flex items-center gap-1.5 text-[12px] text-muted">
-            <CountryFlag code={s.country} />
-            {countryLabel(s.country)} · {s.incoterm}
-          </p>
-        </button>
-        <StatusBadge
-          status={s.status}
-          label={supplierStatusLabel(s.status)}
-        />
-      </div>
-      <dl className="mt-3 grid grid-cols-2 gap-2 text-[12px]">
-        <div>
-          <dt className="text-muted-soft">{t("suppliers.col.products")}</dt>
-          <dd className="font-medium tabular-nums">{row.productCount}</dd>
-        </div>
-        <div>
-          <dt className="text-muted-soft">{t("suppliers.col.avgLanded")}</dt>
-          <dd className="font-medium tabular-nums">
-            {row.avgLandedCost != null ? formatEuro(row.avgLandedCost) : t("common.emDash")}
-          </dd>
-        </div>
-        <div className="col-span-2">
-          <dt className="text-muted-soft">{t("suppliers.col.lastOrder")}</dt>
-          <dd>{formatDate(row.lastOrderAt, locale)}</dd>
-        </div>
-      </dl>
-      <div className="mt-3 flex gap-1 border-t border-line pt-3">
-        <Button variant="ghost" className="h-7 px-2" onClick={onEdit}>
-          {t("common.edit")}
-        </Button>
-        <Button variant="danger" className="h-7 px-2" onClick={onDelete}>
-          ×
-        </Button>
-      </div>
-      {expanded ? (
-        <div className="mt-3 border-t border-line pt-3">
-          <ExpandedComponents
-            components={components}
-            data={data}
-            addProductHref={addProductHref}
-            onAddProduct={onAddProduct}
-            onEditProduct={onEditProduct}
-            locale={locale}
-          />
-        </div>
-      ) : null}
     </div>
   );
 }

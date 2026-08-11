@@ -62,6 +62,7 @@ describe("validateAppData", () => {
             category: "",
             targetMarginPercent: null,
             notes: "",
+            documents: [],
             createdAt: "2026-01-01",
           },
           {
@@ -75,6 +76,7 @@ describe("validateAppData", () => {
             category: "",
             targetMarginPercent: null,
             notes: "",
+            documents: [],
             createdAt: "2026-01-01",
           },
         ],
@@ -98,6 +100,7 @@ describe("validateAppData", () => {
             category: "",
             targetMarginPercent: null,
             notes: "",
+            documents: [],
             createdAt: "2026-01-01",
           },
         ],

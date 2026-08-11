@@ -2,17 +2,15 @@
 
 import { useState } from "react";
 import { useStore } from "@/context/StoreContext";
-import type {
-  CatalogProduct,
-  Component,
-  ProductComponent,
-  Supplier,
-} from "@/lib/types";
+import type { Component, Supplier } from "@/lib/types";
 import {
   SupplierFormModal,
   emptySupplier,
 } from "@/components/SupplierFormModal";
-import { CatalogProductFormModal } from "@/components/CatalogProductFormModal";
+import {
+  ComponentFormModal,
+  type ComponentFormSave,
+} from "@/components/ComponentFormModal";
 import { SuppliersOverview } from "@/components/SuppliersOverview";
 import { useI18n } from "@/hooks/useI18n";
 
@@ -22,10 +20,8 @@ export default function LieferantenPage() {
     data,
     upsertSupplier,
     deleteSupplier,
-    upsertCatalogProduct,
     upsertComponent,
     upsertProductComponent,
-    deleteProductComponent,
     clearData,
   } = useStore();
   const { t } = useI18n();
@@ -34,9 +30,11 @@ export default function LieferantenPage() {
     draft: Supplier | null;
     isEdit: boolean;
   }>({ open: false, draft: null, isEdit: false });
-  const [productDraft, setProductDraft] = useState<CatalogProduct | null>(
-    null,
-  );
+  const [componentModal, setComponentModal] = useState<{
+    open: boolean;
+    draft: Component | null;
+    isEdit: boolean;
+  }>({ open: false, draft: null, isEdit: false });
 
   if (!ready) {
     return <p className="text-[13px] text-muted">{t("common.loading")}</p>;
@@ -54,31 +52,31 @@ export default function LieferantenPage() {
     });
   }
 
-  const isEditProduct = Boolean(
-    productDraft &&
-      data.catalogProducts.some((p) => p.id === productDraft.id),
-  );
+  function openEditComponent(component: Component) {
+    setComponentModal({
+      open: true,
+      draft: structuredClone(component),
+      isEdit: true,
+    });
+  }
 
-  function saveProduct(
-    product: CatalogProduct,
-    components: Component[],
-    links: ProductComponent[],
-  ) {
-    upsertCatalogProduct(product);
-    for (const c of components) {
-      upsertComponent(c);
+  function closeComponentModal() {
+    setComponentModal({ open: false, draft: null, isEdit: false });
+  }
+
+  function handleSaveComponent(result: ComponentFormSave) {
+    upsertComponent(result.component);
+    if (result.link.productId) {
+      const existing = (data.productComponents ?? []).find(
+        (pc) =>
+          pc.productId === result.link.productId &&
+          pc.componentId === result.component.id,
+      );
+      upsertProductComponent(
+        existing ? { ...result.link, id: existing.id } : result.link,
+      );
     }
-    const existingLinks = (data.productComponents ?? []).filter(
-      (pc) => pc.productId === product.id,
-    );
-    const nextIds = new Set(links.map((l) => l.id));
-    for (const link of existingLinks) {
-      if (!nextIds.has(link.id)) deleteProductComponent(link.id);
-    }
-    for (const link of links) {
-      upsertProductComponent(link);
-    }
-    setProductDraft(null);
+    closeComponentModal();
   }
 
   return (
@@ -94,17 +92,18 @@ export default function LieferantenPage() {
           upsertSupplier(supplier);
         }}
         onAddProduct={() => {
-          /* BOM-Komponenten werden über Produkte gepflegt */
+          setSupplierModal({ open: false, draft: null, isEdit: false });
+          setComponentModal({ open: true, draft: null, isEdit: false });
         }}
       />
 
-      <CatalogProductFormModal
-        open={Boolean(productDraft)}
-        initial={productDraft}
-        isEdit={isEditProduct}
+      <ComponentFormModal
+        open={componentModal.open}
+        initial={componentModal.draft}
+        isEdit={componentModal.isEdit}
         data={data}
-        onClose={() => setProductDraft(null)}
-        onSave={saveProduct}
+        onClose={closeComponentModal}
+        onSave={handleSaveComponent}
       />
 
       <SuppliersOverview
@@ -115,24 +114,16 @@ export default function LieferantenPage() {
           deleteSupplier(supplier.id);
         }}
         onAddProduct={() => {
-          /* siehe Link auf /products */
+          setComponentModal({ open: true, draft: null, isEdit: false });
         }}
-        onEditProduct={(component) => {
-          const link = (data.productComponents ?? []).find(
-            (pc) => pc.componentId === component.id,
-          );
-          const product = data.catalogProducts.find(
-            (p) => p.id === link?.productId,
-          );
-          if (product) setProductDraft(product);
-        }}
+        onEditProduct={openEditComponent}
         onClearData={() => {
           void clearData();
         }}
         componentsOf={(supplierId) =>
           data.components.filter((c) => c.supplierId === supplierId)
         }
-        addProductHref="/products"
+        addProductHref="/components"
       />
     </div>
   );

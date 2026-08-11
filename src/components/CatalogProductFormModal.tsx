@@ -8,13 +8,15 @@ import type {
   Component,
   PricingUnit,
   ProductComponent,
+  ProductDocument,
 } from "@/lib/types";
-import { CURRENCIES } from "@/lib/types";
+import { CURRENCIES, MAX_PRODUCT_DOCUMENTS } from "@/lib/types";
 import { createId, formatEuro } from "@/lib/format";
 import {
   catalogProductUnitPurchaseCost,
   emptyComponent,
   emptyProductComponent,
+  emptyProductDocument,
 } from "@/lib/migrateAppData";
 import { useI18n } from "@/hooks/useI18n";
 import {
@@ -38,6 +40,7 @@ export function emptyCatalogProduct(): CatalogProduct {
     category: "",
     targetMarginPercent: null,
     notes: "",
+    documents: [],
     createdAt: new Date().toISOString(),
   };
 }
@@ -81,7 +84,12 @@ export function CatalogProductFormModal({
       return;
     }
     if (initial) {
-      setDraft(structuredClone(initial));
+      setDraft(
+        structuredClone({
+          ...initial,
+          documents: initial.documents ?? [],
+        }),
+      );
       const links = (data.productComponents ?? []).filter(
         (pc) => pc.productId === initial.id,
       );
@@ -140,12 +148,22 @@ export function CatalogProductFormModal({
 
   function handleSave() {
     if (!draft || !draft.name.trim() || !draft.sku.trim()) return;
+    const documents = (draft.documents ?? [])
+      .filter((d) => d.title.trim() || d.url.trim() || d.notes.trim())
+      .slice(0, MAX_PRODUCT_DOCUMENTS)
+      .map((d) => ({
+        ...d,
+        title: d.title.trim(),
+        url: d.url.trim(),
+        notes: d.notes.trim(),
+      }));
     const product: CatalogProduct = {
       ...draft,
       name: draft.name.trim(),
       sku: draft.sku.trim(),
       category: draft.category.trim(),
       notes: draft.notes.trim(),
+      documents,
     };
     const kept = lines.filter(
       (l) => l.component.name.trim() || l.component.purchasePricePerUnit > 0,
@@ -173,6 +191,37 @@ export function CatalogProductFormModal({
         link: emptyProductComponent(draft!.id, component.id),
       },
     ]);
+  }
+
+  function addDocument() {
+    setDraft((prev) => {
+      if (!prev) return prev;
+      const docs = prev.documents ?? [];
+      if (docs.length >= MAX_PRODUCT_DOCUMENTS) return prev;
+      return { ...prev, documents: [...docs, emptyProductDocument()] };
+    });
+  }
+
+  function updateDocument(id: string, patch: Partial<ProductDocument>) {
+    setDraft((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        documents: (prev.documents ?? []).map((d) =>
+          d.id === id ? { ...d, ...patch } : d,
+        ),
+      };
+    });
+  }
+
+  function removeDocument(id: string) {
+    setDraft((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        documents: (prev.documents ?? []).filter((d) => d.id !== id),
+      };
+    });
   }
 
   function updateLine(
@@ -396,6 +445,75 @@ export function CatalogProductFormModal({
               / {pricingUnitLabel(draft.pricingUnit)}
             </span>
           </p>
+        </div>
+
+        <div className="rounded-[10px] border border-line p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div>
+              <p className="text-[13px] font-medium text-foreground">
+                {t("productModal.documentsTitle")}
+              </p>
+              <p className="text-[12px] text-muted">
+                {t("productModal.documentsHint", {
+                  max: String(MAX_PRODUCT_DOCUMENTS),
+                })}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={addDocument}
+              disabled={(draft.documents ?? []).length >= MAX_PRODUCT_DOCUMENTS}
+            >
+              {t("productModal.addDocument")}
+            </Button>
+          </div>
+
+          {(draft.documents ?? []).length === 0 ? (
+            <p className="py-3 text-center text-[12px] text-muted">
+              {t("productModal.documentsEmpty")}
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {(draft.documents ?? []).map((doc) => (
+                <div
+                  key={doc.id}
+                  className="grid gap-2 rounded-[8px] border border-line bg-white p-2 sm:grid-cols-[1fr_1.2fr_auto]"
+                >
+                  <TextInput
+                    value={doc.title}
+                    onChange={(e) =>
+                      updateDocument(doc.id, { title: e.target.value })
+                    }
+                    placeholder={t("productModal.documentTitle")}
+                  />
+                  <TextInput
+                    value={doc.url}
+                    onChange={(e) =>
+                      updateDocument(doc.id, { url: e.target.value })
+                    }
+                    placeholder={t("productModal.documentUrl")}
+                  />
+                  <Button
+                    type="button"
+                    variant="danger"
+                    className="h-9 px-2"
+                    onClick={() => removeDocument(doc.id)}
+                  >
+                    ×
+                  </Button>
+                  <TextInput
+                    className="sm:col-span-3"
+                    value={doc.notes}
+                    onChange={(e) =>
+                      updateDocument(doc.id, { notes: e.target.value })
+                    }
+                    placeholder={t("productModal.documentNotes")}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <Field label={t("productModal.notes")}>

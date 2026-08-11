@@ -246,3 +246,61 @@ export function ConfirmDialog({
     </Modal>
   );
 }
+
+/** Mülleimer-Icon für Tabellen-Aktionen */
+export function TrashIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 14 14"
+      fill="none"
+      aria-hidden
+      className="shrink-0"
+    >
+      <path
+        d="M2.5 3.5h9M5.5 3.5V2.5a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1M6 6v4M8 6v4M3.5 3.5l.5 8a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1l.5-8"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Einheitliche Bearbeiten-/Löschen-Aktionen in Listen-Tabellen */
+export function TableRowActions({
+  onEdit,
+  onDelete,
+  editLabel,
+  deleteLabel,
+}: {
+  onEdit: () => void;
+  onDelete: () => void;
+  editLabel: string;
+  deleteLabel: string;
+}) {
+  return (
+    <div className="flex justify-end gap-1">
+      <Button
+        variant="secondary"
+        className="h-7 min-w-7 px-2"
+        onClick={onEdit}
+        aria-label={editLabel}
+        title={editLabel}
+      >
+        ✎
+      </Button>
+      <Button
+        variant="danger"
+        className="h-7 min-w-7 px-2"
+        onClick={onDelete}
+        aria-label={deleteLabel}
+        title={deleteLabel}
+      >
+        <TrashIcon />
+      </Button>
+    </div>
+  );
+}

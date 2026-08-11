@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useStore } from "@/context/StoreContext";
 import type { CatalogProduct, Component, ProductComponent } from "@/lib/types";
-import { formatEuro, formatPercent } from "@/lib/format";
+import { formatEuro } from "@/lib/format";
 import { catalogProductUnitPurchaseCost } from "@/lib/migrateAppData";
 import type { MessageKey } from "@/lib/i18n";
 import { useI18n } from "@/hooks/useI18n";
@@ -17,6 +18,7 @@ import {
   ConfirmDialog,
   PageHeader,
   Select,
+  TableRowActions,
   TextInput,
 } from "@/components/ui";
 
@@ -170,9 +172,6 @@ export default function ProductsPageClient() {
                   <th className="px-4 py-2.5 font-medium">
                     {t("products.col.status")}
                   </th>
-                  <th className="hidden px-4 py-2.5 text-right font-medium lg:table-cell">
-                    {t("products.col.targetMargin")}
-                  </th>
                   <th className="w-28 px-3 py-2.5" />
                 </tr>
               </thead>
@@ -192,13 +191,12 @@ export default function ProductsPageClient() {
                       className="group border-b border-line last:border-0 hover:bg-surface-faint"
                     >
                       <td className="px-4 py-3">
-                        <button
-                          type="button"
-                          onClick={() => setDraft(product)}
+                        <Link
+                          href={`/products/${product.id}`}
                           className="text-left font-medium text-foreground hover:text-accent"
                         >
                           {product.name}
-                        </button>
+                        </Link>
                         <p className="text-[11px] text-muted-soft">
                           {t("products.componentCount", {
                             count: String(componentCount),
@@ -236,32 +234,13 @@ export default function ProductsPageClient() {
                           )}
                         </Badge>
                       </td>
-                      <td className="hidden px-4 py-3 text-right tabular-nums text-muted lg:table-cell">
-                        {product.targetMarginPercent != null
-                          ? formatPercent(product.targetMarginPercent, locale)
-                          : t("common.emDash")}
-                      </td>
                       <td className="px-2 py-3">
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            variant="secondary"
-                            className="h-7 min-w-7 px-2"
-                            onClick={() => setDraft(product)}
-                            aria-label={t("products.action.edit")}
-                            title={t("products.action.edit")}
-                          >
-                            ✎
-                          </Button>
-                          <Button
-                            variant="danger"
-                            className="h-7 min-w-7 px-2"
-                            onClick={() => setDeleteTarget(product)}
-                            aria-label={t("common.delete")}
-                            title={t("common.delete")}
-                          >
-                            ×
-                          </Button>
-                        </div>
+                        <TableRowActions
+                          onEdit={() => setDraft(product)}
+                          onDelete={() => setDeleteTarget(product)}
+                          editLabel={t("products.action.edit")}
+                          deleteLabel={t("common.delete")}
+                        />
                       </td>
                     </tr>
                   );

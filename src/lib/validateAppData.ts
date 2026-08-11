@@ -1,4 +1,5 @@
 import type { AppData } from "./types";
+import { MAX_PRODUCT_DOCUMENTS } from "./types";
 import { migrateAppData } from "./migrateAppData";
 
 export type ValidationIssue = {
@@ -104,6 +105,32 @@ export function validateAppData(raw: unknown): ValidationIssue[] {
         path: `${base}.listPrice`,
         message: "Product list price must be ≥ 0",
       });
+    }
+    const docs = p.documents ?? [];
+    if (docs.length > MAX_PRODUCT_DOCUMENTS) {
+      issues.push({
+        path: `${base}.documents`,
+        message: `Product may have at most ${MAX_PRODUCT_DOCUMENTS} documents`,
+      });
+    }
+    for (const doc of docs) {
+      if (!doc.title.trim() && (doc.url.trim() || doc.notes.trim())) {
+        issues.push({
+          path: `${base}.documents[${doc.id}].title`,
+          message: "Document title is required when URL or notes are set",
+        });
+      }
+      if (doc.url.trim()) {
+        try {
+          // eslint-disable-next-line no-new
+          new URL(doc.url.trim());
+        } catch {
+          issues.push({
+            path: `${base}.documents[${doc.id}].url`,
+            message: "Document URL must be a valid absolute URL",
+          });
+        }
+      }
     }
   }
 

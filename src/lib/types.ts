@@ -115,6 +115,18 @@ export type Product = {
 /** Verkaufsprodukt (Katalog) — was das Unternehmen verkauft */
 export type CatalogProductStatus = "active" | "inactive";
 
+/** Max. Anzahl verknüpfter Dokumente pro Katalogprodukt */
+export const MAX_PRODUCT_DOCUMENTS = 3;
+
+/** Referenz / Link zu einem Produkt-Dokument (kein Datei-Upload) */
+export type ProductDocument = {
+  id: string;
+  title: string;
+  /** Externer Link (URL); leer = nur Titel/Notiz */
+  url: string;
+  notes: string;
+};
+
 export type CatalogProduct = {
   id: string;
   name: string;
@@ -131,6 +143,8 @@ export type CatalogProduct = {
   /** Optional Zielmarge in Prozent (z. B. 35 = 35%) */
   targetMarginPercent: number | null;
   notes: string;
+  /** Bis zu {@link MAX_PRODUCT_DOCUMENTS} Dokument-Referenzen */
+  documents: ProductDocument[];
   createdAt: string;
 };
 
