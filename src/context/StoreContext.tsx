@@ -16,6 +16,8 @@ import type {
   CatalogProduct,
   Component,
   Dealer,
+  LogisticsBuildingBlock,
+  LogisticsTemplate,
   OverheadActual,
   OverheadItem,
   Product,
@@ -60,6 +62,16 @@ type StoreContextValue = {
   linkedProductNamesForComponent: (componentId: string) => string[];
   upsertDealer: (dealer: Dealer) => void;
   deleteDealer: (id: string) => void;
+  upsertLogisticsBuildingBlock: (block: LogisticsBuildingBlock) => void;
+  /**
+   * Löscht nur, wenn keine Vorlage den Baustein nutzt.
+   * @returns false wenn blockiert
+   */
+  deleteLogisticsBuildingBlock: (id: string) => boolean;
+  upsertLogisticsTemplate: (template: LogisticsTemplate) => void;
+  deleteLogisticsTemplate: (id: string) => void;
+  /** Vorlagennamen, die den Baustein noch referenzieren */
+  linkedTemplateNamesForBuildingBlock: (blockId: string) => string[];
   upsertBatch: (batch: Batch) => void;
   deleteBatch: (id: string) => void;
   upsertOverheadItem: (item: OverheadItem) => void;
@@ -377,8 +389,81 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               s.dealerId === id ? detachDealerFromSale(s, dealer) : s,
             ),
           })),
+          logisticsTemplates: (prev.logisticsTemplates ?? []).map((tpl) =>
+            tpl.supplierId === id ? { ...tpl, supplierId: "" } : tpl,
+          ),
         };
       });
+    },
+    [commit],
+  );
+
+  const linkedTemplateNamesForBuildingBlock = useCallback(
+    (blockId: string) => {
+      return (data.logisticsTemplates ?? [])
+        .filter((tpl) =>
+          tpl.items.some((item) => item.buildingBlockId === blockId),
+        )
+        .map((tpl) => tpl.name || tpl.id);
+    },
+    [data.logisticsTemplates],
+  );
+
+  const upsertLogisticsBuildingBlock = useCallback(
+    (block: LogisticsBuildingBlock) => {
+      commit((prev) => {
+        const list = prev.logisticsBuildingBlocks ?? [];
+        return {
+          ...prev,
+          logisticsBuildingBlocks: list.some((b) => b.id === block.id)
+            ? list.map((b) => (b.id === block.id ? block : b))
+            : [...list, block],
+        };
+      });
+    },
+    [commit],
+  );
+
+  const deleteLogisticsBuildingBlock = useCallback(
+    (id: string) => {
+      const linked = (data.logisticsTemplates ?? []).some((tpl) =>
+        tpl.items.some((item) => item.buildingBlockId === id),
+      );
+      if (linked) return false;
+      commit((prev) => ({
+        ...prev,
+        logisticsBuildingBlocks: (prev.logisticsBuildingBlocks ?? []).filter(
+          (b) => b.id !== id,
+        ),
+      }));
+      return true;
+    },
+    [commit, data.logisticsTemplates],
+  );
+
+  const upsertLogisticsTemplate = useCallback(
+    (template: LogisticsTemplate) => {
+      commit((prev) => {
+        const list = prev.logisticsTemplates ?? [];
+        return {
+          ...prev,
+          logisticsTemplates: list.some((t) => t.id === template.id)
+            ? list.map((t) => (t.id === template.id ? template : t))
+            : [...list, template],
+        };
+      });
+    },
+    [commit],
+  );
+
+  const deleteLogisticsTemplate = useCallback(
+    (id: string) => {
+      commit((prev) => ({
+        ...prev,
+        logisticsTemplates: (prev.logisticsTemplates ?? []).filter(
+          (t) => t.id !== id,
+        ),
+      }));
     },
     [commit],
   );
@@ -573,6 +658,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       linkedProductNamesForComponent,
       upsertDealer,
       deleteDealer,
+      upsertLogisticsBuildingBlock,
+      deleteLogisticsBuildingBlock,
+      upsertLogisticsTemplate,
+      deleteLogisticsTemplate,
+      linkedTemplateNamesForBuildingBlock,
       upsertBatch,
       deleteBatch,
       upsertOverheadItem,
@@ -602,6 +692,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       linkedProductNamesForComponent,
       upsertDealer,
       deleteDealer,
+      upsertLogisticsBuildingBlock,
+      deleteLogisticsBuildingBlock,
+      upsertLogisticsTemplate,
+      deleteLogisticsTemplate,
+      linkedTemplateNamesForBuildingBlock,
       upsertBatch,
       deleteBatch,
       upsertOverheadItem,

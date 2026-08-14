@@ -165,97 +165,119 @@ export default function HaendlerPage() {
           </div>
 
           <div className="overflow-hidden rounded-[12px] border border-line bg-white shadow-[var(--shadow-sm)]">
-            <table className="w-full text-left text-[13px]">
-              <thead>
-                <tr className="border-b border-line bg-surface-faint text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
-                  <th className="px-4 py-2.5 font-medium">{t("dealers.col.dealer")}</th>
-                  <th className="px-4 py-2.5 font-medium">{t("dealers.col.channel")}</th>
-                  <th className="px-4 py-2.5 font-medium">{t("dealers.col.country")}</th>
-                  <th className="px-4 py-2.5 font-medium">{t("dealers.col.terms")}</th>
-                  <th className="px-4 py-2.5 text-right font-medium">{t("dealers.col.vk")}</th>
-                  <th className="px-4 py-2.5 text-right font-medium">{t("dealers.col.batches")}</th>
-                  <th className="px-4 py-2.5 text-right font-medium">
-                    {t("dealers.col.avgMargin")}
-                  </th>
-                  <th className="px-4 py-2.5 font-medium">{t("dealers.col.status")}</th>
-                  <th className="px-2 py-2.5" />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(({ dealer, batchCount, avgMargin }) => (
-                  <tr
-                    key={dealer.id}
-                    className="group border-b border-line last:border-b-0 hover:bg-surface-faint"
-                  >
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-foreground">
-                        {dealer.name}
-                      </p>
-                      <p className="text-[12px] text-muted-soft">
-                        {dealer.contactName || dealer.email || t("common.emDash")}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 text-muted">
-                      {channelLabel(dealer.channel)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center gap-1.5 text-muted">
-                        {dealer.country ? (
-                          <CountryFlag code={dealer.country} />
-                        ) : null}
-                        {countryLabel(dealer.country) || t("common.emDash")}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-muted">
-                      {dealer.paymentTerms || t("common.emDash")}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {dealer.defaultSellPrice > 0
-                        ? formatEuro(dealer.defaultSellPrice, locale)
-                        : t("common.emDash")}
-                      {dealer.salesCostItems.length > 0 ? (
-                        <p className="text-[11px] text-muted-soft">
-                          {t("dealers.costItems", {
-                            count: dealer.salesCostItems.length,
-                          })}
-                        </p>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {batchCount}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {avgMargin != null ? (
-                        <span
-                          className={`tabular-nums ${
-                            avgMargin >= 0 ? "text-success" : "text-danger"
-                          }`}
-                        >
-                          {formatEuro(avgMargin, locale)}
-                        </span>
-                      ) : (
-                        <span className="text-muted-soft">{t("common.emDash")}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge
-                        tone={dealer.status === "active" ? "success" : "neutral"}
-                      >
-                        {statusLabel(dealer.status)}
-                      </Badge>
-                    </td>
-                    <td className="px-2 py-3">
-                      <TableRowActions
-                        onEdit={() => setDraft(dealer)}
-                        onDelete={() => setDeleteTarget(dealer)}
-                        editLabel={t("dealers.action.edit")}
-                        deleteLabel={t("common.delete")}
-                      />
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px] text-left text-[13px]">
+                <thead>
+                  <tr className="border-b border-line bg-surface-faint text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
+                    <th className="px-4 py-2.5 font-medium">
+                      {t("dealers.col.dealer")}
+                    </th>
+                    <th className="px-4 py-2.5 font-medium">
+                      {t("dealers.col.channel")}
+                    </th>
+                    <th className="px-4 py-2.5 font-medium">
+                      {t("dealers.col.country")}
+                    </th>
+                    <th className="px-4 py-2.5 font-medium">
+                      {t("dealers.col.terms")}
+                    </th>
+                    <th className="px-4 py-2.5 text-right font-medium">
+                      {t("dealers.col.vk")}
+                    </th>
+                    <th className="px-4 py-2.5 text-right font-medium">
+                      {t("dealers.col.batches")}
+                    </th>
+                    <th className="px-4 py-2.5 text-right font-medium">
+                      {t("dealers.col.avgMargin")}
+                    </th>
+                    <th className="px-4 py-2.5 font-medium">
+                      {t("dealers.col.status")}
+                    </th>
+                    <th className="w-28 px-3 py-2.5" />
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {rows.map(({ dealer, batchCount, avgMargin }) => (
+                    <tr
+                      key={dealer.id}
+                      className="group border-b border-line last:border-b-0 hover:bg-surface-faint"
+                    >
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-foreground">
+                          {dealer.name}
+                        </p>
+                        <p className="text-[12px] text-muted-soft">
+                          {dealer.contactName ||
+                            dealer.email ||
+                            t("common.emDash")}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 text-muted">
+                        {channelLabel(dealer.channel)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center gap-1.5 text-muted">
+                          {dealer.country ? (
+                            <CountryFlag code={dealer.country} />
+                          ) : null}
+                          {countryLabel(dealer.country) || t("common.emDash")}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-muted">
+                        {dealer.paymentTerms || t("common.emDash")}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums">
+                        {dealer.defaultSellPrice > 0
+                          ? formatEuro(dealer.defaultSellPrice, locale)
+                          : t("common.emDash")}
+                        {dealer.salesCostItems.length > 0 ? (
+                          <p className="text-[11px] text-muted-soft">
+                            {t("dealers.costItems", {
+                              count: dealer.salesCostItems.length,
+                            })}
+                          </p>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums">
+                        {batchCount}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {avgMargin != null ? (
+                          <span
+                            className={`tabular-nums ${
+                              avgMargin >= 0 ? "text-success" : "text-danger"
+                            }`}
+                          >
+                            {formatEuro(avgMargin, locale)}
+                          </span>
+                        ) : (
+                          <span className="text-muted-soft">
+                            {t("common.emDash")}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge
+                          tone={
+                            dealer.status === "active" ? "success" : "neutral"
+                          }
+                        >
+                          {statusLabel(dealer.status)}
+                        </Badge>
+                      </td>
+                      <td className="px-2 py-3">
+                        <TableRowActions
+                          onEdit={() => setDraft(dealer)}
+                          onDelete={() => setDeleteTarget(dealer)}
+                          editLabel={t("dealers.action.edit")}
+                          deleteLabel={t("common.delete")}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             {rows.length === 0 ? (
               <p className="px-4 py-8 text-center text-[13px] text-muted">
                 {t("dealers.noResults")}

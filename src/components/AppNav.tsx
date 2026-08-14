@@ -71,6 +71,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/products", key: "nav.products", icon: ProductsIcon },
       { href: "/components", key: "nav.components", icon: ComponentsIcon },
       { href: "/suppliers", key: "nav.suppliers", icon: SuppliersIcon },
+      { href: "/logistics", key: "nav.logistics", icon: LogisticsIcon },
       { href: "/dealers", key: "nav.dealers", icon: DealersIcon },
     ],
   },
@@ -410,6 +411,21 @@ function OverheadIcon({ active }: { active: boolean }) {
     <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={active ? "text-accent" : "text-muted-soft"}>
       <rect x="2.25" y="2.25" width="10.5" height="10.5" rx="2" stroke="currentColor" strokeWidth="1.3" />
       <path d="M4.5 7.5h6M7.5 4.5v6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function LogisticsIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={active ? "text-accent" : "text-muted-soft"}>
+      <path
+        d="M2.5 9.5h7.5V5.5H2.5v4ZM10 6.5h2.2l1.3 2v1H10V6.5Z"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+      <circle cx="4.5" cy="11.25" r="1.1" stroke="currentColor" strokeWidth="1.2" />
+      <circle cx="11.5" cy="11.25" r="1.1" stroke="currentColor" strokeWidth="1.2" />
     </svg>
   );
 }

@@ -18,6 +18,10 @@ import {
   resolveSalePrice,
   resolveUnitPurchasePrice,
 } from "@/lib/resolve";
+import {
+  logisticsTemplateToCostItems,
+  rankLogisticsTemplates,
+} from "@/lib/logistics";
 import { CostItemEditor } from "@/components/CostItemEditor";
 import { SalesCostsReadonly } from "@/components/SalesCostsReadonly";
 import {
@@ -63,6 +67,7 @@ export default function ChargeDetailPage({ id }: { id: string }) {
   const stored = data.batches.find((b) => b.id === id);
   const [draft, setDraft] = useState<Batch | null>(null);
   const [editing, setEditing] = useState(false);
+  const [logisticsTemplateId, setLogisticsTemplateId] = useState("");
 
   const batch = editing && draft ? draft : stored;
 
@@ -279,6 +284,71 @@ export default function ChargeDetailPage({ id }: { id: string }) {
                   allowedPhases={PROCUREMENT_PHASES}
                   unitLabel={unit}
                 />
+                {(data.logisticsTemplates ?? []).length > 0 ? (
+                  <div className="mt-4 border-t border-line pt-4">
+                    <p className="mb-2 text-[13px] font-medium text-foreground">
+                      {t("batchDetail.applyLogistics")}
+                    </p>
+                    <p className="mb-3 text-[12px] text-muted">
+                      {t("batchDetail.applyLogisticsHint")}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <Select
+                        className="!w-[260px]"
+                        value={logisticsTemplateId}
+                        onChange={(e) =>
+                          setLogisticsTemplateId(e.target.value)
+                        }
+                      >
+                        <option value="">
+                          {t("batchDetail.applyLogisticsChoose")}
+                        </option>
+                        {rankLogisticsTemplates(
+                          data.logisticsTemplates ?? [],
+                          {
+                            supplierId: draft.supplierId,
+                            supplierCountry: supplier?.country,
+                            incoterm: resolveCommercial(supplier, null, draft)
+                              .incoterm,
+                          },
+                        ).map((tpl) => (
+                          <option key={tpl.id} value={tpl.id}>
+                            {tpl.name}
+                          </option>
+                        ))}
+                      </Select>
+                      <Button
+                        variant="secondary"
+                        disabled={!logisticsTemplateId}
+                        onClick={() => {
+                          const tpl = (data.logisticsTemplates ?? []).find(
+                            (x) => x.id === logisticsTemplateId,
+                          );
+                          if (!tpl) return;
+                          const added = logisticsTemplateToCostItems(
+                            tpl,
+                            data.logisticsBuildingBlocks ?? [],
+                          );
+                          if (added.length === 0) return;
+                          setDraft({
+                            ...draft,
+                            costItems: [...draft.costItems, ...added],
+                          });
+                          setLogisticsTemplateId("");
+                        }}
+                      >
+                        {t("batchDetail.applyLogisticsAppend")}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="mt-4 border-t border-line pt-4 text-[12px] text-muted">
+                    {t("batchDetail.applyLogisticsEmpty")}{" "}
+                    <Link href="/logistics" className="text-accent hover:underline">
+                      {t("nav.logistics")}
+                    </Link>
+                  </p>
+                )}
               </Card>
               <Card>
                 <div className="mb-4 flex items-center justify-between gap-2">

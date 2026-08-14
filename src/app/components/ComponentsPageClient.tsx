@@ -20,6 +20,14 @@ import {
   TextInput,
 } from "@/components/ui";
 
+type SortKey =
+  | "name"
+  | "sku"
+  | "supplier"
+  | "price"
+  | "products"
+  | "totalQty";
+
 export default function ComponentsPage() {
   const {
     ready,
@@ -38,11 +46,13 @@ export default function ComponentsPage() {
     name: string;
     products: string[];
   } | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     const links = data.productComponents ?? [];
-    return data.components
+    const filtered = data.components
       .map((component) => {
         const supplier = data.suppliers.find(
           (s) => s.id === component.supplierId,
@@ -70,9 +80,53 @@ export default function ComponentsPage() {
           component.sku.toLowerCase().includes(q) ||
           (supplier?.name.toLowerCase().includes(q) ?? false)
         );
-      })
-      .sort((a, b) => a.component.name.localeCompare(b.component.name, lang));
-  }, [data, query, filterSupplier, lang]);
+      });
+
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      switch (sortKey) {
+        case "name":
+          return a.component.name.localeCompare(b.component.name, lang) * dir;
+        case "sku":
+          return (
+            (a.component.sku || "").localeCompare(b.component.sku || "", lang) *
+            dir
+          );
+        case "supplier":
+          return (
+            (a.supplier?.name || "").localeCompare(
+              b.supplier?.name || "",
+              lang,
+            ) * dir
+          );
+        case "price":
+          return (
+            (a.component.purchasePricePerUnit -
+              b.component.purchasePricePerUnit) *
+            dir
+          );
+        case "products":
+          return (a.productCount - b.productCount) * dir;
+        case "totalQty":
+          return (a.totalQty - b.totalQty) * dir;
+        default:
+          return 0;
+      }
+    });
+  }, [data, query, filterSupplier, lang, sortKey, sortDir]);
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir(
+        key === "price" || key === "products" || key === "totalQty"
+          ? "desc"
+          : "asc",
+      );
+    }
+  }
 
   if (!ready) {
     return <p className="text-[13px] text-muted">{t("common.loading")}</p>;
@@ -194,24 +248,45 @@ export default function ComponentsPage() {
             <table className="w-full min-w-[900px] text-left text-[13px]">
               <thead>
                 <tr className="border-b border-line bg-surface-faint text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
-                  <th className="px-4 py-2.5 font-medium">
-                    {t("productModal.componentName")}
-                  </th>
-                  <th className="px-4 py-2.5 font-medium">
-                    {t("components.col.sku")}
-                  </th>
-                  <th className="px-4 py-2.5 font-medium">
-                    {t("components.col.supplier")}
-                  </th>
-                  <th className="px-4 py-2.5 text-right font-medium">
-                    {t("productModal.componentPrice")}
-                  </th>
-                  <th className="px-4 py-2.5 text-right font-medium">
-                    {t("components.col.products")}
-                  </th>
-                  <th className="px-4 py-2.5 text-right font-medium">
-                    {t("components.col.totalQty")}
-                  </th>
+                  <SortTh
+                    label={t("productModal.componentName")}
+                    active={sortKey === "name"}
+                    dir={sortDir}
+                    onClick={() => toggleSort("name")}
+                  />
+                  <SortTh
+                    label={t("components.col.sku")}
+                    active={sortKey === "sku"}
+                    dir={sortDir}
+                    onClick={() => toggleSort("sku")}
+                  />
+                  <SortTh
+                    label={t("components.col.supplier")}
+                    active={sortKey === "supplier"}
+                    dir={sortDir}
+                    onClick={() => toggleSort("supplier")}
+                  />
+                  <SortTh
+                    label={t("productModal.componentPrice")}
+                    active={sortKey === "price"}
+                    dir={sortDir}
+                    align="right"
+                    onClick={() => toggleSort("price")}
+                  />
+                  <SortTh
+                    label={t("components.col.products")}
+                    active={sortKey === "products"}
+                    dir={sortDir}
+                    align="right"
+                    onClick={() => toggleSort("products")}
+                  />
+                  <SortTh
+                    label={t("components.col.totalQty")}
+                    active={sortKey === "totalQty"}
+                    dir={sortDir}
+                    align="right"
+                    onClick={() => toggleSort("totalQty")}
+                  />
                   <th className="w-28 px-3 py-2.5" />
                 </tr>
               </thead>
@@ -274,5 +349,40 @@ export default function ComponentsPage() {
         </Link>
       </p>
     </div>
+  );
+}
+
+function SortTh({
+  label,
+  active,
+  dir,
+  align = "left",
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  dir: "asc" | "desc";
+  align?: "left" | "right";
+  onClick: () => void;
+}) {
+  return (
+    <th
+      className={`px-4 py-2.5 font-medium ${
+        align === "right" ? "text-right" : "text-left"
+      }`}
+    >
+      <button
+        type="button"
+        onClick={onClick}
+        className={`inline-flex items-center gap-1 transition-colors hover:text-foreground ${
+          active ? "text-foreground" : "text-muted-soft"
+        } ${align === "right" ? "ml-auto" : ""}`}
+      >
+        {label}
+        <span className="text-[10px] tabular-nums" aria-hidden>
+          {active ? (dir === "asc" ? "↑" : "↓") : "↕"}
+        </span>
+      </button>
+    </th>
   );
 }

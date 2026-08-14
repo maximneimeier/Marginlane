@@ -7,6 +7,10 @@ import {
   normalizeSalesPlanRowMeta,
   normalizeSalesPlanSettings,
 } from "./salesPlan";
+import {
+  normalizeLogisticsBuildingBlock,
+  normalizeLogisticsTemplate,
+} from "./logistics";
 import type {
   AppData,
   Batch,
@@ -469,6 +473,31 @@ export function migrateAppData(raw: unknown): AppData {
       | undefined,
   );
 
+  const logisticsBuildingBlocks = Array.isArray(
+    (input as { logisticsBuildingBlocks?: unknown }).logisticsBuildingBlocks,
+  )
+    ? (
+        (input as { logisticsBuildingBlocks: unknown[] })
+          .logisticsBuildingBlocks
+      ).map((raw) =>
+        normalizeLogisticsBuildingBlock(
+          (raw ?? {}) as Parameters<typeof normalizeLogisticsBuildingBlock>[0],
+        ),
+      )
+    : [];
+
+  const logisticsTemplates = Array.isArray(
+    (input as { logisticsTemplates?: unknown }).logisticsTemplates,
+  )
+    ? (
+        (input as { logisticsTemplates: unknown[] }).logisticsTemplates
+      ).map((raw) =>
+        normalizeLogisticsTemplate(
+          (raw ?? {}) as Parameters<typeof normalizeLogisticsTemplate>[0],
+        ),
+      )
+    : [];
+
   return {
     suppliers,
     catalogProducts,
@@ -476,6 +505,8 @@ export function migrateAppData(raw: unknown): AppData {
     productComponents,
     dealers,
     batches,
+    logisticsBuildingBlocks,
+    logisticsTemplates,
     overheadItems: migratedOverhead,
     overheadActuals: migratedActuals.sort((a, b) =>
       a.month === b.month

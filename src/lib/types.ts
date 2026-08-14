@@ -401,6 +401,10 @@ export type AppData = {
   productComponents: ProductComponent[];
   dealers: Dealer[];
   batches: Batch[];
+  /** Wiederverwendbare Logistik-Kostenbausteine */
+  logisticsBuildingBlocks: LogisticsBuildingBlock[];
+  /** Zusammenstellungen von Bausteinen (Lanes / Vorlagen) */
+  logisticsTemplates: LogisticsTemplate[];
   /** Plan: budgetierte wiederkehrende Positionen */
   overheadItems: OverheadItem[];
   /** Ist: tatsächlich erfasste, benannte Ausgaben */
@@ -411,6 +415,48 @@ export type AppData = {
   salesPlanRowMeta: SalesPlanRowMeta[];
   /** Aktives Szenario + Freeze-Status */
   salesPlanSettings: SalesPlanSettings;
+};
+
+/** Phasen, die Logistik-Bausteine typischerweise nutzen */
+export const LOGISTICS_PHASES: CostPhase[] = ["transport", "lager"];
+
+/**
+ * Stammdatensatz: einzelner wiederverwendbarer Logistik-Kostenbaustein.
+ */
+export type LogisticsBuildingBlock = {
+  id: string;
+  name: string;
+  phase: CostPhase;
+  allocation: CostAllocation;
+  /** null = beim Anwenden Betrag manuell setzen */
+  defaultAmount: number | null;
+  notes: string;
+};
+
+/** Zeile in einer Logistik-Vorlage */
+export type LogisticsTemplateItem = {
+  id: string;
+  buildingBlockId: string;
+  /** null = Default-Betrag des Bausteins übernehmen */
+  amountOverride: number | null;
+};
+
+/**
+ * Vorlage („Lane“): geordnete Bausteine, optional gefiltert nach Incoterm/Route/Lieferant.
+ */
+export type LogisticsTemplate = {
+  id: string;
+  name: string;
+  /** "" = beliebig */
+  incoterm: string;
+  /** ISO-Land oder "" */
+  originCountry: string;
+  /** ISO-Land oder "" */
+  destinationCountry: string;
+  /** "" = beliebig */
+  supplierId: string;
+  notes: string;
+  items: LogisticsTemplateItem[];
 };
 
 export const COST_TYPE_PRESETS = [
@@ -603,6 +649,8 @@ export const EMPTY_DATA: AppData = {
   productComponents: [],
   dealers: [],
   batches: [],
+  logisticsBuildingBlocks: [],
+  logisticsTemplates: [],
   overheadItems: [],
   overheadActuals: [],
   salesPlan: [],

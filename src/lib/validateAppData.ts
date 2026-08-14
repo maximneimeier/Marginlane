@@ -266,6 +266,55 @@ export function validateAppData(raw: unknown): ValidationIssue[] {
     }
   }
 
+  const blockIds = new Set(
+    (data.logisticsBuildingBlocks ?? []).map((b) => b.id),
+  );
+  for (const block of data.logisticsBuildingBlocks ?? []) {
+    const base = `logisticsBuildingBlocks[${block.id}]`;
+    if (!block.name.trim()) {
+      issues.push({
+        path: `${base}.name`,
+        message: "Logistics building block name is required",
+      });
+    }
+    if (
+      block.defaultAmount != null &&
+      !isNonNegNumber(block.defaultAmount)
+    ) {
+      issues.push({
+        path: `${base}.defaultAmount`,
+        message: "Logistics building block amount must be ≥ 0",
+      });
+    }
+  }
+
+  for (const tpl of data.logisticsTemplates ?? []) {
+    const base = `logisticsTemplates[${tpl.id}]`;
+    if (!tpl.name.trim()) {
+      issues.push({
+        path: `${base}.name`,
+        message: "Logistics template name is required",
+      });
+    }
+    for (const item of tpl.items ?? []) {
+      if (item.buildingBlockId && !blockIds.has(item.buildingBlockId)) {
+        issues.push({
+          path: `${base}.items[${item.id}].buildingBlockId`,
+          message: "Template item must reference an existing building block",
+        });
+      }
+      if (
+        item.amountOverride != null &&
+        !isNonNegNumber(item.amountOverride)
+      ) {
+        issues.push({
+          path: `${base}.items[${item.id}].amountOverride`,
+          message: "Template item amount override must be ≥ 0",
+        });
+      }
+    }
+  }
+
   return issues;
 }
 
