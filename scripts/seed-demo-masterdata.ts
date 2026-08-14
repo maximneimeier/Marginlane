@@ -11,14 +11,17 @@ import {
 } from "../src/lib/db/workspace";
 import type {
   AppData,
+  Batch,
   CatalogProduct,
   Component,
   CostItem,
   Dealer,
   LogisticsBuildingBlock,
   LogisticsTemplate,
+  OverheadItem,
   ProductComponent,
   ProductDocument,
+  Sale,
   Supplier,
 } from "../src/lib/types";
 import { formatPaymentTerms } from "../src/lib/types";
@@ -667,6 +670,183 @@ const LOGISTICS_TEMPLATES: LogisticsTemplate[] = [
   },
 ];
 
+function costItemsFromTemplate(
+  batchKey: string,
+  template: LogisticsTemplate,
+  blocks: LogisticsBuildingBlock[],
+): CostItem[] {
+  const byId = new Map(blocks.map((b) => [b.id, b]));
+  const out: CostItem[] = [];
+  for (const item of template.items) {
+    const block = byId.get(item.buildingBlockId);
+    if (!block) continue;
+    const amount =
+      item.amountOverride != null
+        ? item.amountOverride
+        : (block.defaultAmount ?? 0);
+    out.push({
+      id: `cost_${batchKey}_${item.id}`,
+      type: block.name,
+      label: block.name,
+      amount,
+      allocation: block.allocation,
+      phase: block.phase,
+    });
+  }
+  return out;
+}
+
+function sale(partial: Omit<Sale, "channel"> & { channel?: Sale["channel"] }): Sale {
+  return {
+    channel: "",
+    ...partial,
+  };
+}
+
+const tplById = Object.fromEntries(
+  LOGISTICS_TEMPLATES.map((t) => [t.id, t]),
+) as Record<string, LogisticsTemplate>;
+
+const BATCHES: Batch[] = [
+  {
+    id: "bat_demo_lounge",
+    productId: "prd_demo_lounge",
+    supplierId: "sup_demo_vinh",
+    label: "Lounge Q3 — Container HCMC",
+    quantity: 40,
+    unitPurchasePrice: null,
+    currency: null,
+    paymentDays: null,
+    paymentUnit: null,
+    skontoPercent: null,
+    skontoDays: null,
+    incoterm: "FOB",
+    costItems: costItemsFromTemplate(
+      "lounge",
+      tplById.ltpl_demo_vn_sea,
+      LOGISTICS_BLOCKS,
+    ),
+    sales: [
+      sale({
+        id: "sale_demo_lounge_1",
+        dealerId: "dlr_demo_gartenwelt",
+        salePricePerUnit: null,
+        quantity: 40,
+        channel: "b2b",
+        costItems: null,
+      }),
+    ],
+    createdAt: NOW,
+  },
+  {
+    id: "bat_demo_bike",
+    productId: "prd_demo_bike",
+    supplierId: "sup_demo_ningbo",
+    label: "Bike-Acc Q3 — Ningbo",
+    quantity: 2000,
+    unitPurchasePrice: null,
+    currency: null,
+    paymentDays: null,
+    paymentUnit: null,
+    skontoPercent: null,
+    skontoDays: null,
+    incoterm: "FOB",
+    costItems: costItemsFromTemplate(
+      "bike",
+      tplById.ltpl_demo_cn_sea,
+      LOGISTICS_BLOCKS,
+    ),
+    sales: [
+      sale({
+        id: "sale_demo_bike_1",
+        dealerId: "dlr_demo_bikestop",
+        salePricePerUnit: null,
+        quantity: 1500,
+        channel: "retail",
+        costItems: null,
+      }),
+      sale({
+        id: "sale_demo_bike_2",
+        dealerId: null,
+        salePricePerUnit: 9.9,
+        quantity: 500,
+        channel: "online",
+        costItems: [],
+      }),
+    ],
+    createdAt: NOW,
+  },
+  {
+    id: "bat_demo_xmas",
+    productId: "prd_demo_xmas",
+    supplierId: "sup_demo_yiwu",
+    label: "Xmas-Set — CIF Yiwu",
+    quantity: 5000,
+    unitPurchasePrice: null,
+    currency: null,
+    paymentDays: null,
+    paymentUnit: null,
+    skontoPercent: null,
+    skontoDays: null,
+    incoterm: "CIF",
+    costItems: costItemsFromTemplate(
+      "xmas",
+      tplById.ltpl_demo_cif,
+      LOGISTICS_BLOCKS,
+    ),
+    sales: [
+      sale({
+        id: "sale_demo_xmas_1",
+        dealerId: "dlr_demo_saison",
+        salePricePerUnit: null,
+        quantity: 5000,
+        channel: "marketplace",
+        costItems: null,
+      }),
+    ],
+    createdAt: NOW,
+  },
+];
+
+const OVERHEAD: OverheadItem[] = [
+  {
+    id: "oh_demo_warehouse",
+    name: "Lagermiete Halle Süd",
+    betrag: 3200,
+    waehrung: "EUR",
+    periode: "monatlich",
+    kategorie: "fertigungsgemeinkosten",
+    kostenart: "fix",
+    variableBasis: null,
+    variableRate: null,
+    verteilschluessel: "nach_stueckzahl",
+    manuelleAufteilung: null,
+    gueltigVon: null,
+    gueltigBis: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+    updatedBy: null,
+  },
+  {
+    id: "oh_demo_warehouse_staff",
+    name: "Lagerpersonal (Wareneingang)",
+    betrag: 4800,
+    waehrung: "EUR",
+    periode: "monatlich",
+    kategorie: "fertigungsgemeinkosten",
+    kostenart: "fix",
+    variableBasis: null,
+    variableRate: null,
+    verteilschluessel: "nach_stueckzahl",
+    manuelleAufteilung: null,
+    gueltigVon: null,
+    gueltigBis: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+    updatedBy: null,
+  },
+];
+
 const DEALERS: Dealer[] = [
   {
     id: "dlr_demo_gartenwelt",
@@ -793,7 +973,11 @@ async function main() {
       current.logisticsTemplates ?? [],
       LOGISTICS_TEMPLATES,
     ),
-    batches: current.batches.filter((b) => !removedIds.includes(b.productId)),
+    batches: upsertById(
+      current.batches.filter((b) => !removedIds.includes(b.productId)),
+      BATCHES,
+    ),
+    overheadItems: upsertById(current.overheadItems ?? [], OVERHEAD),
     salesPlan: (current.salesPlan ?? []).filter(
       (c) => !removedIds.includes(c.productId),
     ),
@@ -817,6 +1001,10 @@ async function main() {
   console.log(`  Händler:     ${DEALERS.length} (gesamt ${saved.dealers.length})`);
   console.log(
     `  Logistik:    ${LOGISTICS_BLOCKS.length} Bausteine, ${LOGISTICS_TEMPLATES.length} Vorlagen`,
+  );
+  console.log(`  Chargen:     ${BATCHES.length} (gesamt ${saved.batches.length})`);
+  console.log(
+    `  Overhead:    ${OVERHEAD.length} (gesamt ${saved.overheadItems.length})`,
   );
 }
 
