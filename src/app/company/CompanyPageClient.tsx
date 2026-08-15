@@ -29,10 +29,20 @@ import {
   parseLocalizedNumber,
   combinedIncomeTaxPercent,
   deEffectiveGewerbesteuerPercent,
-  chCantonalMunicipalPercent,
 } from "@/lib/companySettings";
+import {
+  assessSwissTaxPlausibility,
+  computeSwissTax,
+} from "@/lib/taxModels";
 import { formatNumber } from "@/lib/format";
 import { Button, Card, Field, PageHeader, Select, TextInput } from "@/components/ui";
+
+function formatTaxRate(value: number, locale: string): string {
+  return new Intl.NumberFormat(locale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
 
 type CompanyTab =
   | "general"
@@ -165,6 +175,191 @@ function NumField(props: {
   const { numberFormat, locale } = useContext(NumberInputCtx);
   return (
     <NumberField {...props} numberFormat={numberFormat} locale={locale} />
+  );
+}
+
+function SwissTaxSection({
+  settings,
+  patch,
+  locale,
+  t,
+}: {
+  settings: CompanySettings;
+  patch: (partial: Partial<CompanySettings>) => void;
+  locale: string;
+  t: (key: MessageKey, vars?: Record<string, string | number>) => string;
+}) {
+  const taxYear =
+    (settings.modelStartMonth || settings.lastActualMonth || "").slice(0, 4) ||
+    String(new Date().getFullYear());
+  const swiss = computeSwissTax(settings);
+  const plausibility = assessSwissTaxPlausibility(swiss);
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-[8px] border border-line bg-surface-soft px-3 py-2">
+        <p className="text-[13px] font-medium text-foreground">
+          {t("company.ch.taxYear", { year: taxYear })}
+        </p>
+        <p className="mt-0.5 text-[12px] text-muted">
+          {t("company.ch.taxYearHint")}
+        </p>
+      </div>
+
+      <Field
+        label={t("company.field.chFederal")}
+        hint={t("company.field.chFederalHint")}
+      >
+        <NumField
+          value={settings.chFederalTaxPercent}
+          onValueChange={(n) => patch({ chFederalTaxPercent: n ?? 0 })}
+        />
+      </Field>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field
+          label={t("company.field.chCantonalBase")}
+          hint={t("company.field.chCantonalBaseHint")}
+        >
+          <NumField
+            value={settings.chCantonalTaxPercent}
+            onValueChange={(n) => patch({ chCantonalTaxPercent: n ?? 0 })}
+          />
+        </Field>
+        <Field
+          label={t("company.field.chCantonalFoot")}
+          hint={t("company.field.chCantonalFootHint")}
+        >
+          <NumField
+            value={settings.chCantonalTaxFoot}
+            onValueChange={(n) => patch({ chCantonalTaxFoot: n ?? 0 })}
+          />
+        </Field>
+      </div>
+
+      <Field
+        label={t("company.field.chMunicipalFoot")}
+        hint={t("company.field.chMunicipalFootHint")}
+      >
+        <NumField
+          value={settings.chMunicipalTaxFoot}
+          onValueChange={(n) => patch({ chMunicipalTaxFoot: n ?? 0 })}
+        />
+      </Field>
+
+      <div className="rounded-[10px] border border-line p-3">
+        <p className="mb-3 text-[13px] font-medium text-foreground">
+          {t("company.ch.breakdownTitle")}
+        </p>
+        <div className="space-y-2.5 text-[13px]">
+          <div className="flex items-start justify-between gap-3">
+            <span className="text-muted">{t("company.ch.line.federal")}</span>
+            <span className="font-medium tabular-nums">
+              {formatTaxRate(swiss.federalPercent, locale)} %
+            </span>
+          </div>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-muted">{t("company.ch.line.cantonal")}</p>
+              <p className="text-[12px] text-muted">
+                {t("company.ch.formula.multiply", {
+                  base: formatTaxRate(swiss.cantonalBasePercent, locale),
+                  foot: formatTaxRate(swiss.cantonalTaxFootPercent, locale),
+                })}
+              </p>
+            </div>
+            <span className="font-medium tabular-nums">
+              {formatTaxRate(swiss.cantonalEffectivePercent, locale)} %
+            </span>
+          </div>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-muted">{t("company.ch.line.municipal")}</p>
+              <p className="text-[12px] text-muted">
+                {t("company.ch.formula.multiply", {
+                  base: formatTaxRate(swiss.cantonalBasePercent, locale),
+                  foot: formatTaxRate(swiss.municipalTaxFootPercent, locale),
+                })}
+              </p>
+            </div>
+            <span className="font-medium tabular-nums">
+              {formatTaxRate(swiss.municipalEffectivePercent, locale)} %
+            </span>
+          </div>
+          <div className="border-t border-line pt-2.5">
+            <div className="flex items-start justify-between gap-3">
+              <span className="font-medium text-foreground">
+                {t("company.ch.nominalTotal")}
+              </span>
+              <span className="font-semibold tabular-nums">
+                {formatTaxRate(swiss.nominalCombinedPercent, locale)} %
+              </span>
+            </div>
+            <div className="mt-2 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-muted">{t("company.ch.effectiveTotal")}</p>
+                <p className="text-[12px] text-muted">
+                  {t("company.ch.effectiveHint")}
+                </p>
+              </div>
+              <span className="font-medium tabular-nums">
+                {formatTaxRate(swiss.effectiveCombinedPercent, locale)} %
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-3 rounded-[10px] border border-line p-3">
+        <p className="text-[13px] font-medium text-foreground">
+          {t("company.ch.capitalTitle")}
+        </p>
+        <label className="flex cursor-pointer items-center gap-2 text-[13px]">
+          <input
+            type="checkbox"
+            checked={settings.chCapitalTaxEnabled}
+            onChange={(e) => patch({ chCapitalTaxEnabled: e.target.checked })}
+            className="size-4 rounded border-line"
+          />
+          {t("company.ch.capitalEnable")}
+        </label>
+        {settings.chCapitalTaxEnabled ? (
+          <Field
+            label={t("company.field.chCapitalTax")}
+            hint={t("company.field.chCapitalTaxHint")}
+          >
+            <NumField
+              value={settings.chCapitalTaxPermille}
+              onValueChange={(n) => patch({ chCapitalTaxPermille: n ?? 0 })}
+            />
+          </Field>
+        ) : null}
+        <p className="text-[12px] text-muted">
+          {t("company.ch.capitalSeparate")}
+          {swiss.capitalTaxPermille != null
+            ? ` ${formatTaxRate(swiss.capitalTaxPermille, locale)} ‰`
+            : ""}
+        </p>
+      </div>
+
+      <div
+        className={`rounded-[10px] border px-3 py-2.5 ${
+          plausibility.level === "warn"
+            ? "border-amber-300 bg-amber-50"
+            : "border-line bg-surface-soft"
+        }`}
+      >
+        <p className="mb-1 text-[13px] font-medium text-foreground">
+          {t("company.ch.plausibilityTitle")}
+        </p>
+        <p className="text-[12.5px] leading-relaxed text-muted">
+          {plausibility.level === "ok" ? "✓ " : "⚠ "}
+          {t(plausibility.messageKey, {
+            rate: formatTaxRate(swiss.nominalCombinedPercent, locale),
+          })}
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -818,51 +1013,7 @@ export default function CompanyPageClient() {
             ) : null}
 
             {settings.taxRegime === "ch" ? (
-              <div className="space-y-4">
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <Field
-                    label={t("company.field.chFederal")}
-                    hint={t("company.field.chFederalHint")}
-                  >
-                    <NumField
-                      value={settings.chFederalTaxPercent}
-                      onValueChange={(n) =>
-                        patch({ chFederalTaxPercent: n ?? 0 })
-                      }
-                    />
-                  </Field>
-                  <Field
-                    label={t("company.field.chCantonal")}
-                    hint={t("company.field.chCantonalHint")}
-                  >
-                    <NumField
-                      value={settings.chCantonalTaxPercent}
-                      onValueChange={(n) =>
-                        patch({ chCantonalTaxPercent: n ?? 0 })
-                      }
-                    />
-                  </Field>
-                  <Field
-                    label={t("company.field.chMunicipalFoot")}
-                    hint={t("company.field.chMunicipalFootHint")}
-                  >
-                    <NumField
-                      value={settings.chMunicipalTaxFoot}
-                      onValueChange={(n) =>
-                        patch({ chMunicipalTaxFoot: n ?? 0 })
-                      }
-                    />
-                  </Field>
-                </div>
-                <p className="text-[13px] text-muted">
-                  {t("company.ch.cantonalMunicipal", {
-                    rate: formatNumber(
-                      chCantonalMunicipalPercent(settings),
-                      locale,
-                    ),
-                  })}
-                </p>
-              </div>
+              <SwissTaxSection settings={settings} patch={patch} locale={locale} t={t} />
             ) : null}
 
             {SIMPLE_TAX_REGIMES.includes(settings.taxRegime) ? (
@@ -895,31 +1046,28 @@ export default function CompanyPageClient() {
               </div>
             ) : null}
 
-            <div className="rounded-[8px] bg-surface-soft px-3 py-2">
-              <p className="text-[13px] font-medium text-foreground">
-                {t("company.combinedTaxRate", {
-                  rate: formatNumber(
-                    combinedIncomeTaxPercent(settings),
-                    locale,
-                  ),
-                })}
-              </p>
-              {settings.taxRegime === "us" ? (
-                <p className="mt-0.5 text-[12px] text-muted">
-                  {t("company.us.combinedRateHint")}
+            {settings.taxRegime !== "ch" ? (
+              <div className="rounded-[8px] bg-surface-soft px-3 py-2">
+                <p className="text-[13px] font-medium text-foreground">
+                  {t("company.combinedTaxRate", {
+                    rate: formatNumber(
+                      combinedIncomeTaxPercent(settings),
+                      locale,
+                    ),
+                  })}
                 </p>
-              ) : null}
-              {settings.taxRegime === "de" ? (
-                <p className="mt-0.5 text-[12px] text-muted">
-                  {t("company.de.combinedRateHint")}
-                </p>
-              ) : null}
-              {settings.taxRegime === "ch" ? (
-                <p className="mt-0.5 text-[12px] text-muted">
-                  {t("company.ch.combinedRateHint")}
-                </p>
-              ) : null}
-            </div>
+                {settings.taxRegime === "us" ? (
+                  <p className="mt-0.5 text-[12px] text-muted">
+                    {t("company.us.combinedRateHint")}
+                  </p>
+                ) : null}
+                {settings.taxRegime === "de" ? (
+                  <p className="mt-0.5 text-[12px] text-muted">
+                    {t("company.de.combinedRateHint")}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         ) : null}
 

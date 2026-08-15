@@ -264,10 +264,16 @@ export type CompanySettings = {
   usTaxJurisdictions: UsTaxJurisdiction[];
   /** CH: Direkte Bundessteuer % (nominal typisch 8,5) */
   chFederalTaxPercent: number;
-  /** CH: Kantonale Gewinnsteuer % (Basissatz) */
+  /** CH: Kantonaler Gewinnsteuer-Grundtarif % */
   chCantonalTaxPercent: number;
-  /** CH: Gemeindesteuerfuss (Multiplikator auf Kanton, z. B. 100) */
+  /** CH: Kantonaler Steuerfuss % (Multiplikator auf Grundtarif) */
+  chCantonalTaxFoot: number;
+  /** CH: Gemeindesteuerfuss % (auf kantonalen Grundtarif) */
   chMunicipalTaxFoot: number;
+  /** CH: optionale Kapitalsteuer aktiv */
+  chCapitalTaxEnabled: boolean;
+  /** CH: Kapitalsteuersatz in ‰ (nur wenn aktiv) */
+  chCapitalTaxPermille: number;
   /** UK / NL / other: Körperschaft- bzw. Gesamtsteuersatz % */
   corporateTaxPercent: number;
   /** Bei Regime „other“: freier Ländername */
@@ -303,8 +309,11 @@ export const EMPTY_COMPANY_SETTINGS: CompanySettings = {
   usFederalIncomeTaxPercent: 21,
   usTaxJurisdictions: [],
   chFederalTaxPercent: 8.5,
-  chCantonalTaxPercent: 0,
+  chCantonalTaxPercent: 3.5,
+  chCantonalTaxFoot: 100,
   chMunicipalTaxFoot: 100,
+  chCapitalTaxEnabled: false,
+  chCapitalTaxPermille: 0,
   corporateTaxPercent: 25,
   otherTaxCountryName: "",
   vatRatePercent: 19,

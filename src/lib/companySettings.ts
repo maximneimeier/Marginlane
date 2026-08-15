@@ -10,6 +10,19 @@ import {
 } from "./types";
 import { EMPTY_COMPANY_SETTINGS, VAT_FILING_CADENCES } from "./types";
 import { createId } from "./format";
+import {
+  computeIncomeTax,
+  computeSwissTax,
+  deCombinedIncomeTaxPercent,
+  deEffectiveGewerbesteuerPercent,
+  usCombinedIncomeTaxPercent,
+} from "./taxModels";
+
+export {
+  deCombinedIncomeTaxPercent,
+  deEffectiveGewerbesteuerPercent,
+  usCombinedIncomeTaxPercent,
+};
 
 function finiteNumber(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
@@ -116,86 +129,25 @@ export function normalizeUsTaxJurisdiction(
   };
 }
 
-/** Federal + gewichtete State-Sätze (ohne Franchise). */
-export function usCombinedIncomeTaxPercent(settings: {
-  usFederalIncomeTaxPercent: number;
-  usTaxJurisdictions: UsTaxJurisdiction[];
-}): number {
-  const federal = Math.max(0, settings.usFederalIncomeTaxPercent || 0);
-  let state = 0;
-  for (const j of settings.usTaxJurisdictions ?? []) {
-    const rate = Math.max(0, j.incomeTaxPercent || 0);
-    const ap = Math.max(0, j.apportionmentPercent || 0) / 100;
-    state += rate * ap;
-  }
-  return federal + state;
-}
-
-/** Effektive GewSt % = Messzahl × Hebesatz / 100 */
-export function deEffectiveGewerbesteuerPercent(settings: {
-  gewerbesteuerMesszahlPercent: number;
-  gewerbesteuerHebesatz: number;
-}): number {
-  const messzahl = Math.max(0, settings.gewerbesteuerMesszahlPercent || 0);
-  const hebesatz = Math.max(0, settings.gewerbesteuerHebesatz || 0);
-  return (messzahl * hebesatz) / 100;
+/**
+ * Nominale CH-Gesamtsteuerbelastung vor Steuerabzug
+ * (Bund + kantonal effektiv + gemeindlich effektiv).
+ */
+export function chCombinedIncomeTaxPercent(
+  settings: CompanySettings,
+): number {
+  return computeSwissTax(settings).nominalCombinedPercent;
 }
 
 /**
- * DE-Gesamtbelastung (vereinfacht, Planung):
- * KSt × (1 + Soli%) + effektive GewSt.
+ * Planungs-Ertragsteuersatz je Regime.
+ * Schweiz: effektiver Satz bei abzugsfähiger Gewinnsteuer
+ * (nominal / (1 + nominal/100)); andere Regime: nominal.
  */
-export function deCombinedIncomeTaxPercent(settings: {
-  koerperschaftsteuerPercent: number;
-  solidaritaetszuschlagPercent: number;
-  gewerbesteuerMesszahlPercent: number;
-  gewerbesteuerHebesatz: number;
-}): number {
-  const kst = Math.max(0, settings.koerperschaftsteuerPercent || 0);
-  const soli = Math.max(0, settings.solidaritaetszuschlagPercent || 0);
-  const gewSt = deEffectiveGewerbesteuerPercent(settings);
-  return kst * (1 + soli / 100) + gewSt;
-}
-
-/** Effektive CH Kanton+Gemeinde % = Kanton × Steuerfuss / 100 */
-export function chCantonalMunicipalPercent(settings: {
-  chCantonalTaxPercent: number;
-  chMunicipalTaxFoot: number;
-}): number {
-  const kanton = Math.max(0, settings.chCantonalTaxPercent || 0);
-  const fuss = Math.max(0, settings.chMunicipalTaxFoot || 0);
-  return (kanton * fuss) / 100;
-}
-
-/**
- * CH-Gesamtbelastung (vereinfacht, Planung):
- * Bund + Kanton × Gemeindesteuerfuss/100.
- */
-export function chCombinedIncomeTaxPercent(settings: {
-  chFederalTaxPercent: number;
-  chCantonalTaxPercent: number;
-  chMunicipalTaxFoot: number;
-}): number {
-  const bund = Math.max(0, settings.chFederalTaxPercent || 0);
-  return bund + chCantonalMunicipalPercent(settings);
-}
-
-/** Effektiver Ertragsteuersatz je Regime (Anzeige). */
 export function combinedIncomeTaxPercent(
   settings: CompanySettings,
 ): number {
-  switch (settings.taxRegime) {
-    case "de":
-      return deCombinedIncomeTaxPercent(settings);
-    case "us":
-      return usCombinedIncomeTaxPercent(settings);
-    case "ch":
-      return chCombinedIncomeTaxPercent(settings);
-    case "other":
-      return Math.max(0, settings.corporateTaxPercent || 0);
-    default:
-      return 0;
-  }
+  return computeIncomeTax(settings).effectiveCombinedPercent;
 }
 
 export function normalizeCompanySettings(
@@ -310,9 +262,20 @@ export function normalizeCompanySettings(
       raw.chCantonalTaxPercent,
       EMPTY_COMPANY_SETTINGS.chCantonalTaxPercent,
     ),
+    chCantonalTaxFoot: finiteNumber(
+      (raw as { chCantonalTaxFoot?: unknown }).chCantonalTaxFoot,
+      EMPTY_COMPANY_SETTINGS.chCantonalTaxFoot,
+    ),
     chMunicipalTaxFoot: finiteNumber(
       raw.chMunicipalTaxFoot,
       EMPTY_COMPANY_SETTINGS.chMunicipalTaxFoot,
+    ),
+    chCapitalTaxEnabled: Boolean(
+      (raw as { chCapitalTaxEnabled?: unknown }).chCapitalTaxEnabled,
+    ),
+    chCapitalTaxPermille: finiteNumber(
+      (raw as { chCapitalTaxPermille?: unknown }).chCapitalTaxPermille,
+      EMPTY_COMPANY_SETTINGS.chCapitalTaxPermille,
     ),
     corporateTaxPercent: finiteNumber(
       raw.corporateTaxPercent,

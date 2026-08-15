@@ -611,15 +611,45 @@ const de = {
   "company.field.otherTaxCountry": "Land / Jurisdiktion",
   "company.field.otherTaxCountryPlaceholder": "z. B. Irland, Singapur, …",
   "company.field.chFederal": "Direkte Bundessteuer %",
-  "company.field.chFederalHint": "Nominal typisch 8,5 % (Planungswert)",
-  "company.field.chCantonal": "Kantonale Gewinnsteuer %",
-  "company.field.chCantonalHint": "Basissatz des Kantons",
-  "company.field.chMunicipalFoot": "Gemeindesteuerfuss",
+  "company.field.chFederalHint":
+    "Gesetzlicher Steuersatz der direkten Bundessteuer auf den Reingewinn einer Kapitalgesellschaft.",
+  "company.field.chCantonalBase": "Kantonaler Gewinnsteuer-Grundtarif %",
+  "company.field.chCantonalBaseHint":
+    "Einfacher kantonaler Grundtarif vor Anwendung des kantonalen Steuerfusses.",
+  "company.field.chCantonalFoot": "Kantonaler Steuerfuss %",
+  "company.field.chCantonalFootHint":
+    "Multiplikator auf den kantonalen Grundtarif. Beispiel: 78 bedeutet 78 % des Grundtarifs.",
+  "company.field.chMunicipalFoot": "Gemeindlicher Steuerfuss %",
   "company.field.chMunicipalFootHint":
-    "Multiplikator auf die Kantonssteuer, z. B. 100 oder 120",
-  "company.ch.cantonalMunicipal": "Kanton + Gemeinde (effektiv): {rate} %",
-  "company.ch.combinedRateHint":
-    "Berechnung: Bund + (Kanton × Gemeindesteuerfuss ÷ 100)",
+    "Steuerfuss der Gemeinde. Er wird auf Basis der einfachen kantonalen Steuer angewendet.",
+  "company.ch.taxYear": "Steuerjahr: {year}",
+  "company.ch.taxYearHint":
+    "Die Werte sind Planungsannahmen für dieses Steuerjahr — nicht automatisch amtlich aktuell.",
+  "company.ch.breakdownTitle": "Berechnung",
+  "company.ch.line.federal": "Direkte Bundessteuer",
+  "company.ch.line.cantonal": "Kantonale Gewinnsteuer",
+  "company.ch.line.municipal": "Gemeindliche Gewinnsteuer",
+  "company.ch.formula.multiply": "{base} % × {foot} %",
+  "company.ch.nominalTotal":
+    "Nominale Gesamtsteuerbelastung vor Steuerabzug",
+  "company.ch.effectiveTotal":
+    "Effektiver Steueraufwand relativ zum Gewinn",
+  "company.ch.effectiveHint":
+    "Bei abzugsfähiger Gewinnsteuer: nominal ÷ (1 + nominal/100).",
+  "company.ch.capitalTitle": "Kapitalsteuer",
+  "company.ch.capitalEnable": "Kapitalsteuer aktivieren",
+  "company.field.chCapitalTax": "Kapitalsteuersatz (‰)",
+  "company.field.chCapitalTaxHint":
+    "Optionale kantonale/kommunale Kapitalsteuer. Der konkrete Satz hängt vom Standort und der kantonalen Regelung ab.",
+  "company.ch.capitalSeparate":
+    "Nicht in den Gewinnsteuersatz eingerechnet.",
+  "company.ch.plausibilityTitle": "Steuerangaben prüfen",
+  "company.ch.plausibility.ok":
+    "Steuerparameter plausibel: Die eingegebenen Werte ergeben eine nominale Gesamtsteuerbelastung von {rate} %. Bitte beachte, dass die tatsächlichen kantonalen und kommunalen Steuerparameter vom Standort und Steuerjahr abhängen.",
+  "company.ch.plausibility.warn":
+    "Bitte prüfen: Die eingegebenen Schweizer Steuerparameter führen zu einer nominalen Gesamtsteuerbelastung von {rate} %. Prüfe, ob Grundtarif, kantonaler Steuerfuss und Gemeindesteuerfuss dem gewünschten Standort und Steuerjahr entsprechen.",
+  "company.ch.plausibility.warnParams":
+    "Bitte prüfen: Einzelne Schweizer Steuerparameter wirken ungewöhnlich. Nominale Gesamtsteuerbelastung: {rate} %. Werte werden nicht überschrieben — bitte Eingaben und Standort/Steuerjahr kontrollieren.",
   "company.field.vatRate": "USt-Satz %",
   "company.field.vatCadence": "Voranmeldungsrhythmus",
   "company.vatCadence.monthly": "Monatlich",
@@ -1947,15 +1977,45 @@ const en: Record<MessageKey, string> = {
   "company.field.otherTaxCountry": "Country / jurisdiction",
   "company.field.otherTaxCountryPlaceholder": "e.g. Ireland, Singapore, …",
   "company.field.chFederal": "Direct federal tax %",
-  "company.field.chFederalHint": "Nominal typically 8.5% (planning value)",
-  "company.field.chCantonal": "Cantonal profit tax %",
-  "company.field.chCantonalHint": "Cantonal base rate",
-  "company.field.chMunicipalFoot": "Municipal tax multiplier",
+  "company.field.chFederalHint":
+    "Statutory direct federal tax rate on a corporation’s net profit.",
+  "company.field.chCantonalBase": "Cantonal profit tax base rate %",
+  "company.field.chCantonalBaseHint":
+    "Simple cantonal base rate before applying the cantonal tax multiplier.",
+  "company.field.chCantonalFoot": "Cantonal tax multiplier %",
+  "company.field.chCantonalFootHint":
+    "Multiplier on the cantonal base rate. Example: 78 means 78% of the base rate.",
+  "company.field.chMunicipalFoot": "Municipal tax multiplier %",
   "company.field.chMunicipalFootHint":
-    "Multiplier on cantonal tax, e.g. 100 or 120",
-  "company.ch.cantonalMunicipal": "Canton + municipality (effective): {rate}%",
-  "company.ch.combinedRateHint":
-    "Formula: federal + (cantonal × municipal multiplier ÷ 100)",
+    "Municipal tax multiplier, applied to the simple cantonal tax base.",
+  "company.ch.taxYear": "Tax year: {year}",
+  "company.ch.taxYearHint":
+    "Values are planning assumptions for this tax year — not automatically official current rates.",
+  "company.ch.breakdownTitle": "Calculation",
+  "company.ch.line.federal": "Direct federal tax",
+  "company.ch.line.cantonal": "Cantonal profit tax",
+  "company.ch.line.municipal": "Municipal profit tax",
+  "company.ch.formula.multiply": "{base}% × {foot}%",
+  "company.ch.nominalTotal":
+    "Nominal overall tax burden before tax deductibility",
+  "company.ch.effectiveTotal":
+    "Effective tax expense relative to profit",
+  "company.ch.effectiveHint":
+    "When profit taxes are deductible: nominal ÷ (1 + nominal/100).",
+  "company.ch.capitalTitle": "Capital tax",
+  "company.ch.capitalEnable": "Enable capital tax",
+  "company.field.chCapitalTax": "Capital tax rate (‰)",
+  "company.field.chCapitalTaxHint":
+    "Optional cantonal/municipal capital tax. The rate depends on location and cantonal rules.",
+  "company.ch.capitalSeparate":
+    "Not included in the profit tax rate.",
+  "company.ch.plausibilityTitle": "Review tax inputs",
+  "company.ch.plausibility.ok":
+    "Tax parameters look plausible: the inputs yield a nominal overall tax burden of {rate}%. Note that actual cantonal and municipal parameters depend on location and tax year.",
+  "company.ch.plausibility.warn":
+    "Please review: these Swiss tax parameters yield a nominal overall tax burden of {rate}%. Check whether base rate, cantonal multiplier and municipal multiplier match the intended location and tax year.",
+  "company.ch.plausibility.warnParams":
+    "Please review: some Swiss tax parameters look unusual. Nominal overall tax burden: {rate}%. Values are not overwritten — verify inputs and location/tax year.",
   "company.field.vatRate": "VAT rate %",
   "company.field.vatCadence": "Filing cadence",
   "company.vatCadence.monthly": "Monthly",
