@@ -142,6 +142,8 @@ export default function OverheadPageClient() {
           </div>
           <p className="shrink-0 text-[12px] text-muted lg:pb-2">
             {t("overhead.itemCount", { count: data.overheadItems.length })}
+            {" · "}
+            {t("personnel.kpi.roles")}: {(data.personnelRoles ?? []).length}
           </p>
         </div>
         {FEATURES.overheadRunRate ? (

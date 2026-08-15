@@ -39,9 +39,9 @@ const NAV_GROUPS: NavGroup[] = [
     defaultOpen: true,
     links: [
       { href: "/overview", key: "nav.overview", icon: OverviewIcon },
-      { href: "/compare", key: "nav.compare", icon: CompareIcon },
     ],
   },
+
   {
     id: "planung",
     labelKey: "nav.group.planung",
@@ -450,14 +450,6 @@ function BatchesIcon({ active }: { active: boolean }) {
   return (
     <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={active ? "text-accent" : "text-muted-soft"}>
       <path d="M2.5 4.5h10M2.5 7.5h10M2.5 10.5h7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function CompareIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={active ? "text-accent" : "text-muted-soft"}>
-      <path d="M3 12V6.5M7.5 12V3.5M12 12V8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   );
 }

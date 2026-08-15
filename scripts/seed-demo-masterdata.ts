@@ -19,12 +19,14 @@ import type {
   LogisticsBuildingBlock,
   LogisticsTemplate,
   OverheadItem,
+  PersonnelRole,
   ProductComponent,
   ProductDocument,
   Sale,
   Supplier,
 } from "../src/lib/types";
-import { formatPaymentTerms } from "../src/lib/types";
+import { DEFAULT_LOHNNEBENKOSTEN_PERCENT, formatPaymentTerms } from "../src/lib/types";
+
 
 const NOW = new Date().toISOString();
 
@@ -847,6 +849,89 @@ const OVERHEAD: OverheadItem[] = [
   },
 ];
 
+const PERSONNEL: PersonnelRole[] = [
+  {
+    id: "prs_demo_ops",
+    name: "Operations / Einkauf",
+    bruttoGehalt: 4200,
+    lohnnebenkostenPercent: DEFAULT_LOHNNEBENKOSTEN_PERCENT,
+    headcount: 1,
+    waehrung: "EUR",
+    kategorie: "verwaltungsgemeinkosten",
+    verteilschluessel: "nach_stueckzahl",
+    manuelleAufteilung: null,
+    dependencies: [
+      {
+        id: "pdep_demo_ops_laptop",
+        name: "Laptop",
+        amount: 1200,
+        cadence: "einmalig",
+        scalesWithHeadcount: true,
+      },
+      {
+        id: "pdep_demo_ops_desk",
+        name: "Büroplatz",
+        amount: 350,
+        cadence: "monatlich",
+        scalesWithHeadcount: true,
+      },
+      {
+        id: "pdep_demo_ops_onboard",
+        name: "Onboarding / Vertrag",
+        amount: 400,
+        cadence: "einmalig",
+        scalesWithHeadcount: true,
+      },
+    ],
+    gueltigVon: null,
+    gueltigBis: null,
+    notes: "Demo-Rolle mit Laptop, Büroplatz, Onboarding",
+    createdAt: NOW,
+    updatedAt: NOW,
+    updatedBy: null,
+  },
+  {
+    id: "prs_demo_sales",
+    name: "Vertrieb Innendienst",
+    bruttoGehalt: 3800,
+    lohnnebenkostenPercent: DEFAULT_LOHNNEBENKOSTEN_PERCENT,
+    headcount: 2,
+    waehrung: "EUR",
+    kategorie: "vertriebsgemeinkosten",
+    verteilschluessel: "nach_umsatzanteil",
+    manuelleAufteilung: null,
+    dependencies: [
+      {
+        id: "pdep_demo_sales_laptop",
+        name: "Laptop",
+        amount: 1200,
+        cadence: "einmalig",
+        scalesWithHeadcount: true,
+      },
+      {
+        id: "pdep_demo_sales_desk",
+        name: "Büroplatz",
+        amount: 350,
+        cadence: "monatlich",
+        scalesWithHeadcount: true,
+      },
+      {
+        id: "pdep_demo_sales_onboard",
+        name: "Onboarding / Vertrag",
+        amount: 400,
+        cadence: "einmalig",
+        scalesWithHeadcount: true,
+      },
+    ],
+    gueltigVon: null,
+    gueltigBis: null,
+    notes: "",
+    createdAt: NOW,
+    updatedAt: NOW,
+    updatedBy: null,
+  },
+];
+
 const DEALERS: Dealer[] = [
   {
     id: "dlr_demo_gartenwelt",
@@ -978,6 +1063,7 @@ async function main() {
       BATCHES,
     ),
     overheadItems: upsertById(current.overheadItems ?? [], OVERHEAD),
+    personnelRoles: upsertById(current.personnelRoles ?? [], PERSONNEL),
     salesPlan: (current.salesPlan ?? []).filter(
       (c) => !removedIds.includes(c.productId),
     ),
@@ -1005,6 +1091,9 @@ async function main() {
   console.log(`  Chargen:     ${BATCHES.length} (gesamt ${saved.batches.length})`);
   console.log(
     `  Overhead:    ${OVERHEAD.length} (gesamt ${saved.overheadItems.length})`,
+  );
+  console.log(
+    `  Personal:    ${PERSONNEL.length} (gesamt ${(saved.personnelRoles ?? []).length})`,
   );
 }
 

@@ -15,6 +15,15 @@ import type {
 } from "./types";
 import { OVERHEAD_CATEGORIES } from "./types";
 import { resolvePlanUnitPrice } from "./salesPlan";
+import { expandPersonnelRolesToOverheadItems } from "./personnel";
+
+/** Plan-Positionen inkl. expandierter Personalrollen (für Umlegung & Totals). */
+export function effectivePlanOverheadItems(data: AppData): OverheadItem[] {
+  return [
+    ...(data.overheadItems ?? []),
+    ...expandPersonnelRolesToOverheadItems(data.personnelRoles ?? []),
+  ];
+}
 
 export type ProductActivity = {
   productId: string;
@@ -36,7 +45,10 @@ export type OverheadPeriodReport = {
   totalOverhead: number;
   totalDb3: number;
   operatingResult: number;
+  /** Klassische Gemeinkosten-Positionen (ohne expandiertes Personal) */
   items: Array<OverheadItem & { periodAmount: number }>;
+  /** Periodenanteil aus Personalrollen (Gehalt+NK + monatl. Pakete) */
+  personnelAmount: number;
   byProduct: OverheadProductAllocation[];
 };
 
@@ -520,7 +532,7 @@ export function buildOverheadAllocationIssues(
 
   const issues: OverheadAllocationIssue[] = [];
 
-  for (const item of data.overheadItems ?? []) {
+  for (const item of effectivePlanOverheadItems(data)) {
     if (item.verteilschluessel !== "manuell") continue;
 
     const shares = item.manuelleAufteilung ?? [];
@@ -804,29 +816,39 @@ export function buildOverheadReport(
   range: DateRange,
 ): OverheadPeriodReport {
   const totals = activityTotalsForRange(data, range);
-  const items = (data.overheadItems ?? []).map((item) => ({
+  const planItems = effectivePlanOverheadItems(data);
+  const personnelIds = new Set(
+    expandPersonnelRolesToOverheadItems(data.personnelRoles ?? []).map(
+      (i) => i.id,
+    ),
+  );
+
+  const withAmounts = planItems.map((item) => ({
     ...item,
     periodAmount: amountForRange(item, range, totals),
   }));
-  const totalOverhead = items.reduce((acc, item) => acc + item.periodAmount, 0);
+
+  const items = withAmounts
+    .filter((item) => !personnelIds.has(item.id))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const personnelAmount = withAmounts
+    .filter((item) => personnelIds.has(item.id))
+    .reduce((acc, item) => acc + item.periodAmount, 0);
+  const totalOverhead =
+    items.reduce((acc, item) => acc + item.periodAmount, 0) + personnelAmount;
   const overview = buildOverview(data, range, { productIds: null });
   const totalDb3 = overview.kpis.db3;
   const operatingResult = totalDb3 - totalOverhead;
 
   const activity = buildProductActivity(data, range);
-  const allocated = allocateOverheadToProducts(
-    data.overheadItems ?? [],
-    range,
-    data,
-  );
+  const allocated = allocateOverheadToProducts(planItems, range, data);
 
   const productIds = new Set<string>([
     ...activity.map((a) => a.productId),
     ...allocated.keys(),
   ]);
 
-  // Include manually referenced products even without activity
-  for (const item of data.overheadItems ?? []) {
+  for (const item of planItems) {
     for (const share of item.manuelleAufteilung ?? []) {
       productIds.add(share.productId);
     }
@@ -853,7 +875,8 @@ export function buildOverheadReport(
     totalOverhead,
     totalDb3,
     operatingResult,
-    items: items.sort((a, b) => a.name.localeCompare(b.name)),
+    items,
+    personnelAmount,
     byProduct,
   };
 }
@@ -889,7 +912,7 @@ export function buildOverheadWaterfall(
   const report = buildOverheadReport(data, range);
   const totals = activityTotalsForRange(data, range);
   const categories = buildOverheadByCategory(
-    data.overheadItems ?? [],
+    effectivePlanOverheadItems(data),
     range,
     totals,
   );

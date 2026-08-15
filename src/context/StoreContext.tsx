@@ -20,6 +20,7 @@ import type {
   LogisticsTemplate,
   OverheadActual,
   OverheadItem,
+  PersonnelRole,
   Product,
   ProductComponent,
   SalesPlanCell,
@@ -78,6 +79,8 @@ type StoreContextValue = {
   deleteOverheadItem: (id: string) => void;
   upsertOverheadActual: (actual: OverheadActual) => void;
   deleteOverheadActual: (id: string) => void;
+  upsertPersonnelRole: (role: PersonnelRole) => void;
+  deletePersonnelRole: (id: string) => void;
   /** Zellen mergen; quantity 0 entfernt den Eintrag */
   applySalesPlanUpdates: (updates: SalesPlanCell[]) => void;
   upsertSalesPlanRowMeta: (meta: SalesPlanRowMeta) => void;
@@ -114,6 +117,19 @@ function scrubManualShares(
       (row) => row.productId !== productId,
     );
     return { ...item, manuelleAufteilung: next.length > 0 ? next : null };
+  });
+}
+
+function scrubPersonnelManualShares(
+  roles: PersonnelRole[],
+  productId: string,
+): PersonnelRole[] {
+  return roles.map((role) => {
+    if (!role.manuelleAufteilung) return role;
+    const next = role.manuelleAufteilung.filter(
+      (row) => row.productId !== productId,
+    );
+    return { ...role, manuelleAufteilung: next.length > 0 ? next : null };
   });
 }
 
@@ -249,6 +265,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         products: prev.products.filter((p) => p.id !== id),
         batches: prev.batches.filter((b) => b.productId !== id),
         overheadItems: scrubManualShares(prev.overheadItems, id),
+        personnelRoles: scrubPersonnelManualShares(
+          prev.personnelRoles ?? [],
+          id,
+        ),
       }));
     },
     [commit],
@@ -282,6 +302,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           (m) => m.productId !== id,
         ),
         overheadItems: scrubManualShares(prev.overheadItems, id),
+        personnelRoles: scrubPersonnelManualShares(
+          prev.personnelRoles ?? [],
+          id,
+        ),
       }));
     },
     [commit],
@@ -560,6 +584,38 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [commit],
   );
 
+  const upsertPersonnelRole = useCallback(
+    (role: PersonnelRole) => {
+      const now = new Date().toISOString();
+      const stamped: PersonnelRole = {
+        ...role,
+        updatedAt: now,
+        updatedBy: role.updatedBy ?? null,
+        createdAt: role.createdAt || now,
+      };
+      commit((prev) => {
+        const list = prev.personnelRoles ?? [];
+        return {
+          ...prev,
+          personnelRoles: list.some((r) => r.id === stamped.id)
+            ? list.map((r) => (r.id === stamped.id ? stamped : r))
+            : [...list, stamped],
+        };
+      });
+    },
+    [commit],
+  );
+
+  const deletePersonnelRole = useCallback(
+    (id: string) => {
+      commit((prev) => ({
+        ...prev,
+        personnelRoles: (prev.personnelRoles ?? []).filter((r) => r.id !== id),
+      }));
+    },
+    [commit],
+  );
+
   const applySalesPlanUpdates = useCallback(
     (updates: SalesPlanCell[]) => {
       commit((prev) => ({
@@ -669,6 +725,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteOverheadItem,
       upsertOverheadActual,
       deleteOverheadActual,
+      upsertPersonnelRole,
+      deletePersonnelRole,
       applySalesPlanUpdates,
       upsertSalesPlanRowMeta,
       patchSalesPlanSettings,
@@ -703,6 +761,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteOverheadItem,
       upsertOverheadActual,
       deleteOverheadActual,
+      upsertPersonnelRole,
+      deletePersonnelRole,
       applySalesPlanUpdates,
       upsertSalesPlanRowMeta,
       patchSalesPlanSettings,

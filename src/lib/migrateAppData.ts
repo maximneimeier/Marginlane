@@ -11,6 +11,7 @@ import {
   normalizeLogisticsBuildingBlock,
   normalizeLogisticsTemplate,
 } from "./logistics";
+import { normalizePersonnelRole } from "./personnel";
 import type {
   AppData,
   Batch,
@@ -498,6 +499,18 @@ export function migrateAppData(raw: unknown): AppData {
       )
     : [];
 
+  const personnelRoles = Array.isArray(
+    (input as { personnelRoles?: unknown }).personnelRoles,
+  )
+    ? (
+        (input as { personnelRoles: unknown[] }).personnelRoles
+      ).map((raw) =>
+        normalizePersonnelRole(
+          (raw ?? {}) as Parameters<typeof normalizePersonnelRole>[0],
+        ),
+      )
+    : [];
+
   return {
     suppliers,
     catalogProducts,
@@ -513,6 +526,7 @@ export function migrateAppData(raw: unknown): AppData {
         ? a.name.localeCompare(b.name)
         : a.month.localeCompare(b.month),
     ),
+    personnelRoles,
     salesPlan,
     salesPlanRowMeta,
     salesPlanSettings,

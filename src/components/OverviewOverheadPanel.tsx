@@ -2,14 +2,28 @@
 
 import { Fragment, useMemo, useState } from "react";
 import { useStore } from "@/context/StoreContext";
-import type { OverheadCostBehavior, OverheadItem } from "@/lib/types";
+import type {
+  OverheadCostBehavior,
+  OverheadItem,
+  PersonnelRole,
+} from "@/lib/types";
 import { OVERHEAD_COST_BEHAVIORS } from "@/lib/types";
 import type { DateRange } from "@/lib/overview";
-import { buildOverheadReport, buildOverheadAllocationIssues, emptyOverheadItem } from "@/lib/overhead";
+import {
+  buildOverheadReport,
+  buildOverheadAllocationIssues,
+  emptyOverheadItem,
+} from "@/lib/overhead";
+import {
+  emptyPersonnelRole,
+  hireExtraPersonCost,
+  recurringMonthlyTotal,
+} from "@/lib/personnel";
 import { formatEuro } from "@/lib/format";
 import type { MessageKey } from "@/lib/i18n";
 import { useI18n } from "@/hooks/useI18n";
 import { OverheadFormModal } from "@/components/OverheadFormModal";
+import { PersonnelRoleFormModal } from "@/components/PersonnelRoleFormModal";
 import { OverheadStackedBarChart } from "@/components/OverheadStackedBarChart";
 import { OverheadAllocationSankeyChart } from "@/components/OverheadAllocationSankeyChart";
 import { OverheadResultWaterfallChart } from "@/components/OverheadResultWaterfallChart";
@@ -20,6 +34,7 @@ import {
   Card,
   ConfirmDialog,
   Select,
+  TableRowActions,
 } from "@/components/ui";
 import { FEATURES } from "@/lib/features";
 
@@ -29,16 +44,27 @@ type Props = {
   hidePageHeader?: boolean;
 };
 
-type OverheadTab = "tables" | "charts" | "planVsActual";
+type OverheadTab = "tables" | "personnel" | "charts" | "planVsActual";
 
 export function OverviewOverheadPanel({
   range,
   hidePageHeader = false,
 }: Props) {
-  const { data, upsertOverheadItem, deleteOverheadItem } = useStore();
+  const {
+    data,
+    upsertOverheadItem,
+    deleteOverheadItem,
+    upsertPersonnelRole,
+    deletePersonnelRole,
+  } = useStore();
   const { t, locale } = useI18n();
   const [draft, setDraft] = useState<OverheadItem | null>(null);
+  const [personnelDraft, setPersonnelDraft] = useState<PersonnelRole | null>(
+    null,
+  );
   const [deleteTarget, setDeleteTarget] = useState<OverheadItem | null>(null);
+  const [deletePersonnelTarget, setDeletePersonnelTarget] =
+    useState<PersonnelRole | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [tab, setTab] = useState<OverheadTab>("tables");
   const [kostenartFilter, setKostenartFilter] = useState<
@@ -47,7 +73,6 @@ export function OverviewOverheadPanel({
 
   const showPlanVsActual = FEATURES.overheadPlanVsActual;
   const showCharts = FEATURES.overheadCharts;
-  const showTabSwitch = showPlanVsActual || showCharts;
   const activeTab: OverheadTab =
     tab === "planVsActual" && !showPlanVsActual
       ? "tables"
@@ -82,15 +107,27 @@ export function OverviewOverheadPanel({
     );
   }, [report.items, kostenartFilter]);
 
+  const roles = useMemo(
+    () =>
+      [...(data.personnelRoles ?? [])].sort((a, b) =>
+        a.name.localeCompare(b.name),
+      ),
+    [data.personnelRoles],
+  );
+
   const isEdit = Boolean(
     draft && data.overheadItems.some((o) => o.id === draft.id),
+  );
+  const isPersonnelEdit = Boolean(
+    personnelDraft &&
+      (data.personnelRoles ?? []).some((r) => r.id === personnelDraft.id),
   );
 
   const defaultCurrency =
     data.suppliers.find((s) => s.currency)?.currency ?? "EUR";
 
-  const tabSwitch = showTabSwitch ? (
-    <div className="flex rounded-[8px] border border-line bg-white p-0.5">
+  const tabSwitch = (
+    <div className="flex flex-wrap rounded-[8px] border border-line bg-white p-0.5">
       <button
         type="button"
         onClick={() => setTab("tables")}
@@ -101,6 +138,17 @@ export function OverviewOverheadPanel({
         }`}
       >
         {t("overhead.tab.tables")}
+      </button>
+      <button
+        type="button"
+        onClick={() => setTab("personnel")}
+        className={`rounded-[6px] px-2.5 py-1 text-[12px] font-medium ${
+          activeTab === "personnel"
+            ? "bg-surface-soft text-foreground"
+            : "text-muted hover:text-foreground"
+        }`}
+      >
+        {t("overhead.tab.personnel")}
       </button>
       {showPlanVsActual ? (
         <button
@@ -129,7 +177,7 @@ export function OverviewOverheadPanel({
         </button>
       ) : null}
     </div>
-  ) : null;
+  );
 
   const addButton =
     activeTab === "tables" ? (
@@ -138,6 +186,13 @@ export function OverviewOverheadPanel({
         className="shrink-0"
       >
         {t("overhead.add")}
+      </Button>
+    ) : activeTab === "personnel" ? (
+      <Button
+        onClick={() => setPersonnelDraft(emptyPersonnelRole(defaultCurrency))}
+        className="shrink-0"
+      >
+        {t("personnel.add")}
       </Button>
     ) : null;
 
@@ -180,6 +235,24 @@ export function OverviewOverheadPanel({
         }}
       />
 
+      <ConfirmDialog
+        open={Boolean(deletePersonnelTarget)}
+        onClose={() => setDeletePersonnelTarget(null)}
+        title={t("personnel.deleteTitle")}
+        description={
+          deletePersonnelTarget
+            ? t("personnel.deleteDescription", {
+                name: deletePersonnelTarget.name,
+              })
+            : ""
+        }
+        confirmLabel={t("common.deleteConfirm")}
+        onConfirm={() => {
+          if (deletePersonnelTarget)
+            deletePersonnelRole(deletePersonnelTarget.id);
+        }}
+      />
+
       <OverheadFormModal
         open={Boolean(draft)}
         initial={draft}
@@ -190,13 +263,41 @@ export function OverviewOverheadPanel({
         onSave={(item) => upsertOverheadItem(item)}
       />
 
+      <PersonnelRoleFormModal
+        open={Boolean(personnelDraft)}
+        initial={personnelDraft}
+        products={data.catalogProducts}
+        isEdit={isPersonnelEdit}
+        defaultCurrency={defaultCurrency}
+        onClose={() => setPersonnelDraft(null)}
+        onSave={(role) => upsertPersonnelRole(role)}
+      />
+
+      {activeTab === "personnel" ? (
+        <PersonnelRolesSection
+          roles={roles}
+          personnelAmount={report.personnelAmount}
+          locale={locale}
+          onEdit={(role) => setPersonnelDraft(structuredClone(role))}
+          onDelete={(role) => setDeletePersonnelTarget(role)}
+          onCreate={() =>
+            setPersonnelDraft(emptyPersonnelRole(defaultCurrency))
+          }
+        />
+      ) : null}
+
       {activeTab === "tables" ? (
         <div className="space-y-6">
-          {report.items.length > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-3">
+          {report.items.length > 0 || report.personnelAmount > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <OverheadKpi
                 label={t("overhead.kpi.total")}
                 value={formatEuro(report.totalOverhead, locale)}
+              />
+              <OverheadKpi
+                label={t("overhead.kpi.personnel")}
+                value={formatEuro(report.personnelAmount, locale)}
+                hint={t("overhead.kpi.personnelHint")}
               />
               <OverheadKpi
                 label={t("overhead.kpi.db3")}
@@ -630,6 +731,130 @@ export function OverviewOverheadPanel({
       ) : activeTab === "planVsActual" && showPlanVsActual ? (
         <OverheadPlanVsActualPanel range={range} />
       ) : null}
+    </div>
+  );
+}
+
+function PersonnelRolesSection({
+  roles,
+  personnelAmount,
+  locale,
+  onEdit,
+  onDelete,
+  onCreate,
+}: {
+  roles: PersonnelRole[];
+  personnelAmount: number;
+  locale: string;
+  onEdit: (role: PersonnelRole) => void;
+  onDelete: (role: PersonnelRole) => void;
+  onCreate: () => void;
+}) {
+  const { t } = useI18n();
+
+  if (roles.length === 0) {
+    return (
+      <div className="rounded-[12px] border border-dashed border-line px-4 py-12 text-center">
+        <p className="text-[14px] font-medium text-foreground">
+          {t("personnel.emptyTitle")}
+        </p>
+        <p className="mx-auto mt-1 max-w-md text-[13px] text-muted">
+          {t("personnel.emptyDescription")}
+        </p>
+        <Button className="mt-4" onClick={onCreate}>
+          {t("personnel.emptyCta")}
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <OverheadKpi
+          label={t("personnel.kpi.roles")}
+          value={String(roles.length)}
+        />
+        <OverheadKpi
+          label={t("personnel.kpi.period")}
+          value={formatEuro(personnelAmount, locale)}
+          hint={t("personnel.kpi.periodHint")}
+        />
+      </div>
+
+      <div className="space-y-3">
+        {roles.map((role) => {
+          const recurring = recurringMonthlyTotal(role);
+          const hire = hireExtraPersonCost(role);
+          return (
+            <Card key={role.id} className="!p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-[15px] font-medium text-foreground">
+                      {role.name}
+                    </h3>
+                    <Badge>
+                      {t("personnel.headcountBadge", {
+                        count: String(role.headcount),
+                      })}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-[12px] text-muted">
+                    {t(`overhead.category.${role.kategorie}` as MessageKey)}
+                    {" · "}
+                    {t(
+                      `overhead.allocation.${role.verteilschluessel}` as MessageKey,
+                    )}
+                  </p>
+                  <dl className="mt-3 grid gap-1 text-[13px] sm:grid-cols-2">
+                    <div className="flex justify-between gap-2 sm:block">
+                      <dt className="text-muted">
+                        {t("personnel.summary.recurring")}
+                      </dt>
+                      <dd className="font-medium tabular-nums">
+                        {formatEuro(recurring, locale)}
+                        <span className="ml-1 text-[12px] font-normal text-muted">
+                          {t("personnel.summary.perMonth")}
+                        </span>
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-2 sm:block">
+                      <dt className="text-muted">
+                        {t("personnel.hirePreview.firstMonth")}
+                      </dt>
+                      <dd className="font-medium tabular-nums">
+                        {formatEuro(hire.totalFirstMonth, locale)}
+                        <span className="ml-1 text-[12px] font-normal text-muted">
+                          {t("personnel.hirePreview.plusOne")}
+                        </span>
+                      </dd>
+                    </div>
+                  </dl>
+                  {role.dependencies.length > 0 ? (
+                    <ul className="mt-3 flex flex-wrap gap-1.5">
+                      {role.dependencies.map((dep) => (
+                        <li key={dep.id}>
+                          <Badge>
+                            {dep.name || "—"} · {formatEuro(dep.amount, locale)}{" "}
+                            · {t(`personnel.cadence.${dep.cadence}` as MessageKey)}
+                          </Badge>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+                <TableRowActions
+                  onEdit={() => onEdit(role)}
+                  onDelete={() => onDelete(role)}
+                  editLabel={t("common.edit")}
+                  deleteLabel={t("common.delete")}
+                />
+              </div>
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 }

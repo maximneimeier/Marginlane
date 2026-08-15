@@ -386,6 +386,45 @@ export type OverheadActual = {
   updatedBy: string | null;
 };
 
+/** Wiederkehrend vs. einmalig (z. B. Laptop bei Neueinstellung) */
+export type PersonnelCadence = "monatlich" | "einmalig";
+
+/** Abhängige Kosten einer Rolle (Büroplatz, Laptop, …) */
+export type PersonnelDependency = {
+  id: string;
+  name: string;
+  amount: number;
+  cadence: PersonnelCadence;
+  /** true = × Headcount / je Neueinstellung */
+  scalesWithHeadcount: boolean;
+};
+
+/**
+ * Personalrolle (Slidebean-ähnlich: Headcount × Gehalt + Nebenkosten + Pakete).
+ * Wiederkehrende Anteile fließen in die Gemeinkosten-Umlegung.
+ */
+export type PersonnelRole = {
+  id: string;
+  name: string;
+  /** Bruttogehalt je FTE / Monat */
+  bruttoGehalt: number;
+  /** AG-Lohnnebenkosten in % vom Brutto (z. B. 22) */
+  lohnnebenkostenPercent: number;
+  /** Vollzeitäquivalente */
+  headcount: number;
+  waehrung: string;
+  kategorie: OverheadCategory;
+  verteilschluessel: OverheadAllocation;
+  manuelleAufteilung: OverheadManualShare[] | null;
+  dependencies: PersonnelDependency[];
+  gueltigVon: string | null;
+  gueltigBis: string | null;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+  updatedBy: string | null;
+};
+
 export type AppData = {
   suppliers: Supplier[];
   /**
@@ -409,6 +448,8 @@ export type AppData = {
   overheadItems: OverheadItem[];
   /** Ist: tatsächlich erfasste, benannte Ausgaben */
   overheadActuals: OverheadActual[];
+  /** Personalrollen (Gehalt + Nebenkosten + Abhängigkeiten) */
+  personnelRoles: PersonnelRole[];
   /** Absatzplan: Stück je Produkt × Händler × Monat × Szenario */
   salesPlan: SalesPlanCell[];
   /** Plan-VK und Notizen je Zeile */
@@ -641,6 +682,11 @@ export const OVERHEAD_ALLOCATIONS: OverheadAllocation[] = [
   "manuell",
 ];
 
+export const PERSONNEL_CADENCES: PersonnelCadence[] = ["monatlich", "einmalig"];
+
+/** Default AG-Lohnnebenkosten % (grobe DE-Planung, kein SV-Rechner) */
+export const DEFAULT_LOHNNEBENKOSTEN_PERCENT = 22;
+
 export const EMPTY_DATA: AppData = {
   suppliers: [],
   products: [],
@@ -653,6 +699,7 @@ export const EMPTY_DATA: AppData = {
   logisticsTemplates: [],
   overheadItems: [],
   overheadActuals: [],
+  personnelRoles: [],
   salesPlan: [],
   salesPlanRowMeta: [],
   salesPlanSettings: { activeScenario: "base", frozen: [] },

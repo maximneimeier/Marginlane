@@ -16,7 +16,8 @@ const nextConfig: NextConfig = {
         destination: "/batches/:id",
         permanent: true,
       },
-      { source: "/vergleich", destination: "/compare", permanent: true },
+      { source: "/vergleich", destination: "/overview", permanent: true },
+      { source: "/compare", destination: "/overview", permanent: true },
       { source: "/gemeinkosten", destination: "/overhead", permanent: true },
       { source: "/", destination: "/overview", permanent: false },
     ];
