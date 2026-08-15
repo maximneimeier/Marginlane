@@ -25,8 +25,12 @@ function ChargenPageInner() {
     if (!wantsNew && !product) return;
     setInitialProductId(product);
     setModalOpen(true);
-    router.replace("/batches", { scroll: false });
-  }, [ready, searchParams, router]);
+    // Prefer history API over router.replace — avoids App Router dispatch
+    // before initialization (Next.js 16 / Turbopack HMR edge case).
+    if (typeof window !== "undefined" && window.location.search) {
+      window.history.replaceState(window.history.state, "", "/batches");
+    }
+  }, [ready, searchParams]);
 
   if (!ready) return <p className="text-sm text-muted">{t("common.loading")}</p>;
 
