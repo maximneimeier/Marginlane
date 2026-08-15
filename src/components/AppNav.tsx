@@ -54,12 +54,6 @@ const NAV_GROUPS: NavGroup[] = [
         icon: SalesVolumeIcon,
         feature: "salesVolumePlanning",
       },
-      {
-        href: "/overhead",
-        key: "nav.overhead",
-        icon: OverheadIcon,
-        feature: "overheadTopLevelNav",
-      },
     ],
   },
   {
@@ -80,7 +74,15 @@ const NAV_GROUPS: NavGroup[] = [
     labelKey: "nav.group.abwicklung",
     collapsible: false,
     defaultOpen: true,
-    links: [{ href: "/batches", key: "nav.batches", icon: BatchesIcon }],
+    links: [
+      { href: "/batches", key: "nav.batches", icon: BatchesIcon },
+      {
+        href: "/overhead",
+        key: "nav.overhead",
+        icon: OverheadIcon,
+        feature: "overheadTopLevelNav",
+      },
+    ],
   },
 ];
 

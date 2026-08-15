@@ -17,7 +17,6 @@ import { useI18n } from "@/hooks/useI18n";
 import { OverviewWaterfallChart } from "@/components/OverviewWaterfallChart";
 import { OverviewSankeyChart } from "@/components/OverviewSankeyChart";
 import { SalesPlanOverviewStrip } from "@/components/SalesPlanOverviewStrip";
-import { OverviewOverheadPanel } from "@/components/OverviewOverheadPanel";
 import { ProductFilterDropdown } from "@/components/ProductFilterDropdown";
 import { Card, Field, PageHeader, Select, TextInput } from "@/components/ui";
 
@@ -169,11 +168,7 @@ export default function OverviewPage() {
                 count: kpiReport.kpis.batchCount,
               })}
             </p>
-          ) : (
-            <p className="shrink-0 text-[12px] text-muted lg:pb-2">
-              {t("overviewPage.rangeForOverhead")}
-            </p>
-          )}
+          ) : null}
         </div>
       </Card>
 
@@ -375,11 +370,6 @@ export default function OverviewPage() {
             </div>
           )}
         </Card>
-      ) : null}
-
-      {/* MVP: Gemeinkosten als Sektion in der Overview (nicht Top-Level-Nav) */}
-      {!FEATURES.overheadTopLevelNav ? (
-        <OverviewOverheadPanel range={range} />
       ) : null}
     </div>
   );

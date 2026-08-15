@@ -593,11 +593,11 @@ const de = {
   "overview.empty":
     "Noch keine Chargen. Lege einen Lieferanten an und erfasse die erste Bestellung.",
 
-  "overviewPage.title": "Overview",
+  "overviewPage.title": "Übersicht",
   "overviewPage.description":
-    "Deckungsbeitrag, Marge und geplanter Cash-Flow für den gewählten Zeitraum — nur Lesen und Aggregieren.",
+    "Konsolidierte KPIs und Grafiken zu Umsatz, Deckungsbeitrag und Marge im gewählten Zeitraum.",
   "overviewPage.descriptionMvp":
-    "Gemeinkosten und Verteilschlüssel für den gewählten Zeitraum — ohne unternehmensweite DB-Konsolidierung.",
+    "Konsolidierte Übersicht folgt, sobald die Aggregation freigeschaltet ist.",
   "overviewPage.rangeForOverhead": "Zeitraum gilt für Gemeinkosten",
   "overviewPage.from": "Von",
   "overviewPage.to": "Bis",
@@ -677,7 +677,7 @@ const de = {
 
   "overhead.title": "Gemeinkosten",
   "overhead.description":
-    "Fixe Overhead-Kosten der Periode erfassen und auf Produkte verteilen — Betriebsergebnis nach DB3.",
+    "Gemeinkosten erfassen und per Verteilschlüssel auf Produkte umlegen — Betriebsergebnis nach DB3.",
   "overhead.add": "+ Neue Gemeinkosten-Position",
   "overhead.itemCount": "{count} Positionen",
   "overhead.deleteTitle": "Gemeinkosten-Position löschen?",
@@ -1723,9 +1723,9 @@ const en: Record<MessageKey, string> = {
 
   "overviewPage.title": "Overview",
   "overviewPage.description":
-    "Contribution margin, profitability and planned cash flow for the selected period — read-only aggregates.",
+    "Consolidated KPIs and charts for revenue, contribution margin and margin in the selected period.",
   "overviewPage.descriptionMvp":
-    "Overhead costs and allocation keys for the selected period — without company-wide contribution consolidation.",
+    "Consolidated overview appears once aggregation is enabled.",
   "overviewPage.rangeForOverhead": "Date range applies to overhead",
   "overviewPage.from": "From",
   "overviewPage.to": "To",
@@ -1806,7 +1806,7 @@ const en: Record<MessageKey, string> = {
 
   "overhead.title": "Overhead",
   "overhead.description":
-    "Capture fixed overhead for the period and allocate it to products — operating result after DB3.",
+    "Capture overhead and allocate it to products by allocation key — operating result after DB3.",
   "overhead.add": "+ New overhead item",
   "overhead.itemCount": "{count} items",
   "overhead.deleteTitle": "Delete overhead item?",

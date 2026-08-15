@@ -8,7 +8,7 @@ export const FEATURES = {
    * Company-wide DB1–DB3 aggregation on Overview
    * (KPIs, contribution waterfall/sankey, product/supplier breakdown).
    */
-  overviewConsolidation: false,
+  overviewConsolidation: true,
 
   /** Aggregated payment-timing cashflow chart on Overview. */
   overviewCashflow: false,
@@ -16,8 +16,11 @@ export const FEATURES = {
   /** Sales volume planning (/sales-volume) and overview strip. */
   salesVolumePlanning: false,
 
-  /** Dedicated top-level /overhead page in nav (MVP: section inside Overview). */
-  overheadTopLevelNav: false,
+  /**
+   * Dedicated /overhead page under Abwicklung (Gemeinkosten erfassen & umlegen).
+   * When false, /overhead redirects to /overview (legacy).
+   */
+  overheadTopLevelNav: true,
 
   /** Overhead Plan vs. Ist tab. */
   overheadPlanVsActual: false,
