@@ -6,11 +6,14 @@ import type {
   OverheadAllocation,
   PersonnelDependency,
   PersonnelRole,
+  PersonnelTeam,
 } from "@/lib/types";
 import {
   CURRENCIES,
   OVERHEAD_ALLOCATIONS,
   OVERHEAD_CATEGORIES,
+  PERSONNEL_HIRE_FREQUENCIES,
+  PERSONNEL_ROLE_TYPES,
 } from "@/lib/types";
 import {
   emptyPersonnelDependency,
@@ -27,12 +30,14 @@ import { formatEuro } from "@/lib/format";
 import { useI18n } from "@/hooks/useI18n";
 import type { MessageKey } from "@/lib/i18n";
 import { usePrefs } from "@/context/PreferencesContext";
+import Link from "next/link";
 import { Button, Field, Modal, Select, TextInput } from "@/components/ui";
 
 type Props = {
   open: boolean;
   initial: PersonnelRole | null;
   products: CatalogProduct[];
+  teams: PersonnelTeam[];
   isEdit: boolean;
   defaultCurrency?: string;
   onClose: () => void;
@@ -43,6 +48,7 @@ export function PersonnelRoleFormModal({
   open,
   initial,
   products,
+  teams,
   isEdit,
   defaultCurrency = "EUR",
   onClose,
@@ -53,6 +59,11 @@ export function PersonnelRoleFormModal({
   const [draft, setDraft] = useState<PersonnelRole | null>(null);
   const [percentInputs, setPercentInputs] = useState<Record<string, string>>(
     {},
+  );
+
+  const sortedTeams = useMemo(
+    () => [...teams].sort((a, b) => a.name.localeCompare(b.name)),
+    [teams],
   );
 
   const sortedProducts = useMemo(
@@ -139,6 +150,39 @@ export function PersonnelRoleFormModal({
               placeholder={t("personnel.field.namePlaceholder")}
             />
           </Field>
+          <Field
+            label={t("personnel.field.team")}
+            hint={
+              sortedTeams.length === 0
+                ? undefined
+                : t("personnel.field.teamHint")
+            }
+          >
+            <Select
+              value={draft.teamId}
+              onChange={(e) =>
+                setDraft({ ...draft, teamId: e.target.value })
+              }
+            >
+              <option value="">{t("personnel.team.unassigned")}</option>
+              {sortedTeams.map((team) => (
+                <option key={team.id} value={team.id}>
+                  {team.name}
+                </option>
+              ))}
+            </Select>
+            {sortedTeams.length === 0 ? (
+              <p className="mt-1 text-[12px] text-muted">
+                {t("personnel.field.teamEmpty")}{" "}
+                <Link href="/teams" className="text-accent hover:underline">
+                  {t("nav.teams")}
+                </Link>
+              </p>
+            ) : null}
+          </Field>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
           <Field label={t("personnel.field.headcount")} required>
             <TextInput
               type="number"
@@ -149,6 +193,51 @@ export function PersonnelRoleFormModal({
                 setDraft({
                   ...draft,
                   headcount: Number(e.target.value) || 0,
+                })
+              }
+            />
+          </Field>
+          <div className="hidden sm:block" />
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label={t("personnel.field.roleType")}>
+            <Select
+              value={draft.roleType}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  roleType: e.target.value as PersonnelRole["roleType"],
+                })
+              }
+            >
+              {PERSONNEL_ROLE_TYPES.map((rt) => (
+                <option key={rt} value={rt}>
+                  {t(`personnel.roleType.${rt}` as MessageKey)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label={t("personnel.field.start")}>
+            <TextInput
+              type="date"
+              value={draft.gueltigVon ?? ""}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  gueltigVon: e.target.value || null,
+                })
+              }
+            />
+          </Field>
+          <Field label={t("personnel.field.end")}>
+            <TextInput
+              type="date"
+              value={draft.gueltigBis ?? ""}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  gueltigBis: e.target.value || null,
                 })
               }
             />
@@ -177,7 +266,7 @@ export function PersonnelRoleFormModal({
             <TextInput
               type="number"
               min={0}
-              step={1}
+              step={0.25}
               value={draft.lohnnebenkostenPercent}
               onChange={(e) =>
                 setDraft({
@@ -202,6 +291,116 @@ export function PersonnelRoleFormModal({
             </Select>
           </Field>
         </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field
+            label={t("personnel.field.benefits")}
+            hint={t("personnel.field.benefitsHint")}
+          >
+            <TextInput
+              type="number"
+              min={0}
+              step={10}
+              value={draft.benefitsMonthly}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  benefitsMonthly: Number(e.target.value) || 0,
+                })
+              }
+            />
+          </Field>
+          <Field
+            label={t("personnel.field.zusatzAg")}
+            hint={t("personnel.field.zusatzAgHint")}
+          >
+            <TextInput
+              type="number"
+              min={0}
+              step={0.25}
+              value={draft.zusatzAgPercent}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  zusatzAgPercent: Number(e.target.value) || 0,
+                })
+              }
+            />
+          </Field>
+          <Field label={t("personnel.field.increase")}>
+            <TextInput
+              type="number"
+              min={0}
+              step={0.5}
+              value={draft.annualIncreasePercent}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  annualIncreasePercent: Number(e.target.value) || 0,
+                })
+              }
+            />
+          </Field>
+        </div>
+
+        {draft.roleType === "scaling" ? (
+          <div className="grid gap-3 rounded-[10px] border border-line p-3 sm:grid-cols-3">
+            <p className="sm:col-span-3 text-[13px] font-medium">
+              {t("personnel.col.teamScaling")}
+            </p>
+            <Field label={t("personnel.col.hiresPerPeriod")}>
+              <TextInput
+                type="number"
+                min={0}
+                step={1}
+                value={draft.hiresPerPeriod}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    hiresPerPeriod: Number(e.target.value) || 0,
+                  })
+                }
+              />
+            </Field>
+            <Field label={t("personnel.col.hireFrequency")}>
+              <Select
+                value={draft.hireFrequency}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    hireFrequency: e.target
+                      .value as PersonnelRole["hireFrequency"],
+                  })
+                }
+              >
+                {PERSONNEL_HIRE_FREQUENCIES.map((f) => (
+                  <option key={f} value={f}>
+                    {t(`personnel.hireFrequency.${f}` as MessageKey)}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field
+              label={t("personnel.col.maxHeadcount")}
+              hint={t("personnel.field.maxHeadcountHint")}
+            >
+              <TextInput
+                type="number"
+                min={0}
+                step={1}
+                value={draft.maxHeadcount ?? ""}
+                placeholder={t("personnel.col.unlimited")}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setDraft({
+                    ...draft,
+                    maxHeadcount: v === "" ? null : Number(v) || 0,
+                  });
+                }}
+              />
+            </Field>
+          </div>
+        ) : null}
 
         <div className="rounded-[10px] border border-line bg-surface-faint px-3.5 py-3 text-[13px]">
           <p className="text-muted">{t("personnel.summary.employer")}</p>

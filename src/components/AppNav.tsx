@@ -72,6 +72,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/suppliers", key: "nav.suppliers", icon: SuppliersIcon },
       { href: "/logistics", key: "nav.logistics", icon: LogisticsIcon },
       { href: "/dealers", key: "nav.dealers", icon: DealersIcon },
+      { href: "/teams", key: "nav.teams", icon: TeamsIcon },
     ],
   },
   {
@@ -476,6 +477,21 @@ function DealersIcon({ active }: { active: boolean }) {
         strokeLinejoin="round"
       />
       <path d="M5.5 11.5V8h4v3.5" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function TeamsIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={active ? "text-accent" : "text-muted-soft"}>
+      <circle cx="5" cy="5" r="1.75" stroke="currentColor" strokeWidth="1.3" />
+      <circle cx="10" cy="5.5" r="1.5" stroke="currentColor" strokeWidth="1.3" />
+      <path
+        d="M2.25 11.5c0-1.6 1.35-2.75 2.75-2.75S7.75 9.9 7.75 11.5M8.25 11.5c0-1.35 1.1-2.35 2.35-2.35s2.15 1 2.15 2.35"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }

@@ -12,9 +12,17 @@ function role(partial: Partial<PersonnelRole> = {}): PersonnelRole {
   return {
     id: "prs_1",
     name: "CS",
+    teamId: "",
     bruttoGehalt: 4000,
     lohnnebenkostenPercent: DEFAULT_LOHNNEBENKOSTEN_PERCENT,
+    zusatzAgPercent: 2,
+    benefitsMonthly: 100,
+    annualIncreasePercent: 3,
+    roleType: "single",
     headcount: 2,
+    hiresPerPeriod: 1,
+    hireFrequency: "once",
+    maxHeadcount: null,
     waehrung: "EUR",
     kategorie: "verwaltungsgemeinkosten",
     verteilschluessel: "gleichmaessig",
@@ -46,28 +54,29 @@ function role(partial: Partial<PersonnelRole> = {}): PersonnelRole {
 }
 
 describe("personnel costs", () => {
-  it("computes employer cost with on-costs", () => {
-    expect(employerCostPerFte(role())).toBe(4000 * 1.22);
+  it("computes employer CTC with taxes, extras and benefits", () => {
+    // 4000 * (1 + 0.22 + 0.02) + 100 = 4000 * 1.24 + 100 = 5060
+    expect(employerCostPerFte(role())).toBe(5060);
   });
 
   it("sums recurring monthly including packages × headcount", () => {
-    // 4000*1.22*2 + 350*2
-    expect(recurringMonthlyTotal(role())).toBe(4000 * 1.22 * 2 + 700);
+    // 5060 * 2 + 350 * 2
+    expect(recurringMonthlyTotal(role())).toBe(5060 * 2 + 700);
   });
 
-  it("preview +1 person includes salary, monthly package, one-time", () => {
+  it("preview +1 person includes CTC, monthly package, one-time", () => {
     const h = hireExtraPersonCost(role());
-    expect(h.salary).toBe(4000 * 1.22);
+    expect(h.salary).toBe(5060);
     expect(h.monthlyPackages).toBe(350);
     expect(h.oneTime).toBe(1200);
-    expect(h.totalFirstMonth).toBe(4000 * 1.22 + 350 + 1200);
+    expect(h.totalFirstMonth).toBe(5060 + 350 + 1200);
   });
 
   it("expands only recurring lines to overhead items", () => {
     const items = expandPersonnelRolesToOverheadItems([role()]);
     expect(items).toHaveLength(2);
     expect(items[0].name).toContain("Gehalt+NK");
-    expect(items[0].betrag).toBe(4000 * 1.22 * 2);
+    expect(items[0].betrag).toBe(5060 * 2);
     expect(items[1].name).toContain("Desk");
     expect(items[1].betrag).toBe(700);
   });

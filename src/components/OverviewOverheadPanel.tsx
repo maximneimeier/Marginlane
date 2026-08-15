@@ -6,6 +6,7 @@ import type {
   OverheadCostBehavior,
   OverheadItem,
   PersonnelRole,
+  PersonnelTeam,
 } from "@/lib/types";
 import { OVERHEAD_COST_BEHAVIORS } from "@/lib/types";
 import type { DateRange } from "@/lib/overview";
@@ -15,9 +16,10 @@ import {
   emptyOverheadItem,
 } from "@/lib/overhead";
 import {
+  annualSalary,
   emptyPersonnelRole,
-  hireExtraPersonCost,
-  recurringMonthlyTotal,
+  employerBurdenPerFte,
+  employerCostPerFte,
 } from "@/lib/personnel";
 import { formatEuro } from "@/lib/format";
 import type { MessageKey } from "@/lib/i18n";
@@ -263,6 +265,7 @@ export function OverviewOverheadPanel({
         open={Boolean(personnelDraft)}
         initial={personnelDraft}
         products={data.catalogProducts}
+        teams={data.personnelTeams ?? []}
         isEdit={isPersonnelEdit}
         defaultCurrency={defaultCurrency}
         onClose={() => setPersonnelDraft(null)}
@@ -272,6 +275,7 @@ export function OverviewOverheadPanel({
       {section === "personnel" ? (
         <PersonnelRolesSection
           roles={roles}
+          teams={data.personnelTeams ?? []}
           personnelAmount={report.personnelAmount}
           locale={locale}
           onEdit={(role) => setPersonnelDraft(structuredClone(role))}
@@ -735,6 +739,7 @@ export function OverviewOverheadPanel({
 
 function PersonnelRolesSection({
   roles,
+  teams,
   personnelAmount,
   locale,
   onEdit,
@@ -742,6 +747,7 @@ function PersonnelRolesSection({
   onCreate,
 }: {
   roles: PersonnelRole[];
+  teams: PersonnelTeam[];
   personnelAmount: number;
   locale: string;
   onEdit: (role: PersonnelRole) => void;
@@ -749,6 +755,46 @@ function PersonnelRolesSection({
   onCreate: () => void;
 }) {
   const { t } = useI18n();
+
+  const teamById = useMemo(() => {
+    const map = new Map<string, PersonnelTeam>();
+    for (const team of teams) map.set(team.id, team);
+    return map;
+  }, [teams]);
+
+  const grouped = useMemo(() => {
+    const sortedTeams = [...teams].sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+    const byTeam = new Map<string, PersonnelRole[]>();
+    const unassigned: PersonnelRole[] = [];
+    for (const role of roles) {
+      if (role.teamId && teamById.has(role.teamId)) {
+        const list = byTeam.get(role.teamId) ?? [];
+        list.push(role);
+        byTeam.set(role.teamId, list);
+      } else {
+        unassigned.push(role);
+      }
+    }
+    const groups = sortedTeams
+      .map((team) => ({
+        key: team.id,
+        label: team.name,
+        roles: (byTeam.get(team.id) ?? []).sort((a, b) =>
+          a.name.localeCompare(b.name),
+        ),
+      }))
+      .filter((g) => g.roles.length > 0);
+    if (unassigned.length > 0) {
+      groups.push({
+        key: "__none__",
+        label: t("personnel.team.unassigned"),
+        roles: unassigned.sort((a, b) => a.name.localeCompare(b.name)),
+      });
+    }
+    return groups;
+  }, [roles, teams, teamById, t]);
 
   if (roles.length === 0) {
     return (
@@ -766,6 +812,19 @@ function PersonnelRolesSection({
     );
   }
 
+  const colCount = 16;
+
+  function formatDate(iso: string | null) {
+    if (!iso) return t("personnel.col.noEnd");
+    const d = new Date(`${iso}T00:00:00`);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString(locale, {
+      day: "2-digit",
+      month: "2-digit",
+      year: "2-digit",
+    });
+  }
+
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2">
@@ -780,78 +839,191 @@ function PersonnelRolesSection({
         />
       </div>
 
-      <div className="space-y-3">
-        {roles.map((role) => {
-          const recurring = recurringMonthlyTotal(role);
-          const hire = hireExtraPersonCost(role);
-          return (
-            <Card key={role.id} className="!p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-[15px] font-medium text-foreground">
-                      {role.name}
-                    </h3>
-                    <Badge>
-                      {t("personnel.headcountBadge", {
-                        count: String(role.headcount),
-                      })}
-                    </Badge>
-                  </div>
-                  <p className="mt-1 text-[12px] text-muted">
-                    {t(`overhead.category.${role.kategorie}` as MessageKey)}
-                    {" · "}
-                    {t(
-                      `overhead.allocation.${role.verteilschluessel}` as MessageKey,
-                    )}
-                  </p>
-                  <dl className="mt-3 grid gap-1 text-[13px] sm:grid-cols-2">
-                    <div className="flex justify-between gap-2 sm:block">
-                      <dt className="text-muted">
-                        {t("personnel.summary.recurring")}
-                      </dt>
-                      <dd className="font-medium tabular-nums">
-                        {formatEuro(recurring, locale)}
-                        <span className="ml-1 text-[12px] font-normal text-muted">
-                          {t("personnel.summary.perMonth")}
-                        </span>
-                      </dd>
-                    </div>
-                    <div className="flex justify-between gap-2 sm:block">
-                      <dt className="text-muted">
-                        {t("personnel.hirePreview.firstMonth")}
-                      </dt>
-                      <dd className="font-medium tabular-nums">
-                        {formatEuro(hire.totalFirstMonth, locale)}
-                        <span className="ml-1 text-[12px] font-normal text-muted">
-                          {t("personnel.hirePreview.plusOne")}
-                        </span>
-                      </dd>
-                    </div>
-                  </dl>
-                  {role.dependencies.length > 0 ? (
-                    <ul className="mt-3 flex flex-wrap gap-1.5">
-                      {role.dependencies.map((dep) => (
-                        <li key={dep.id}>
-                          <Badge>
-                            {dep.name || "—"} · {formatEuro(dep.amount, locale)}{" "}
-                            · {t(`personnel.cadence.${dep.cadence}` as MessageKey)}
-                          </Badge>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </div>
-                <TableRowActions
-                  onEdit={() => onEdit(role)}
-                  onDelete={() => onDelete(role)}
-                  editLabel={t("common.edit")}
-                  deleteLabel={t("common.delete")}
-                />
-              </div>
-            </Card>
-          );
-        })}
+      <div className="overflow-hidden rounded-[12px] border border-line bg-white shadow-[var(--shadow-sm)]">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1100px] border-collapse text-left text-[12px]">
+            <thead>
+              <tr className="border-b border-line bg-surface-faint text-[10px] font-semibold uppercase tracking-[0.03em] text-muted-soft">
+                <th className="sticky left-0 z-10 bg-surface-faint px-3 py-2.5 text-left font-semibold">
+                  {t("personnel.col.name")}
+                </th>
+                <th className="px-2 py-2.5 font-semibold">
+                  {t("personnel.col.currency")}
+                </th>
+                <th className="px-2 py-2.5 font-semibold">
+                  {t("personnel.col.roleType")}
+                </th>
+                <th className="px-2 py-2.5 font-semibold">
+                  {t("personnel.col.start")}
+                </th>
+                <th className="px-2 py-2.5 font-semibold">
+                  {t("personnel.col.end")}
+                </th>
+                <th className="px-2 py-2.5 text-right font-semibold">
+                  {t("personnel.col.annualSalary")}
+                </th>
+                <th className="px-2 py-2.5 text-right font-semibold">
+                  {t("personnel.col.nebenkosten")}
+                </th>
+                <th className="px-2 py-2.5 text-right font-semibold">
+                  {t("personnel.col.benefits")}
+                </th>
+                <th className="px-2 py-2.5 text-right font-semibold">
+                  {t("personnel.col.zusatzAg")}
+                </th>
+                <th className="px-2 py-2.5 text-right font-semibold">
+                  {t("personnel.col.burden")}
+                </th>
+                <th className="px-2 py-2.5 text-right font-semibold">
+                  {t("personnel.col.increase")}
+                </th>
+                <th className="px-2 py-2.5 text-right font-semibold">
+                  {t("personnel.col.monthlySalary")}
+                </th>
+                <th className="px-2 py-2.5 text-right font-semibold">
+                  {t("personnel.col.monthlyCtc")}
+                </th>
+                <th
+                  colSpan={3}
+                  className="border-l border-line px-2 py-2.5 text-center font-semibold"
+                >
+                  {t("personnel.col.teamScaling")}
+                </th>
+                <th className="px-2 py-2.5 text-right font-semibold">
+                  <span className="sr-only">{t("common.edit")}</span>
+                </th>
+              </tr>
+              <tr className="border-b border-line bg-surface-faint text-[10px] font-medium text-muted">
+                <th className="sticky left-0 z-10 bg-surface-faint px-3 py-1.5" />
+                <th className="px-2 py-1.5" />
+                <th className="px-2 py-1.5" />
+                <th className="px-2 py-1.5" />
+                <th className="px-2 py-1.5" />
+                <th className="px-2 py-1.5" />
+                <th className="px-2 py-1.5" />
+                <th className="px-2 py-1.5" />
+                <th className="px-2 py-1.5" />
+                <th className="px-2 py-1.5" />
+                <th className="px-2 py-1.5" />
+                <th className="px-2 py-1.5" />
+                <th className="px-2 py-1.5" />
+                <th className="border-l border-line px-2 py-1.5 text-center font-medium">
+                  {t("personnel.col.hiresPerPeriod")}
+                </th>
+                <th className="px-2 py-1.5 text-center font-medium">
+                  {t("personnel.col.hireFrequency")}
+                </th>
+                <th className="px-2 py-1.5 text-center font-medium">
+                  {t("personnel.col.maxHeadcount")}
+                </th>
+                <th className="px-2 py-1.5" />
+              </tr>
+            </thead>
+            <tbody>
+              {grouped.map((group) => (
+                <Fragment key={group.key}>
+                  <tr className="border-b border-line bg-surface-soft">
+                    <td
+                      colSpan={colCount}
+                      className="sticky left-0 px-3 py-2 text-[12px] font-semibold text-foreground"
+                    >
+                      {group.label}
+                    </td>
+                  </tr>
+                  {group.roles.map((role) => {
+                    const ctc = employerCostPerFte(role);
+                    const burden = employerBurdenPerFte(role);
+                    const annual = annualSalary(role);
+                    return (
+                      <tr
+                        key={role.id}
+                        className="border-b border-line last:border-0 hover:bg-surface-faint"
+                      >
+                        <td className="sticky left-0 z-[1] bg-white px-3 py-2 hover:bg-surface-faint">
+                          <button
+                            type="button"
+                            onClick={() => onEdit(role)}
+                            className="text-left font-medium text-accent hover:underline"
+                          >
+                            {role.name}
+                          </button>
+                          <p className="mt-0.5 text-[10px] text-muted">
+                            {t("personnel.col.headcount")}: {role.headcount}
+                          </p>
+                        </td>
+                        <td className="px-2 py-2 text-muted">{role.waehrung}</td>
+                        <td className="px-2 py-2">
+                          {t(
+                            `personnel.roleType.${role.roleType}` as MessageKey,
+                          )}
+                        </td>
+                        <td className="px-2 py-2 tabular-nums text-muted">
+                          {role.gueltigVon
+                            ? formatDate(role.gueltigVon)
+                            : t("common.emDash")}
+                        </td>
+                        <td className="px-2 py-2 tabular-nums text-muted">
+                          {role.gueltigBis
+                            ? formatDate(role.gueltigBis)
+                            : t("personnel.col.noEnd")}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {formatEuro(annual, locale)}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {role.lohnnebenkostenPercent.toFixed(2)}%
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {formatEuro(role.benefitsMonthly, locale)}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {role.zusatzAgPercent.toFixed(2)}%
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {formatEuro(burden, locale)}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {role.annualIncreasePercent.toFixed(2)}%
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {formatEuro(role.bruttoGehalt, locale)}
+                        </td>
+                        <td className="px-2 py-2 text-right font-medium tabular-nums">
+                          {formatEuro(ctc, locale)}
+                        </td>
+                        <td className="border-l border-line px-2 py-2 text-center tabular-nums">
+                          {role.roleType === "scaling"
+                            ? role.hiresPerPeriod
+                            : t("common.emDash")}
+                        </td>
+                        <td className="px-2 py-2 text-center text-muted">
+                          {role.roleType === "scaling"
+                            ? t(
+                                `personnel.hireFrequency.${role.hireFrequency}` as MessageKey,
+                              )
+                            : t("common.emDash")}
+                        </td>
+                        <td className="px-2 py-2 text-center tabular-nums">
+                          {role.roleType === "scaling"
+                            ? (role.maxHeadcount ?? t("personnel.col.unlimited"))
+                            : t("common.emDash")}
+                        </td>
+                        <td className="px-2 py-2">
+                          <TableRowActions
+                            onEdit={() => onEdit(role)}
+                            onDelete={() => onDelete(role)}
+                            editLabel={t("common.edit")}
+                            deleteLabel={t("common.delete")}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

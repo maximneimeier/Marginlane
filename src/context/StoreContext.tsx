@@ -21,6 +21,7 @@ import type {
   OverheadActual,
   OverheadItem,
   PersonnelRole,
+  PersonnelTeam,
   Product,
   ProductComponent,
   SalesPlanCell,
@@ -81,6 +82,8 @@ type StoreContextValue = {
   deleteOverheadActual: (id: string) => void;
   upsertPersonnelRole: (role: PersonnelRole) => void;
   deletePersonnelRole: (id: string) => void;
+  upsertPersonnelTeam: (team: PersonnelTeam) => void;
+  deletePersonnelTeam: (id: string) => void;
   /** Zellen mergen; quantity 0 entfernt den Eintrag */
   applySalesPlanUpdates: (updates: SalesPlanCell[]) => void;
   upsertSalesPlanRowMeta: (meta: SalesPlanRowMeta) => void;
@@ -616,6 +619,40 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [commit],
   );
 
+  const upsertPersonnelTeam = useCallback(
+    (team: PersonnelTeam) => {
+      const now = new Date().toISOString();
+      const stamped: PersonnelTeam = {
+        ...team,
+        updatedAt: now,
+        createdAt: team.createdAt || now,
+      };
+      commit((prev) => {
+        const list = prev.personnelTeams ?? [];
+        return {
+          ...prev,
+          personnelTeams: list.some((t) => t.id === stamped.id)
+            ? list.map((t) => (t.id === stamped.id ? stamped : t))
+            : [...list, stamped],
+        };
+      });
+    },
+    [commit],
+  );
+
+  const deletePersonnelTeam = useCallback(
+    (id: string) => {
+      commit((prev) => ({
+        ...prev,
+        personnelTeams: (prev.personnelTeams ?? []).filter((t) => t.id !== id),
+        personnelRoles: (prev.personnelRoles ?? []).map((r) =>
+          r.teamId === id ? { ...r, teamId: "" } : r,
+        ),
+      }));
+    },
+    [commit],
+  );
+
   const applySalesPlanUpdates = useCallback(
     (updates: SalesPlanCell[]) => {
       commit((prev) => ({
@@ -727,6 +764,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteOverheadActual,
       upsertPersonnelRole,
       deletePersonnelRole,
+      upsertPersonnelTeam,
+      deletePersonnelTeam,
       applySalesPlanUpdates,
       upsertSalesPlanRowMeta,
       patchSalesPlanSettings,
@@ -763,6 +802,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteOverheadActual,
       upsertPersonnelRole,
       deletePersonnelRole,
+      upsertPersonnelTeam,
+      deletePersonnelTeam,
       applySalesPlanUpdates,
       upsertSalesPlanRowMeta,
       patchSalesPlanSettings,

@@ -389,6 +389,26 @@ export type OverheadActual = {
 /** Wiederkehrend vs. einmalig (z. B. Laptop bei Neueinstellung) */
 export type PersonnelCadence = "monatlich" | "einmalig";
 
+/** Single Hire vs. skalierendes Team (Slidebean-ähnlich) */
+export type PersonnelRoleType = "single" | "scaling";
+
+/** Wie oft neue Hires geplant werden */
+export type PersonnelHireFrequency =
+  | "once"
+  | "yearly"
+  | "semiannual"
+  | "quarterly"
+  | "monthly";
+
+/** Organisatorisches Team / Abteilung (Stammdaten) für Personal-Gruppierung */
+export type PersonnelTeam = {
+  id: string;
+  name: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 /** Abhängige Kosten einer Rolle (Büroplatz, Laptop, …) */
 export type PersonnelDependency = {
   id: string;
@@ -406,12 +426,31 @@ export type PersonnelDependency = {
 export type PersonnelRole = {
   id: string;
   name: string;
+  /** Stammdaten-Team (Sales, Marketing, …); leer = ohne Team */
+  teamId: string;
   /** Bruttogehalt je FTE / Monat */
   bruttoGehalt: number;
   /** AG-Lohnnebenkosten in % vom Brutto (z. B. 22) */
   lohnnebenkostenPercent: number;
-  /** Vollzeitäquivalente */
+  /**
+   * Weitere AG-Anteile in % vom Brutto
+   * (z. B. bAV, Unfallversicherung — analog Workers’ Comp / 401k).
+   */
+  zusatzAgPercent: number;
+  /** Benefits / Sachbezüge je FTE / Monat (Health & Perks) */
+  benefitsMonthly: number;
+  /** Geplante jährliche Gehaltssteigerung % */
+  annualIncreasePercent: number;
+  /** Single Hire oder Scaling Team */
+  roleType: PersonnelRoleType;
+  /** Aktuelle Vollzeitäquivalente */
   headcount: number;
+  /** Bei Scaling: Hires pro Periode */
+  hiresPerPeriod: number;
+  /** Bei Scaling: Rhythmus */
+  hireFrequency: PersonnelHireFrequency;
+  /** Bei Scaling: Obergrenze; null = unbegrenzt */
+  maxHeadcount: number | null;
   waehrung: string;
   kategorie: OverheadCategory;
   verteilschluessel: OverheadAllocation;
@@ -448,6 +487,8 @@ export type AppData = {
   overheadItems: OverheadItem[];
   /** Ist: tatsächlich erfasste, benannte Ausgaben */
   overheadActuals: OverheadActual[];
+  /** Teams / Abteilungen für Personal-Gruppierung */
+  personnelTeams: PersonnelTeam[];
   /** Personalrollen (Gehalt + Nebenkosten + Abhängigkeiten) */
   personnelRoles: PersonnelRole[];
   /** Absatzplan: Stück je Produkt × Händler × Monat × Szenario */
@@ -684,6 +725,16 @@ export const OVERHEAD_ALLOCATIONS: OverheadAllocation[] = [
 
 export const PERSONNEL_CADENCES: PersonnelCadence[] = ["monatlich", "einmalig"];
 
+export const PERSONNEL_ROLE_TYPES: PersonnelRoleType[] = ["single", "scaling"];
+
+export const PERSONNEL_HIRE_FREQUENCIES: PersonnelHireFrequency[] = [
+  "once",
+  "yearly",
+  "semiannual",
+  "quarterly",
+  "monthly",
+];
+
 /** Default AG-Lohnnebenkosten % (grobe DE-Planung, kein SV-Rechner) */
 export const DEFAULT_LOHNNEBENKOSTEN_PERCENT = 22;
 
@@ -699,6 +750,7 @@ export const EMPTY_DATA: AppData = {
   logisticsTemplates: [],
   overheadItems: [],
   overheadActuals: [],
+  personnelTeams: [],
   personnelRoles: [],
   salesPlan: [],
   salesPlanRowMeta: [],

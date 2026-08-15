@@ -3,11 +3,16 @@ import type {
   OverheadItem,
   PersonnelCadence,
   PersonnelDependency,
+  PersonnelHireFrequency,
   PersonnelRole,
+  PersonnelRoleType,
+  PersonnelTeam,
 } from "./types";
 import {
   DEFAULT_LOHNNEBENKOSTEN_PERCENT,
   PERSONNEL_CADENCES,
+  PERSONNEL_HIRE_FREQUENCIES,
+  PERSONNEL_ROLE_TYPES,
 } from "./types";
 
 export function isPersonnelCadence(value: unknown): value is PersonnelCadence {
@@ -17,11 +22,46 @@ export function isPersonnelCadence(value: unknown): value is PersonnelCadence {
   );
 }
 
-/** Arbeitgeberkosten je FTE / Monat (Brutto + Nebenkosten). */
+export function isPersonnelRoleType(value: unknown): value is PersonnelRoleType {
+  return (
+    typeof value === "string" &&
+    (PERSONNEL_ROLE_TYPES as string[]).includes(value)
+  );
+}
+
+export function isPersonnelHireFrequency(
+  value: unknown,
+): value is PersonnelHireFrequency {
+  return (
+    typeof value === "string" &&
+    (PERSONNEL_HIRE_FREQUENCIES as string[]).includes(value)
+  );
+}
+
+/** Brutto × Jahr */
+export function annualSalary(role: PersonnelRole): number {
+  return Math.max(0, role.bruttoGehalt || 0) * 12;
+}
+
+/**
+ * AG-Kosten je FTE / Monat:
+ * Brutto × (1 + NK% + Zusatz%) + Benefits/Monat.
+ */
 export function employerCostPerFte(role: PersonnelRole): number {
   const brutto = Math.max(0, role.bruttoGehalt || 0);
-  const pct = Math.max(0, role.lohnnebenkostenPercent || 0);
-  return brutto * (1 + pct / 100);
+  const nk = Math.max(0, role.lohnnebenkostenPercent || 0);
+  const zusatz = Math.max(0, role.zusatzAgPercent || 0);
+  const benefits = Math.max(0, role.benefitsMonthly || 0);
+  return brutto * (1 + (nk + zusatz) / 100) + benefits;
+}
+
+/** Nur Lohnnebenkosten + Zusatz + Benefits je FTE / Monat (ohne Brutto). */
+export function employerBurdenPerFte(role: PersonnelRole): number {
+  const brutto = Math.max(0, role.bruttoGehalt || 0);
+  const nk = Math.max(0, role.lohnnebenkostenPercent || 0);
+  const zusatz = Math.max(0, role.zusatzAgPercent || 0);
+  const benefits = Math.max(0, role.benefitsMonthly || 0);
+  return brutto * ((nk + zusatz) / 100) + benefits;
 }
 
 /** Monatliche Paketkosten für aktuellen Headcount (ohne Gehalt). */
@@ -36,7 +76,7 @@ export function monthlyDependencyTotal(role: PersonnelRole): number {
   return sum;
 }
 
-/** Wiederkehrende Personalkosten / Monat (Gehalt+NK × HC + monatl. Pakete). */
+/** Wiederkehrende Personalkosten / Monat (CTC × HC + monatl. Pakete). */
 export function recurringMonthlyTotal(role: PersonnelRole): number {
   const hc = Math.max(0, role.headcount || 0);
   return employerCostPerFte(role) * hc + monthlyDependencyTotal(role);
@@ -44,7 +84,7 @@ export function recurringMonthlyTotal(role: PersonnelRole): number {
 
 /**
  * Kosten einer zusätzlichen Person (FTE +1):
- * Gehalt+NK + skalierende monatl. Pakete + einmalige Pakete (pro Kopf bzw. fix).
+ * CTC + skalierende monatl. Pakete + einmalige Pakete.
  */
 export function hireExtraPersonCost(role: PersonnelRole): {
   salary: number;
@@ -166,14 +206,52 @@ export function defaultPersonnelDependencies(): PersonnelDependency[] {
   ];
 }
 
+export function emptyPersonnelTeam(): PersonnelTeam {
+  const now = new Date().toISOString();
+  return {
+    id: createId("ptm"),
+    name: "",
+    notes: "",
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+export function normalizePersonnelTeam(
+  raw: Partial<PersonnelTeam> | null | undefined,
+): PersonnelTeam {
+  const now = new Date().toISOString();
+  return {
+    id: typeof raw?.id === "string" && raw.id ? raw.id : createId("ptm"),
+    name: typeof raw?.name === "string" ? raw.name : "",
+    notes: typeof raw?.notes === "string" ? raw.notes : "",
+    createdAt:
+      typeof raw?.createdAt === "string" && raw.createdAt
+        ? raw.createdAt
+        : now,
+    updatedAt:
+      typeof raw?.updatedAt === "string" && raw.updatedAt
+        ? raw.updatedAt
+        : now,
+  };
+}
+
 export function emptyPersonnelRole(currency = "EUR"): PersonnelRole {
   const now = new Date().toISOString();
   return {
     id: createId("prs"),
     name: "",
+    teamId: "",
     bruttoGehalt: 0,
     lohnnebenkostenPercent: DEFAULT_LOHNNEBENKOSTEN_PERCENT,
+    zusatzAgPercent: 0,
+    benefitsMonthly: 0,
+    annualIncreasePercent: 3,
+    roleType: "single",
     headcount: 1,
+    hiresPerPeriod: 1,
+    hireFrequency: "once",
+    maxHeadcount: null,
     waehrung: currency,
     kategorie: "verwaltungsgemeinkosten",
     verteilschluessel: "gleichmaessig",
@@ -195,10 +273,7 @@ export function normalizePersonnelDependency(
     ? raw!.cadence
     : "monatlich";
   return {
-    id:
-      typeof raw?.id === "string" && raw.id
-        ? raw.id
-        : createId("pdep"),
+    id: typeof raw?.id === "string" && raw.id ? raw.id : createId("pdep"),
     name: typeof raw?.name === "string" ? raw.name : "",
     amount:
       typeof raw?.amount === "number" && Number.isFinite(raw.amount)
@@ -234,6 +309,7 @@ export function normalizePersonnelRole(
   return {
     id: typeof raw?.id === "string" && raw.id ? raw.id : createId("prs"),
     name: typeof raw?.name === "string" ? raw.name : "",
+    teamId: typeof raw?.teamId === "string" ? raw.teamId : "",
     bruttoGehalt:
       typeof raw?.bruttoGehalt === "number" && Number.isFinite(raw.bruttoGehalt)
         ? raw.bruttoGehalt
@@ -243,10 +319,38 @@ export function normalizePersonnelRole(
       Number.isFinite(raw.lohnnebenkostenPercent)
         ? raw.lohnnebenkostenPercent
         : DEFAULT_LOHNNEBENKOSTEN_PERCENT,
+    zusatzAgPercent:
+      typeof raw?.zusatzAgPercent === "number" &&
+      Number.isFinite(raw.zusatzAgPercent)
+        ? raw.zusatzAgPercent
+        : 0,
+    benefitsMonthly:
+      typeof raw?.benefitsMonthly === "number" &&
+      Number.isFinite(raw.benefitsMonthly)
+        ? raw.benefitsMonthly
+        : 0,
+    annualIncreasePercent:
+      typeof raw?.annualIncreasePercent === "number" &&
+      Number.isFinite(raw.annualIncreasePercent)
+        ? raw.annualIncreasePercent
+        : 3,
+    roleType: isPersonnelRoleType(raw?.roleType) ? raw!.roleType : "single",
     headcount:
       typeof raw?.headcount === "number" && Number.isFinite(raw.headcount)
         ? raw.headcount
         : 1,
+    hiresPerPeriod:
+      typeof raw?.hiresPerPeriod === "number" &&
+      Number.isFinite(raw.hiresPerPeriod)
+        ? raw.hiresPerPeriod
+        : 1,
+    hireFrequency: isPersonnelHireFrequency(raw?.hireFrequency)
+      ? raw!.hireFrequency
+      : "once",
+    maxHeadcount:
+      typeof raw?.maxHeadcount === "number" && Number.isFinite(raw.maxHeadcount)
+        ? raw.maxHeadcount
+        : null,
     waehrung:
       typeof raw?.waehrung === "string" && raw.waehrung ? raw.waehrung : "EUR",
     kategorie,
@@ -283,7 +387,6 @@ export function normalizePersonnelRole(
       typeof raw?.updatedAt === "string" && raw.updatedAt
         ? raw.updatedAt
         : now,
-    updatedBy:
-      typeof raw?.updatedBy === "string" ? raw.updatedBy : null,
+    updatedBy: typeof raw?.updatedBy === "string" ? raw.updatedBy : null,
   };
 }

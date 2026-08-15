@@ -20,6 +20,7 @@ import type {
   LogisticsTemplate,
   OverheadItem,
   PersonnelRole,
+  PersonnelTeam,
   ProductComponent,
   ProductDocument,
   Sale,
@@ -849,13 +850,38 @@ const OVERHEAD: OverheadItem[] = [
   },
 ];
 
+const PERSONNEL_TEAMS: PersonnelTeam[] = [
+  {
+    id: "ptm_demo_ops",
+    name: "Operations",
+    notes: "Einkauf & Ops",
+    createdAt: NOW,
+    updatedAt: NOW,
+  },
+  {
+    id: "ptm_demo_sales",
+    name: "Sales",
+    notes: "Vertrieb",
+    createdAt: NOW,
+    updatedAt: NOW,
+  },
+];
+
 const PERSONNEL: PersonnelRole[] = [
   {
     id: "prs_demo_ops",
     name: "Operations / Einkauf",
+    teamId: "ptm_demo_ops",
     bruttoGehalt: 4200,
     lohnnebenkostenPercent: DEFAULT_LOHNNEBENKOSTEN_PERCENT,
+    zusatzAgPercent: 2,
+    benefitsMonthly: 80,
+    annualIncreasePercent: 3,
+    roleType: "single",
     headcount: 1,
+    hiresPerPeriod: 1,
+    hireFrequency: "once",
+    maxHeadcount: null,
     waehrung: "EUR",
     kategorie: "verwaltungsgemeinkosten",
     verteilschluessel: "nach_stueckzahl",
@@ -883,7 +909,7 @@ const PERSONNEL: PersonnelRole[] = [
         scalesWithHeadcount: true,
       },
     ],
-    gueltigVon: null,
+    gueltigVon: "2026-01-01",
     gueltigBis: null,
     notes: "Demo-Rolle mit Laptop, Büroplatz, Onboarding",
     createdAt: NOW,
@@ -893,9 +919,17 @@ const PERSONNEL: PersonnelRole[] = [
   {
     id: "prs_demo_sales",
     name: "Vertrieb Innendienst",
+    teamId: "ptm_demo_sales",
     bruttoGehalt: 3800,
     lohnnebenkostenPercent: DEFAULT_LOHNNEBENKOSTEN_PERCENT,
+    zusatzAgPercent: 1.5,
+    benefitsMonthly: 60,
+    annualIncreasePercent: 3,
+    roleType: "scaling",
     headcount: 2,
+    hiresPerPeriod: 1,
+    hireFrequency: "yearly",
+    maxHeadcount: 5,
     waehrung: "EUR",
     kategorie: "vertriebsgemeinkosten",
     verteilschluessel: "nach_umsatzanteil",
@@ -923,7 +957,7 @@ const PERSONNEL: PersonnelRole[] = [
         scalesWithHeadcount: true,
       },
     ],
-    gueltigVon: null,
+    gueltigVon: "2026-01-01",
     gueltigBis: null,
     notes: "",
     createdAt: NOW,
@@ -1063,6 +1097,7 @@ async function main() {
       BATCHES,
     ),
     overheadItems: upsertById(current.overheadItems ?? [], OVERHEAD),
+    personnelTeams: upsertById(current.personnelTeams ?? [], PERSONNEL_TEAMS),
     personnelRoles: upsertById(current.personnelRoles ?? [], PERSONNEL),
     salesPlan: (current.salesPlan ?? []).filter(
       (c) => !removedIds.includes(c.productId),
@@ -1093,7 +1128,7 @@ async function main() {
     `  Overhead:    ${OVERHEAD.length} (gesamt ${saved.overheadItems.length})`,
   );
   console.log(
-    `  Personal:    ${PERSONNEL.length} (gesamt ${(saved.personnelRoles ?? []).length})`,
+    `  Personal:    ${PERSONNEL.length} Rollen, ${PERSONNEL_TEAMS.length} Teams (gesamt ${(saved.personnelRoles ?? []).length} / ${(saved.personnelTeams ?? []).length})`,
   );
 }
 
