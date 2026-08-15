@@ -22,6 +22,7 @@ import {
   hireExtraPersonCost,
   recurringMonthlyTotal,
 } from "@/lib/personnel";
+import type { PersonnelCostDefaults } from "@/lib/companySettings";
 import {
   isManualAllocationValid,
   sumManualPercents,
@@ -40,6 +41,7 @@ type Props = {
   teams: PersonnelTeam[];
   isEdit: boolean;
   defaultCurrency?: string;
+  personnelDefaults?: Partial<PersonnelCostDefaults>;
   onClose: () => void;
   onSave: (role: PersonnelRole) => void;
 };
@@ -51,6 +53,7 @@ export function PersonnelRoleFormModal({
   teams,
   isEdit,
   defaultCurrency = "EUR",
+  personnelDefaults,
   onClose,
   onSave,
 }: Props) {
@@ -82,9 +85,9 @@ export function PersonnelRoleFormModal({
       setPercentInputs(inputs);
       return;
     }
-    setDraft(emptyPersonnelRole(defaultCurrency));
+    setDraft(emptyPersonnelRole(defaultCurrency, personnelDefaults));
     setPercentInputs({});
-  }, [open, initial, defaultCurrency]);
+  }, [open, initial, defaultCurrency, personnelDefaults]);
 
   if (!draft) return null;
 

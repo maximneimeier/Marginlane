@@ -7,6 +7,7 @@ import {
   normalizeSalesPlanRowMeta,
   normalizeSalesPlanSettings,
 } from "./salesPlan";
+import { normalizeCompanySettings } from "./companySettings";
 import {
   normalizeLogisticsBuildingBlock,
   normalizeLogisticsTemplate,
@@ -474,6 +475,12 @@ export function migrateAppData(raw: unknown): AppData {
       | undefined,
   );
 
+  const companySettings = normalizeCompanySettings(
+    (input as { companySettings?: unknown }).companySettings as
+      | Parameters<typeof normalizeCompanySettings>[0]
+      | undefined,
+  );
+
   const logisticsBuildingBlocks = Array.isArray(
     (input as { logisticsBuildingBlocks?: unknown }).logisticsBuildingBlocks,
   )
@@ -543,6 +550,7 @@ export function migrateAppData(raw: unknown): AppData {
     salesPlan,
     salesPlanRowMeta,
     salesPlanSettings,
+    companySettings,
     products: [],
   };
 }

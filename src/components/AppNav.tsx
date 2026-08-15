@@ -67,6 +67,7 @@ const NAV_GROUPS: NavGroup[] = [
     collapsible: true,
     defaultOpen: true,
     links: [
+      { href: "/company", key: "nav.company", icon: CompanyIcon },
       { href: "/products", key: "nav.products", icon: ProductsIcon },
       { href: "/components", key: "nav.components", icon: ComponentsIcon },
       { href: "/suppliers", key: "nav.suppliers", icon: SuppliersIcon },
@@ -492,6 +493,20 @@ function TeamsIcon({ active }: { active: boolean }) {
         strokeWidth="1.3"
         strokeLinecap="round"
       />
+    </svg>
+  );
+}
+
+function CompanyIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={active ? "text-accent" : "text-muted-soft"}>
+      <path
+        d="M3 12.5V4.5l4.5-2 4.5 2v8"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+      <path d="M5.5 7h1M8.5 7h1M5.5 9.5h1M8.5 9.5h1M6.5 12.5v-2h2v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

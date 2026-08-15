@@ -14,6 +14,7 @@ import type {
   AppData,
   Batch,
   CatalogProduct,
+  CompanySettings,
   Component,
   Dealer,
   LogisticsBuildingBlock,
@@ -30,7 +31,7 @@ import type {
   SalesPlanSettings,
   Supplier,
 } from "@/lib/types";
-import { EMPTY_DATA } from "@/lib/types";
+import { EMPTY_COMPANY_SETTINGS, EMPTY_DATA } from "@/lib/types";
 import { migrateAppData } from "@/lib/migrateAppData";
 import {
   freezeKey,
@@ -88,6 +89,7 @@ type StoreContextValue = {
   applySalesPlanUpdates: (updates: SalesPlanCell[]) => void;
   upsertSalesPlanRowMeta: (meta: SalesPlanRowMeta) => void;
   patchSalesPlanSettings: (patch: Partial<SalesPlanSettings>) => void;
+  patchCompanySettings: (patch: Partial<CompanySettings>) => void;
   setSalesPlanFrozen: (
     year: number,
     scenario: SalesPlanScenario,
@@ -691,6 +693,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [commit],
   );
 
+  const patchCompanySettings = useCallback(
+    (patch: Partial<CompanySettings>) => {
+      commit((prev) => ({
+        ...prev,
+        companySettings: {
+          ...(prev.companySettings ?? EMPTY_COMPANY_SETTINGS),
+          ...patch,
+        },
+      }));
+    },
+    [commit],
+  );
+
   const setSalesPlanFrozen = useCallback(
     (year: number, scenario: SalesPlanScenario, frozen: boolean) => {
       commit((prev) => {
@@ -769,6 +784,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       applySalesPlanUpdates,
       upsertSalesPlanRowMeta,
       patchSalesPlanSettings,
+      patchCompanySettings,
       setSalesPlanFrozen,
       importSalesPlan,
       clearData,
@@ -807,6 +823,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       applySalesPlanUpdates,
       upsertSalesPlanRowMeta,
       patchSalesPlanSettings,
+      patchCompanySettings,
       setSalesPlanFrozen,
       importSalesPlan,
       clearData,

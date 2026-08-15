@@ -236,17 +236,26 @@ export function normalizePersonnelTeam(
   };
 }
 
-export function emptyPersonnelRole(currency = "EUR"): PersonnelRole {
+export function emptyPersonnelRole(
+  currency = "EUR",
+  defaults?: Partial<{
+    lohnnebenkostenPercent: number;
+    zusatzAgPercent: number;
+    benefitsMonthly: number;
+    annualIncreasePercent: number;
+  }>,
+): PersonnelRole {
   const now = new Date().toISOString();
   return {
     id: createId("prs"),
     name: "",
     teamId: "",
     bruttoGehalt: 0,
-    lohnnebenkostenPercent: DEFAULT_LOHNNEBENKOSTEN_PERCENT,
-    zusatzAgPercent: 0,
-    benefitsMonthly: 0,
-    annualIncreasePercent: 3,
+    lohnnebenkostenPercent:
+      defaults?.lohnnebenkostenPercent ?? DEFAULT_LOHNNEBENKOSTEN_PERCENT,
+    zusatzAgPercent: defaults?.zusatzAgPercent ?? 0,
+    benefitsMonthly: defaults?.benefitsMonthly ?? 0,
+    annualIncreasePercent: defaults?.annualIncreasePercent ?? 3,
     roleType: "single",
     headcount: 1,
     hiresPerPeriod: 1,

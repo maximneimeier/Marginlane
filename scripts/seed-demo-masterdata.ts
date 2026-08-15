@@ -1099,6 +1099,13 @@ async function main() {
     overheadItems: upsertById(current.overheadItems ?? [], OVERHEAD),
     personnelTeams: upsertById(current.personnelTeams ?? [], PERSONNEL_TEAMS),
     personnelRoles: upsertById(current.personnelRoles ?? [], PERSONNEL),
+    companySettings: {
+      ...(current.companySettings ?? {}),
+      companyName:
+        current.companySettings?.companyName?.trim() ||
+        "Marginlane Demo GmbH",
+      baseCurrency: current.companySettings?.baseCurrency || "EUR",
+    },
     salesPlan: (current.salesPlan ?? []).filter(
       (c) => !removedIds.includes(c.productId),
     ),

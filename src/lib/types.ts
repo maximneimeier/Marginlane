@@ -192,6 +192,68 @@ export const EMPTY_SALES_PLAN_SETTINGS: SalesPlanSettings = {
   frozen: [],
 };
 
+/** USt-Voranmeldungsrhythmus (DE) */
+export type VatFilingCadence = "monthly" | "quarterly" | "annual";
+
+export const VAT_FILING_CADENCES: VatFilingCadence[] = [
+  "monthly",
+  "quarterly",
+  "annual",
+];
+
+/**
+ * Workspace-Unternehmensdaten (Finanzmodell-Annahmen).
+ * Getrennt von Profil/Sprache in localStorage (`marginlane-prefs-v1`).
+ */
+export type CompanySettings = {
+  companyName: string;
+  /** Workspace-Basiswährung (z. B. neue Gehälter) */
+  baseCurrency: string;
+  /** Modellstart YYYY-MM */
+  modelStartMonth: string;
+  /** Letzter Ist-Monat YYYY-MM */
+  lastActualMonth: string;
+  startingEquity: number;
+  startingCash: number;
+  unpaidTaxesAtStart: number;
+  /** Körperschaftsteuer % */
+  koerperschaftsteuerPercent: number;
+  /** Solidaritätszuschlag % auf KSt */
+  solidaritaetszuschlagPercent: number;
+  /** Effektive Gewerbesteuer % (vereinfacht) */
+  gewerbesteuerPercent: number;
+  vatRatePercent: number;
+  vatFilingCadence: VatFilingCadence;
+  defaultLohnnebenkostenPercent: number;
+  defaultZusatzAgPercent: number;
+  defaultBenefitsMonthly: number;
+  defaultAnnualIncreasePercent: number;
+  /** Optional Bewertung */
+  waccPercent: number | null;
+  terminalGrowthPercent: number | null;
+};
+
+export const EMPTY_COMPANY_SETTINGS: CompanySettings = {
+  companyName: "",
+  baseCurrency: "EUR",
+  modelStartMonth: "",
+  lastActualMonth: "",
+  startingEquity: 0,
+  startingCash: 0,
+  unpaidTaxesAtStart: 0,
+  koerperschaftsteuerPercent: 15,
+  solidaritaetszuschlagPercent: 5.5,
+  gewerbesteuerPercent: 14,
+  vatRatePercent: 19,
+  vatFilingCadence: "monthly",
+  defaultLohnnebenkostenPercent: 22,
+  defaultZusatzAgPercent: 0,
+  defaultBenefitsMonthly: 0,
+  defaultAnnualIncreasePercent: 3,
+  waccPercent: null,
+  terminalGrowthPercent: null,
+};
+
 /**
  * Stammdatensatz: wiederverwendbare Beschaffungs-Komponente (ohne Produktbezug).
  * Zuordnung zu Produkten über `ProductComponent`.
@@ -497,6 +559,8 @@ export type AppData = {
   salesPlanRowMeta: SalesPlanRowMeta[];
   /** Aktives Szenario + Freeze-Status */
   salesPlanSettings: SalesPlanSettings;
+  /** Firmen-/Modellannahmen (Stammdaten → Unternehmen) */
+  companySettings: CompanySettings;
 };
 
 /** Phasen, die Logistik-Bausteine typischerweise nutzen */
@@ -755,6 +819,7 @@ export const EMPTY_DATA: AppData = {
   salesPlan: [],
   salesPlanRowMeta: [],
   salesPlanSettings: { activeScenario: "base", frozen: [] },
+  companySettings: { ...EMPTY_COMPANY_SETTINGS },
 };
 
 export function formatPaymentTerms(s: {

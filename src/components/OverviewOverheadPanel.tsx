@@ -21,6 +21,8 @@ import {
   employerBurdenPerFte,
   employerCostPerFte,
 } from "@/lib/personnel";
+import { personnelDefaultsFromCompany } from "@/lib/companySettings";
+import { EMPTY_COMPANY_SETTINGS } from "@/lib/types";
 import { formatEuro } from "@/lib/format";
 import type { MessageKey } from "@/lib/i18n";
 import { useI18n } from "@/hooks/useI18n";
@@ -132,8 +134,23 @@ export function OverviewOverheadPanel({
       (data.personnelRoles ?? []).some((r) => r.id === personnelDraft.id),
   );
 
+  const companySettings = data.companySettings ?? EMPTY_COMPANY_SETTINGS;
+  const personnelDefaults = useMemo(
+    () => personnelDefaultsFromCompany(companySettings),
+    [
+      companySettings.defaultLohnnebenkostenPercent,
+      companySettings.defaultZusatzAgPercent,
+      companySettings.defaultBenefitsMonthly,
+      companySettings.defaultAnnualIncreasePercent,
+    ],
+  );
   const defaultCurrency =
-    data.suppliers.find((s) => s.currency)?.currency ?? "EUR";
+    companySettings.baseCurrency ||
+    data.suppliers.find((s) => s.currency)?.currency ||
+    "EUR";
+
+  const newPersonnelRole = () =>
+    emptyPersonnelRole(defaultCurrency, personnelDefaults);
 
   const tabSwitch = showTabSwitch ? (
     <div className="flex flex-wrap rounded-[8px] border border-line bg-white p-0.5">
@@ -180,7 +197,7 @@ export function OverviewOverheadPanel({
   const addButton =
     section === "personnel" ? (
       <Button
-        onClick={() => setPersonnelDraft(emptyPersonnelRole(defaultCurrency))}
+        onClick={() => setPersonnelDraft(newPersonnelRole())}
         className="shrink-0"
       >
         {t("personnel.add")}
@@ -268,6 +285,7 @@ export function OverviewOverheadPanel({
         teams={data.personnelTeams ?? []}
         isEdit={isPersonnelEdit}
         defaultCurrency={defaultCurrency}
+        personnelDefaults={personnelDefaults}
         onClose={() => setPersonnelDraft(null)}
         onSave={(role) => upsertPersonnelRole(role)}
       />
@@ -281,7 +299,7 @@ export function OverviewOverheadPanel({
           onEdit={(role) => setPersonnelDraft(structuredClone(role))}
           onDelete={(role) => setDeletePersonnelTarget(role)}
           onCreate={() =>
-            setPersonnelDraft(emptyPersonnelRole(defaultCurrency))
+            setPersonnelDraft(newPersonnelRole())
           }
         />
       ) : null}
