@@ -7,6 +7,17 @@ import {
   normalizeSalesPlanRowMeta,
   normalizeSalesPlanSettings,
 } from "./salesPlan";
+import {
+  mergeRevenuePlan,
+  normalizeRevenuePlanCell,
+} from "./revenuePlan";
+import {
+  defaultCogsStructure,
+  mergeCogsPlan,
+  normalizeCogsCategory,
+  normalizeCogsLineItem,
+  normalizeCogsPlanCell,
+} from "./cogsPlan";
 import { normalizeCompanySettings } from "./companySettings";
 import {
   normalizeLogisticsBuildingBlock,
@@ -27,6 +38,10 @@ import type {
   SalesData,
   SalesPlanCell,
   SalesPlanRowMeta,
+  RevenuePlanCell,
+  CogsPlanCell,
+  CogsCategory,
+  CogsLineItem,
 } from "./types";
 import { MAX_PRODUCT_DOCUMENTS } from "./types";
 import {
@@ -530,6 +545,60 @@ export function migrateAppData(raw: unknown): AppData {
       )
     : [];
 
+  const revenuePlan: RevenuePlanCell[] = Array.isArray(
+    (input as { revenuePlan?: unknown }).revenuePlan,
+  )
+    ? mergeRevenuePlan(
+        [],
+        ((input as { revenuePlan: unknown[] }).revenuePlan
+          .map((raw) =>
+            normalizeRevenuePlanCell(
+              (raw ?? {}) as Partial<RevenuePlanCell>,
+            ),
+          )
+          .filter((c): c is RevenuePlanCell => Boolean(c))),
+      )
+    : [];
+
+  const cogsPlan: CogsPlanCell[] = Array.isArray(
+    (input as { cogsPlan?: unknown }).cogsPlan,
+  )
+    ? mergeCogsPlan(
+        [],
+        ((input as { cogsPlan: unknown[] }).cogsPlan
+          .map((raw) =>
+            normalizeCogsPlanCell((raw ?? {}) as Partial<CogsPlanCell>),
+          )
+          .filter((c): c is CogsPlanCell => Boolean(c))),
+      )
+    : [];
+
+  let cogsCategories: CogsCategory[] = Array.isArray(
+    (input as { cogsCategories?: unknown }).cogsCategories,
+  )
+    ? (
+        (input as { cogsCategories: unknown[] }).cogsCategories
+      ).map((raw) =>
+        normalizeCogsCategory((raw ?? {}) as Partial<CogsCategory>),
+      )
+    : [];
+
+  let cogsLineItems: CogsLineItem[] = Array.isArray(
+    (input as { cogsLineItems?: unknown }).cogsLineItems,
+  )
+    ? (
+        (input as { cogsLineItems: unknown[] }).cogsLineItems
+      ).map((raw) =>
+        normalizeCogsLineItem((raw ?? {}) as Partial<CogsLineItem>),
+      )
+    : [];
+
+  if (cogsCategories.length === 0 && cogsLineItems.length === 0) {
+    const seeded = defaultCogsStructure();
+    cogsCategories = seeded.categories;
+    cogsLineItems = seeded.lineItems;
+  }
+
   return {
     suppliers,
     catalogProducts,
@@ -550,6 +619,10 @@ export function migrateAppData(raw: unknown): AppData {
     salesPlan,
     salesPlanRowMeta,
     salesPlanSettings,
+    revenuePlan,
+    cogsCategories,
+    cogsLineItems,
+    cogsPlan,
     companySettings,
     products: [],
   };

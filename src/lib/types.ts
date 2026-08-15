@@ -192,6 +192,43 @@ export const EMPTY_SALES_PLAN_SETTINGS: SalesPlanSettings = {
   frozen: [],
 };
 
+/** Geplanter Umsatz je Produkt × Monat (FP&A: Menge × ASP) */
+export type RevenuePlanCell = {
+  productId: string;
+  monthKey: string;
+  /** Geplante Absatzmenge */
+  quantity: number;
+  /** Average Selling Price (€ je Einheit) */
+  unitPrice: number;
+};
+
+/**
+ * Geplanter Wareneinsatz (Consolidated COGS):
+ * Kategorie → Kostenzeile → Betrag je Monat.
+ */
+export type CogsCategory = {
+  id: string;
+  name: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CogsLineItem = {
+  id: string;
+  categoryId: string;
+  name: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CogsPlanCell = {
+  lineItemId: string;
+  monthKey: string;
+  amount: number;
+};
+
 /** USt-Voranmeldungsrhythmus (DE) */
 export type VatFilingCadence = "monthly" | "quarterly" | "annual";
 
@@ -711,6 +748,16 @@ export type AppData = {
   salesPlanRowMeta: SalesPlanRowMeta[];
   /** Aktives Szenario + Freeze-Status */
   salesPlanSettings: SalesPlanSettings;
+  /**
+   * Geplanter Umsatz (Top-Line) je Monat — unabhängig vom Absatzplan.
+   */
+  revenuePlan: RevenuePlanCell[];
+  /** COGS-Kategorien (Consolidated-Sektionen) */
+  cogsCategories: CogsCategory[];
+  /** COGS-Kostenzeilen je Kategorie */
+  cogsLineItems: CogsLineItem[];
+  /** Geplante Beträge je Kostenzeile × Monat */
+  cogsPlan: CogsPlanCell[];
   /** Firmen-/Modellannahmen (Stammdaten → Unternehmen) */
   companySettings: CompanySettings;
 };
@@ -971,6 +1018,10 @@ export const EMPTY_DATA: AppData = {
   salesPlan: [],
   salesPlanRowMeta: [],
   salesPlanSettings: { activeScenario: "base", frozen: [] },
+  revenuePlan: [],
+  cogsCategories: [],
+  cogsLineItems: [],
+  cogsPlan: [],
   companySettings: { ...EMPTY_COMPANY_SETTINGS },
 };
 

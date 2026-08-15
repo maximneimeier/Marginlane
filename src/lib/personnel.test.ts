@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   employerCostPerFte,
   expandPersonnelRolesToOverheadItems,
+  headcountForMonth,
   hireExtraPersonCost,
+  buildPersonnelMonthlyMatrix,
+  aggregatePersonnelMatrixByYear,
   recurringMonthlyTotal,
 } from "@/lib/personnel";
 import type { PersonnelRole } from "@/lib/types";
@@ -89,5 +92,108 @@ describe("personnel costs", () => {
     // 4000 * (1 + 0 + 0.02) + 100 = 4180
     expect(employerCostPerFte(role())).toBe(4180);
     expect(DEFAULT_LOHNNEBENKOSTEN_PERCENT).toBe(0);
+  });
+});
+
+describe("personnel monthly scaling", () => {
+  const months = [
+    "2025-01",
+    "2025-02",
+    "2025-03",
+    "2025-04",
+    "2025-07",
+    "2026-01",
+  ];
+
+  it("keeps single-hire headcount constant while active", () => {
+    const r = role({
+      roleType: "single",
+      headcount: 2,
+      gueltigVon: "2025-02-01",
+    });
+    expect(headcountForMonth(r, "2025-01", "2025-02")).toBe(0);
+    expect(headcountForMonth(r, "2025-02", "2025-02")).toBe(2);
+    expect(headcountForMonth(r, "2026-01", "2025-02")).toBe(2);
+  });
+
+  it("grows scaling roles by hire cadence and respects max", () => {
+    const r = role({
+      roleType: "scaling",
+      headcount: 2,
+      hiresPerPeriod: 1,
+      hireFrequency: "quarterly",
+      maxHeadcount: 4,
+      gueltigVon: "2025-01-01",
+    });
+    expect(headcountForMonth(r, "2025-01", "2025-01")).toBe(2);
+    expect(headcountForMonth(r, "2025-02", "2025-01")).toBe(2);
+    expect(headcountForMonth(r, "2025-04", "2025-01")).toBe(3);
+    expect(headcountForMonth(r, "2025-07", "2025-01")).toBe(4);
+    expect(headcountForMonth(r, "2026-01", "2025-01")).toBe(4);
+  });
+
+  it("builds matrix totals by month", () => {
+    const matrix = buildPersonnelMonthlyMatrix(
+      [
+        role({
+          id: "a",
+          name: "A",
+          teamId: "t1",
+          roleType: "single",
+          headcount: 1,
+          gueltigVon: "2025-01-01",
+        }),
+        role({
+          id: "b",
+          name: "B",
+          teamId: "t1",
+          roleType: "scaling",
+          headcount: 1,
+          hiresPerPeriod: 1,
+          hireFrequency: "yearly",
+          maxHeadcount: 3,
+          gueltigVon: "2025-01-01",
+        }),
+      ],
+      months,
+      [{ id: "t1", name: "Sales", notes: "", createdAt: "", updatedAt: "" }],
+      "Unassigned",
+    );
+    expect(matrix.headcountTotal[0]).toBe(2);
+    expect(matrix.headcountTotal[5]).toBe(3);
+    expect(matrix.groups).toHaveLength(1);
+    expect(matrix.costTotal[0]).toBeGreaterThan(0);
+    // Hire month: Laptop 1200 × 2 FTEs (both roles start with hired > 0)
+    expect(matrix.oneTimeTotal[0]).toBe(2400);
+    expect(matrix.oneTimeTotal[1]).toBe(0);
+    // Recurring cost stays flat for month 0→1 (no new hires)
+    expect(matrix.costTotal[0]).toBe(matrix.costTotal[1]);
+  });
+
+  it("aggregates monthly matrix into years", () => {
+    const monthly = buildPersonnelMonthlyMatrix(
+      [
+        role({
+          id: "a",
+          name: "A",
+          teamId: "t1",
+          roleType: "scaling",
+          headcount: 1,
+          hiresPerPeriod: 1,
+          hireFrequency: "yearly",
+          maxHeadcount: 5,
+          gueltigVon: "2025-01-01",
+        }),
+      ],
+      ["2025-01", "2025-06", "2025-12", "2026-01", "2026-12"],
+      [{ id: "t1", name: "Sales", notes: "", createdAt: "", updatedAt: "" }],
+      "Unassigned",
+    );
+    const yearly = aggregatePersonnelMatrixByYear(monthly);
+    expect(yearly.months).toEqual(["2025", "2026"]);
+    expect(yearly.headcountTotal[0]).toBe(1);
+    expect(yearly.headcountTotal[1]).toBe(2);
+    expect(yearly.costTotal[0]).toBeGreaterThan(0);
+    expect(yearly.costTotal[1]).toBeGreaterThan(0);
   });
 });

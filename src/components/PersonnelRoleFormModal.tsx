@@ -19,6 +19,7 @@ import {
   emptyPersonnelRole,
   employerCostPerFte,
   hireExtraPersonCost,
+  monthlyDependencyTotal,
   recurringMonthlyTotal,
   withCompanyPersonnelDefaults,
 } from "@/lib/personnel";
@@ -436,6 +437,13 @@ export function PersonnelRoleFormModal({
               {t("personnel.summary.perFteMonth")}
             </span>
           </p>
+          <p className="mt-2 text-muted">{t("personnel.summary.packages")}</p>
+          <p className="mt-0.5 font-medium tabular-nums text-foreground">
+            {formatEuro(monthlyDependencyTotal(priced), locale)}
+            <span className="ml-1 text-[12px] font-normal text-muted">
+              {t("personnel.summary.perMonth")}
+            </span>
+          </p>
           <p className="mt-2 text-muted">{t("personnel.summary.recurring")}</p>
           <p className="mt-0.5 font-medium tabular-nums text-foreground">
             {formatEuro(recurring, locale)}
@@ -443,6 +451,159 @@ export function PersonnelRoleFormModal({
               {t("personnel.summary.perMonth")}
             </span>
           </p>
+        </div>
+
+        <div className="rounded-[10px] border border-line p-3.5">
+          <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[13px] font-medium text-foreground">
+                {t("personnel.deps.title")}
+              </p>
+              <p className="mt-0.5 text-[12px] text-muted">
+                {t("personnel.deps.hint")}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() =>
+                setDraft({
+                  ...draft,
+                  dependencies: [
+                    ...draft.dependencies,
+                    emptyPersonnelDependency(),
+                  ],
+                })
+              }
+            >
+              {t("personnel.deps.add")}
+            </Button>
+          </div>
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            {(
+              [
+                {
+                  key: "car" as const,
+                  name: t("personnel.deps.preset.car"),
+                  amount: 450,
+                  cadence: "monatlich" as const,
+                },
+                {
+                  key: "laptop" as const,
+                  name: t("personnel.deps.preset.laptop"),
+                  amount: 1200,
+                  cadence: "einmalig" as const,
+                },
+                {
+                  key: "desk" as const,
+                  name: t("personnel.deps.preset.desk"),
+                  amount: 350,
+                  cadence: "monatlich" as const,
+                },
+              ] as const
+            ).map((preset) => (
+              <button
+                key={preset.key}
+                type="button"
+                className="rounded-[6px] border border-line bg-white px-2 py-1 text-[11px] text-muted hover:border-line-strong hover:text-foreground"
+                onClick={() =>
+                  setDraft({
+                    ...draft,
+                    dependencies: [
+                      ...draft.dependencies,
+                      emptyPersonnelDependency({
+                        name: preset.name,
+                        amount: preset.amount,
+                        cadence: preset.cadence,
+                        scalesWithHeadcount: true,
+                      }),
+                    ],
+                  })
+                }
+              >
+                + {preset.name}
+              </button>
+            ))}
+          </div>
+          <p className="mb-3 rounded-[8px] border border-dashed border-line bg-surface-faint px-3 py-2 text-[12px] text-muted">
+            {t("personnel.deps.commissionNote")}{" "}
+            <Link href="/dealers" className="text-accent hover:underline">
+              {t("personnel.deps.commissionLink")}
+            </Link>
+          </p>
+          {draft.dependencies.length === 0 ? (
+            <p className="text-[12px] text-muted">{t("personnel.deps.empty")}</p>
+          ) : (
+            <div className="space-y-2">
+              {draft.dependencies.map((dep) => (
+                <div
+                  key={dep.id}
+                  className="grid gap-2 rounded-[10px] border border-line bg-white p-3 sm:grid-cols-[1fr_100px_120px_auto_auto]"
+                >
+                  <TextInput
+                    value={dep.name}
+                    placeholder={t("personnel.deps.namePlaceholder")}
+                    onChange={(e) =>
+                      updateDep(dep.id, { name: e.target.value })
+                    }
+                  />
+                  <TextInput
+                    type="number"
+                    min={0}
+                    value={dep.amount}
+                    aria-label={t("personnel.deps.amount")}
+                    onChange={(e) =>
+                      updateDep(dep.id, {
+                        amount: Number(e.target.value) || 0,
+                      })
+                    }
+                  />
+                  <Select
+                    value={dep.cadence}
+                    onChange={(e) =>
+                      updateDep(dep.id, {
+                        cadence: e.target
+                          .value as PersonnelDependency["cadence"],
+                      })
+                    }
+                  >
+                    <option value="monatlich">
+                      {t("personnel.cadence.monatlich")}
+                    </option>
+                    <option value="einmalig">
+                      {t("personnel.cadence.einmalig")}
+                    </option>
+                  </Select>
+                  <label className="flex items-center gap-1.5 text-[12px] text-muted">
+                    <input
+                      type="checkbox"
+                      checked={dep.scalesWithHeadcount}
+                      onChange={(e) =>
+                        updateDep(dep.id, {
+                          scalesWithHeadcount: e.target.checked,
+                        })
+                      }
+                    />
+                    {t("personnel.deps.scales")}
+                  </label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() =>
+                      setDraft({
+                        ...draft,
+                        dependencies: draft.dependencies.filter(
+                          (d) => d.id !== dep.id,
+                        ),
+                      })
+                    }
+                  >
+                    {t("common.delete")}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -543,105 +704,6 @@ export function PersonnelRoleFormModal({
             ) : null}
           </div>
         ) : null}
-
-        <div>
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <div>
-              <p className="text-[13px] font-medium text-foreground">
-                {t("personnel.deps.title")}
-              </p>
-              <p className="text-[12px] text-muted">
-                {t("personnel.deps.hint")}
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() =>
-                setDraft({
-                  ...draft,
-                  dependencies: [
-                    ...draft.dependencies,
-                    emptyPersonnelDependency(),
-                  ],
-                })
-              }
-            >
-              {t("personnel.deps.add")}
-            </Button>
-          </div>
-          {draft.dependencies.length === 0 ? (
-            <p className="text-[12px] text-muted">{t("personnel.deps.empty")}</p>
-          ) : (
-            <div className="space-y-2">
-              {draft.dependencies.map((dep) => (
-                <div
-                  key={dep.id}
-                  className="grid gap-2 rounded-[10px] border border-line p-3 sm:grid-cols-[1fr_100px_120px_auto_auto]"
-                >
-                  <TextInput
-                    value={dep.name}
-                    placeholder={t("personnel.deps.namePlaceholder")}
-                    onChange={(e) =>
-                      updateDep(dep.id, { name: e.target.value })
-                    }
-                  />
-                  <TextInput
-                    type="number"
-                    min={0}
-                    value={dep.amount}
-                    onChange={(e) =>
-                      updateDep(dep.id, {
-                        amount: Number(e.target.value) || 0,
-                      })
-                    }
-                  />
-                  <Select
-                    value={dep.cadence}
-                    onChange={(e) =>
-                      updateDep(dep.id, {
-                        cadence: e.target.value as PersonnelDependency["cadence"],
-                      })
-                    }
-                  >
-                    <option value="monatlich">
-                      {t("personnel.cadence.monatlich")}
-                    </option>
-                    <option value="einmalig">
-                      {t("personnel.cadence.einmalig")}
-                    </option>
-                  </Select>
-                  <label className="flex items-center gap-1.5 text-[12px] text-muted">
-                    <input
-                      type="checkbox"
-                      checked={dep.scalesWithHeadcount}
-                      onChange={(e) =>
-                        updateDep(dep.id, {
-                          scalesWithHeadcount: e.target.checked,
-                        })
-                      }
-                    />
-                    {t("personnel.deps.scales")}
-                  </label>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() =>
-                      setDraft({
-                        ...draft,
-                        dependencies: draft.dependencies.filter(
-                          (d) => d.id !== dep.id,
-                        ),
-                      })
-                    }
-                  >
-                    {t("common.delete")}
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
 
         <div className="rounded-[10px] border border-dashed border-line px-3.5 py-3 text-[13px]">
           <p className="font-medium text-foreground">

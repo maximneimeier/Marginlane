@@ -2,7 +2,24 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
+import {
+  BarChart3,
+  Building2,
+  ChevronRight,
+  Grid2x2,
+  LayoutDashboard,
+  Layers,
+  Package,
+  PackageOpen,
+  Receipt,
+  Store,
+  TrendingUp,
+  Truck,
+  UserRound,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import {
   initialsFromName,
   usePrefs,
@@ -11,12 +28,10 @@ import { useI18n } from "@/hooks/useI18n";
 import type { MessageKey } from "@/lib/i18n";
 import { FEATURES } from "@/lib/features";
 
-type NavIcon = (props: { active: boolean }) => ReactNode;
-
 type NavLink = {
   href: string;
   key: MessageKey;
-  icon: NavIcon;
+  icon: LucideIcon;
   /** If set, link is only shown when this feature flag is true */
   feature?: keyof typeof FEATURES;
 };
@@ -24,6 +39,7 @@ type NavLink = {
 type NavGroupId =
   | "analyse"
   | "planung"
+  | "umsatz"
   | "stammdaten"
   | "abwicklung"
   | "gemeinkosten";
@@ -43,7 +59,17 @@ const NAV_GROUPS: NavGroup[] = [
     collapsible: false,
     defaultOpen: true,
     links: [
-      { href: "/overview", key: "nav.overview", icon: OverviewIcon },
+      { href: "/overview", key: "nav.overview", icon: LayoutDashboard },
+    ],
+  },
+
+  {
+    id: "umsatz",
+    labelKey: "nav.group.umsatz",
+    collapsible: false,
+    defaultOpen: true,
+    links: [
+      { href: "/revenue", key: "nav.revenue", icon: TrendingUp },
     ],
   },
 
@@ -56,7 +82,7 @@ const NAV_GROUPS: NavGroup[] = [
       {
         href: "/sales-volume",
         key: "nav.salesVolume",
-        icon: SalesVolumeIcon,
+        icon: BarChart3,
         feature: "salesVolumePlanning",
       },
     ],
@@ -67,12 +93,12 @@ const NAV_GROUPS: NavGroup[] = [
     collapsible: true,
     defaultOpen: true,
     links: [
-      { href: "/company", key: "nav.company", icon: CompanyIcon },
-      { href: "/products", key: "nav.products", icon: ProductsIcon },
-      { href: "/components", key: "nav.components", icon: ComponentsIcon },
-      { href: "/suppliers", key: "nav.suppliers", icon: SuppliersIcon },
-      { href: "/logistics", key: "nav.logistics", icon: LogisticsIcon },
-      { href: "/dealers", key: "nav.dealers", icon: DealersIcon },
+      { href: "/company", key: "nav.company", icon: Building2 },
+      { href: "/products", key: "nav.products", icon: Package },
+      { href: "/components", key: "nav.components", icon: Grid2x2 },
+      { href: "/suppliers", key: "nav.suppliers", icon: Users },
+      { href: "/logistics", key: "nav.logistics", icon: Truck },
+      { href: "/dealers", key: "nav.dealers", icon: Store },
     ],
   },
   {
@@ -80,7 +106,7 @@ const NAV_GROUPS: NavGroup[] = [
     labelKey: "nav.group.abwicklung",
     collapsible: false,
     defaultOpen: true,
-    links: [{ href: "/batches", key: "nav.batches", icon: BatchesIcon }],
+    links: [{ href: "/batches", key: "nav.batches", icon: Layers }],
   },
   {
     id: "gemeinkosten",
@@ -89,20 +115,42 @@ const NAV_GROUPS: NavGroup[] = [
     defaultOpen: true,
     links: [
       {
+        href: "/cogs",
+        key: "nav.cogs",
+        icon: PackageOpen,
+      },
+      {
         href: "/overhead",
         key: "nav.overheadPositions",
-        icon: OverheadIcon,
+        icon: Receipt,
         feature: "overheadTopLevelNav",
       },
       {
         href: "/overhead/personnel",
         key: "nav.overheadPersonnel",
-        icon: PersonnelIcon,
+        icon: UserRound,
         feature: "overheadTopLevelNav",
       },
     ],
   },
 ];
+
+function NavItemIcon({
+  icon: Icon,
+  active,
+}: {
+  icon: LucideIcon;
+  active: boolean;
+}) {
+  return (
+    <Icon
+      size={15}
+      strokeWidth={1.75}
+      className={`shrink-0 ${active ? "text-accent" : "text-muted-soft"}`}
+      aria-hidden
+    />
+  );
+}
 
 function visibleLinks(links: NavLink[]): NavLink[] {
   return links.filter(
@@ -240,7 +288,6 @@ export function AppNav() {
                 <div className="mt-0.5 flex flex-col gap-0.5">
                   {group.links.map((link) => {
                     const active = isActive(pathname, link.href);
-                    const Icon = link.icon;
                     return (
                       <Link
                         key={link.href}
@@ -251,7 +298,7 @@ export function AppNav() {
                             : "text-muted hover:bg-white/70 hover:text-foreground"
                         }`}
                       >
-                        <Icon active={active} />
+                        <NavItemIcon icon={link.icon} active={active} />
                         {t(link.key)}
                       </Link>
                     );
@@ -328,177 +375,24 @@ export function MobileNav() {
 
 function GroupChevron({ open }: { open: boolean }) {
   return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 12 12"
-      fill="none"
+    <ChevronRight
+      size={12}
+      strokeWidth={2}
       className={`shrink-0 text-muted-soft transition-transform ${
         open ? "rotate-90" : ""
       }`}
       aria-hidden
-    >
-      <path
-        d="M4.5 3 7.5 6l-3 3"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+    />
   );
 }
 
 function SettingsChevron() {
   return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 14 14"
-      fill="none"
+    <ChevronRight
+      size={14}
+      strokeWidth={1.75}
       className="shrink-0 text-muted-soft"
       aria-hidden
-    >
-      <path
-        d="M5.25 3.5 8.75 7l-3.5 3.5"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function OverviewIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={active ? "text-accent" : "text-muted-soft"}>
-      <rect x="2" y="2" width="4.5" height="4.5" rx="1" stroke="currentColor" strokeWidth="1.3" />
-      <rect x="8.5" y="2" width="4.5" height="4.5" rx="1" stroke="currentColor" strokeWidth="1.3" />
-      <rect x="2" y="8.5" width="4.5" height="4.5" rx="1" stroke="currentColor" strokeWidth="1.3" />
-      <rect x="8.5" y="8.5" width="4.5" height="4.5" rx="1" stroke="currentColor" strokeWidth="1.3" />
-    </svg>
-  );
-}
-
-function SuppliersIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={active ? "text-accent" : "text-muted-soft"}>
-      <circle cx="7.5" cy="4.5" r="2.25" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M2.5 12.5c0-2.4 2.1-4.25 5-4.25s5 1.85 5 4.25" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function ProductsIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={active ? "text-accent" : "text-muted-soft"}>
-      <path
-        d="M2.5 4.2 7.5 1.75 12.5 4.2v6.6L7.5 13.25 2.5 10.8V4.2Z"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinejoin="round"
-      />
-      <path d="M7.5 7.5V13.1M7.5 7.5 2.7 5.1M7.5 7.5l4.8-2.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function SalesVolumeIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={active ? "text-accent" : "text-muted-soft"}>
-      <path
-        d="M3 11.5V7.5M6.5 11.5V4.5M10 11.5V6M12.5 11.5V8.5"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-      />
-      <path d="M2.5 12.5h10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function ComponentsIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={active ? "text-accent" : "text-muted-soft"}>
-      <rect x="2.25" y="2.25" width="4.5" height="4.5" rx="1" stroke="currentColor" strokeWidth="1.3" />
-      <rect x="8.25" y="2.25" width="4.5" height="4.5" rx="1" stroke="currentColor" strokeWidth="1.3" />
-      <rect x="2.25" y="8.25" width="4.5" height="4.5" rx="1" stroke="currentColor" strokeWidth="1.3" />
-      <rect x="8.25" y="8.25" width="4.5" height="4.5" rx="1" stroke="currentColor" strokeWidth="1.3" />
-    </svg>
-  );
-}
-
-function OverheadIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={active ? "text-accent" : "text-muted-soft"}>
-      <rect x="2.25" y="2.25" width="10.5" height="10.5" rx="2" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M4.5 7.5h6M7.5 4.5v6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function PersonnelIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={active ? "text-accent" : "text-muted-soft"}>
-      <circle cx="7.5" cy="4.5" r="2.25" stroke="currentColor" strokeWidth="1.3" />
-      <path
-        d="M2.75 12.25c0-2.2 2-3.75 4.75-3.75s4.75 1.55 4.75 3.75"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function LogisticsIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={active ? "text-accent" : "text-muted-soft"}>
-      <path
-        d="M2.5 9.5h7.5V5.5H2.5v4ZM10 6.5h2.2l1.3 2v1H10V6.5Z"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinejoin="round"
-      />
-      <circle cx="4.5" cy="11.25" r="1.1" stroke="currentColor" strokeWidth="1.2" />
-      <circle cx="11.5" cy="11.25" r="1.1" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  );
-}
-
-function DealersIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={active ? "text-accent" : "text-muted-soft"}>
-      <path
-        d="M2.5 11.5V5.2L7.5 2.5l5 2.7v6.3"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinejoin="round"
-      />
-      <path d="M5.5 11.5V8h4v3.5" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function CompanyIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={active ? "text-accent" : "text-muted-soft"}>
-      <path
-        d="M3 12.5V4.5l4.5-2 4.5 2v8"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinejoin="round"
-      />
-      <path d="M5.5 7h1M8.5 7h1M5.5 9.5h1M8.5 9.5h1M6.5 12.5v-2h2v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function BatchesIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={active ? "text-accent" : "text-muted-soft"}>
-      <path d="M2.5 4.5h10M2.5 7.5h10M2.5 10.5h7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-    </svg>
+    />
   );
 }

@@ -29,6 +29,7 @@ import {
   annualSalary,
   emptyPersonnelRole,
   employerCostBreakdown,
+  monthlyDependencyTotal,
   withCompanyPersonnelDefaults,
 } from "@/lib/personnel";
 import {
@@ -45,6 +46,8 @@ import type { MessageKey } from "@/lib/i18n";
 import { useI18n } from "@/hooks/useI18n";
 import { OverheadFormModal } from "@/components/OverheadFormModal";
 import { PersonnelRoleFormModal } from "@/components/PersonnelRoleFormModal";
+import { PersonnelMonthlyMatrix } from "@/components/PersonnelMonthlyMatrix";
+import { PersonnelCharts } from "@/components/PersonnelCharts";
 import { OverheadStackedBarChart } from "@/components/OverheadStackedBarChart";
 import { OverheadAllocationSankeyChart } from "@/components/OverheadAllocationSankeyChart";
 import { OverheadResultWaterfallChart } from "@/components/OverheadResultWaterfallChart";
@@ -92,6 +95,9 @@ export function OverviewOverheadPanel({
     useState<PersonnelRole | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [tab, setTab] = useState<OverheadTab>("tables");
+  const [personnelTab, setPersonnelTab] = useState<
+    "roles" | "matrix" | "charts"
+  >("roles");
   const [kostenartFilter, setKostenartFilter] = useState<
     "all" | OverheadCostBehavior
   >("all");
@@ -99,7 +105,8 @@ export function OverviewOverheadPanel({
   const showPlanVsActual = FEATURES.overheadPlanVsActual;
   const showCharts = FEATURES.overheadCharts;
   const showTabSwitch =
-    section === "positions" && (showPlanVsActual || showCharts);
+    section === "personnel" ||
+    (section === "positions" && (showPlanVsActual || showCharts));
   const activeTab: OverheadTab =
     section === "personnel"
       ? "tables"
@@ -175,55 +182,95 @@ export function OverviewOverheadPanel({
 
   const tabSwitch = showTabSwitch ? (
     <div className="flex flex-wrap rounded-[8px] border border-line bg-white p-0.5">
-      <button
-        type="button"
-        onClick={() => setTab("tables")}
-        className={`rounded-[6px] px-2.5 py-1 text-[12px] font-medium ${
-          activeTab === "tables"
-            ? "bg-surface-soft text-foreground"
-            : "text-muted hover:text-foreground"
-        }`}
-      >
-        {t("overhead.tab.tables")}
-      </button>
-      {showPlanVsActual ? (
-        <button
-          type="button"
-          onClick={() => setTab("planVsActual")}
-          className={`rounded-[6px] px-2.5 py-1 text-[12px] font-medium ${
-            activeTab === "planVsActual"
-              ? "bg-surface-soft text-foreground"
-              : "text-muted hover:text-foreground"
-          }`}
-        >
-          {t("overhead.tab.planVsActual")}
-        </button>
-      ) : null}
-      {showCharts ? (
-        <button
-          type="button"
-          onClick={() => setTab("charts")}
-          className={`rounded-[6px] px-2.5 py-1 text-[12px] font-medium ${
-            activeTab === "charts"
-              ? "bg-surface-soft text-foreground"
-              : "text-muted hover:text-foreground"
-          }`}
-        >
-          {t("overhead.tab.charts")}
-        </button>
-      ) : null}
+      {section === "personnel" ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setPersonnelTab("roles")}
+            className={`rounded-[6px] px-2.5 py-1 text-[12px] font-medium ${
+              personnelTab === "roles"
+                ? "bg-surface-soft text-foreground"
+                : "text-muted hover:text-foreground"
+            }`}
+          >
+            {t("personnel.tab.roles")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setPersonnelTab("matrix")}
+            className={`rounded-[6px] px-2.5 py-1 text-[12px] font-medium ${
+              personnelTab === "matrix"
+                ? "bg-surface-soft text-foreground"
+                : "text-muted hover:text-foreground"
+            }`}
+          >
+            {t("personnel.tab.matrix")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setPersonnelTab("charts")}
+            className={`rounded-[6px] px-2.5 py-1 text-[12px] font-medium ${
+              personnelTab === "charts"
+                ? "bg-surface-soft text-foreground"
+                : "text-muted hover:text-foreground"
+            }`}
+          >
+            {t("personnel.tab.charts")}
+          </button>
+        </>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={() => setTab("tables")}
+            className={`rounded-[6px] px-2.5 py-1 text-[12px] font-medium ${
+              activeTab === "tables"
+                ? "bg-surface-soft text-foreground"
+                : "text-muted hover:text-foreground"
+            }`}
+          >
+            {t("overhead.tab.tables")}
+          </button>
+          {showPlanVsActual ? (
+            <button
+              type="button"
+              onClick={() => setTab("planVsActual")}
+              className={`rounded-[6px] px-2.5 py-1 text-[12px] font-medium ${
+                activeTab === "planVsActual"
+                  ? "bg-surface-soft text-foreground"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              {t("overhead.tab.planVsActual")}
+            </button>
+          ) : null}
+          {showCharts ? (
+            <button
+              type="button"
+              onClick={() => setTab("charts")}
+              className={`rounded-[6px] px-2.5 py-1 text-[12px] font-medium ${
+                activeTab === "charts"
+                  ? "bg-surface-soft text-foreground"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              {t("overhead.tab.charts")}
+            </button>
+          ) : null}
+        </>
+      )}
     </div>
   ) : null;
 
   const addButton =
-    section === "personnel" ? (
+    section === "personnel" && personnelTab === "roles" ? (
       <Button
         onClick={() => setPersonnelDraft(newPersonnelRole())}
         className="shrink-0"
       >
         {t("personnel.add")}
       </Button>
-    ) : activeTab === "tables" ? (
+    ) : section === "positions" && activeTab === "tables" ? (
       <Button
         onClick={() => setDraft(emptyOverheadItem(defaultCurrency))}
         className="shrink-0"
@@ -324,6 +371,7 @@ export function OverviewOverheadPanel({
           companySettings={companySettings}
           personnelAmount={report.personnelAmount}
           locale={locale}
+          view={personnelTab}
           onEdit={(role) => setPersonnelDraft(structuredClone(role))}
           onDelete={(role) => setDeletePersonnelTarget(role)}
           onCreate={() => setPersonnelDraft(newPersonnelRole())}
@@ -1032,12 +1080,128 @@ function CtcBreakdownCell({
   );
 }
 
+function PackagesBreakdownCell({
+  role,
+  locale,
+}: {
+  role: PersonnelRole;
+  locale: string;
+}) {
+  const { t } = useI18n();
+  const cellRef = useRef<HTMLTableCellElement>(null);
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const monthly = monthlyDependencyTotal(role);
+  const monthlyDeps = (role.dependencies ?? []).filter(
+    (d) => d.cadence === "monatlich" && (d.amount || 0) > 0,
+  );
+  const oneTimeDeps = (role.dependencies ?? []).filter(
+    (d) => d.cadence === "einmalig" && (d.amount || 0) > 0,
+  );
+  const hc = Math.max(0, role.headcount || 0);
+
+  function show() {
+    const rect = cellRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setPos({ top: rect.top - 8, left: rect.right });
+    setOpen(true);
+  }
+
+  return (
+    <td
+      ref={cellRef}
+      className="px-2 py-2 text-right tabular-nums text-muted"
+      onMouseEnter={show}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <span className="cursor-default border-b border-dotted border-muted-soft/80">
+        {monthly > 0 ? formatEuro(monthly, locale) : t("common.emDash")}
+      </span>
+      {open
+        ? createPortal(
+            <div
+              role="tooltip"
+              className="pointer-events-none fixed z-[80] w-[250px] -translate-x-full -translate-y-full rounded-[10px] border border-line bg-white px-3 py-2.5 text-left shadow-[0_12px_40px_rgba(28,29,31,0.16)]"
+              style={{ top: pos.top, left: pos.left }}
+            >
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.04em] text-muted-soft">
+                {t("personnel.packagesBreakdown.title")}
+              </p>
+              {monthlyDeps.length === 0 && oneTimeDeps.length === 0 ? (
+                <p className="text-[12px] text-muted">
+                  {t("personnel.packagesBreakdown.empty")}
+                </p>
+              ) : (
+                <dl className="space-y-1.5">
+                  {monthlyDeps.map((dep) => {
+                    const amount = Math.max(0, dep.amount || 0);
+                    const line = dep.scalesWithHeadcount
+                      ? amount * hc
+                      : amount;
+                    return (
+                      <div
+                        key={dep.id}
+                        className="flex items-baseline justify-between gap-3"
+                      >
+                        <dt className="text-[11px] leading-snug text-muted">
+                          {dep.name || t("personnel.deps.namePlaceholder")}
+                          {dep.scalesWithHeadcount
+                            ? ` × ${formatNumber(hc, locale)}`
+                            : ""}
+                        </dt>
+                        <dd className="shrink-0 text-[12px] tabular-nums text-foreground">
+                          {formatEuro(line, locale)}
+                        </dd>
+                      </div>
+                    );
+                  })}
+                  {monthlyDeps.length > 0 ? (
+                    <div className="flex items-baseline justify-between gap-3 border-t border-line pt-1.5">
+                      <dt className="text-[11px] font-medium text-foreground">
+                        {t("personnel.packagesBreakdown.total")}
+                      </dt>
+                      <dd className="shrink-0 text-[12px] font-semibold tabular-nums text-foreground">
+                        {formatEuro(monthly, locale)}
+                      </dd>
+                    </div>
+                  ) : null}
+                  {oneTimeDeps.length > 0 ? (
+                    <>
+                      <p className="pt-1 text-[10px] font-semibold uppercase tracking-[0.04em] text-muted-soft">
+                        {t("personnel.packagesBreakdown.oneTime")}
+                      </p>
+                      {oneTimeDeps.map((dep) => (
+                        <div
+                          key={dep.id}
+                          className="flex items-baseline justify-between gap-3"
+                        >
+                          <dt className="text-[11px] leading-snug text-muted">
+                            {dep.name || t("personnel.deps.namePlaceholder")}
+                          </dt>
+                          <dd className="shrink-0 text-[12px] tabular-nums text-foreground">
+                            {formatEuro(Math.max(0, dep.amount || 0), locale)}
+                          </dd>
+                        </div>
+                      ))}
+                    </>
+                  ) : null}
+                </dl>
+              )}
+            </div>,
+            document.body,
+          )
+        : null}
+    </td>
+  );
+}
+
 function PersonnelRolesSection({
   roles,
   teams,
   companySettings,
   personnelAmount,
   locale,
+  view,
   onEdit,
   onDelete,
   onCreate,
@@ -1048,6 +1212,7 @@ function PersonnelRolesSection({
   companySettings: CompanySettings;
   personnelAmount: number;
   locale: string;
+  view: "roles" | "matrix" | "charts";
   onEdit: (role: PersonnelRole) => void;
   onDelete: (role: PersonnelRole) => void;
   onCreate: () => void;
@@ -1057,6 +1222,51 @@ function PersonnelRolesSection({
 
   const modelDateMin = monthKeyToStartDate(companySettings.modelStartMonth);
   const modelDateMax = monthKeyToEndDate(companySettings.lastActualMonth);
+
+  const [nameColWidth, setNameColWidth] = useState(() => {
+    if (typeof window === "undefined") return 200;
+    const raw = window.localStorage.getItem("personnel.sheet.nameColWidth");
+    const n = raw ? Number(raw) : NaN;
+    if (!Number.isFinite(n)) return 200;
+    return Math.min(480, Math.max(120, n));
+  });
+
+  function onNameColResizeStart(event: React.MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startWidth = nameColWidth;
+    const onMove = (ev: globalThis.MouseEvent) => {
+      const next = Math.min(
+        480,
+        Math.max(120, startWidth + (ev.clientX - startX)),
+      );
+      setNameColWidth(next);
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      setNameColWidth((width) => {
+        window.localStorage.setItem(
+          "personnel.sheet.nameColWidth",
+          String(width),
+        );
+        return width;
+      });
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }
+
+  const nameColStyle = {
+    width: nameColWidth,
+    minWidth: nameColWidth,
+    maxWidth: nameColWidth,
+  } as const;
 
   const teamById = useMemo(() => {
     const map = new Map<string, PersonnelTeam>();
@@ -1116,7 +1326,7 @@ function PersonnelRolesSection({
 
   const costDefaults = personnelDefaultsFromCompany(companySettings);
   const anyScaling = roles.some((r) => r.roleType === "scaling");
-  const colCount = anyScaling ? 12 : 9;
+  const colCount = anyScaling ? 13 : 10;
   const sortedTeams = [...teams].sort((a, b) =>
     a.name.localeCompare(b.name),
   );
@@ -1136,6 +1346,52 @@ function PersonnelRolesSection({
     }).format(n);
 
   const benefitsAnnualDefault = Math.max(0, costDefaults.benefitsMonthly) * 12;
+
+  if (view === "matrix") {
+    return (
+      <div className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <OverheadKpi
+            label={t("personnel.kpi.roles")}
+            value={String(roles.length)}
+          />
+          <OverheadKpi
+            label={t("personnel.kpi.period")}
+            value={formatEuro(personnelAmount, locale)}
+            hint={t("personnel.kpi.periodHint")}
+          />
+        </div>
+        <PersonnelMonthlyMatrix
+          roles={roles}
+          teams={teams}
+          companySettings={companySettings}
+        />
+      </div>
+    );
+  }
+
+  if (view === "charts") {
+    return (
+      <div className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <OverheadKpi
+            label={t("personnel.kpi.roles")}
+            value={String(roles.length)}
+          />
+          <OverheadKpi
+            label={t("personnel.kpi.period")}
+            value={formatEuro(personnelAmount, locale)}
+            hint={t("personnel.kpi.periodHint")}
+          />
+        </div>
+        <PersonnelCharts
+          roles={roles}
+          teams={teams}
+          companySettings={companySettings}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -1180,8 +1436,18 @@ function PersonnelRolesSection({
           <table className="w-full min-w-[960px] border-collapse text-left text-[12px]">
             <thead>
               <tr className="border-b border-line bg-surface-faint text-[10px] font-semibold uppercase tracking-[0.03em] text-muted-soft">
-                <th className="sticky left-0 z-10 bg-surface-faint px-3 py-2.5 text-left font-semibold">
-                  {t("personnel.col.name")}
+                <th
+                  className="relative sticky left-0 z-10 bg-surface-faint px-3 py-2.5 text-left font-semibold"
+                  style={nameColStyle}
+                >
+                  <span className="pr-2">{t("personnel.col.name")}</span>
+                  <button
+                    type="button"
+                    aria-label={t("personnel.col.resizeName")}
+                    title={t("personnel.col.resizeName")}
+                    onMouseDown={onNameColResizeStart}
+                    className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize border-0 bg-transparent p-0 hover:bg-accent/30"
+                  />
                 </th>
                 <th className="px-2 py-2.5 text-right font-semibold">
                   {t("personnel.col.headcount")}
@@ -1204,6 +1470,9 @@ function PersonnelRolesSection({
                 <th className="px-2 py-2.5 text-right font-semibold">
                   {t("personnel.col.monthlyCtc")}
                 </th>
+                <th className="px-2 py-2.5 text-right font-semibold">
+                  {t("personnel.col.packagesMonthly")}
+                </th>
                 {anyScaling ? (
                   <th
                     colSpan={3}
@@ -1218,7 +1487,11 @@ function PersonnelRolesSection({
               </tr>
               {anyScaling ? (
                 <tr className="border-b border-line bg-surface-faint text-[10px] font-medium text-muted">
-                  <th className="sticky left-0 z-10 bg-surface-faint px-3 py-1.5" />
+                  <th
+                    className="sticky left-0 z-10 bg-surface-faint px-3 py-1.5"
+                    style={nameColStyle}
+                  />
+                  <th className="px-2 py-1.5" />
                   <th className="px-2 py-1.5" />
                   <th className="px-2 py-1.5" />
                   <th className="px-2 py-1.5" />
@@ -1262,11 +1535,14 @@ function PersonnelRolesSection({
                         key={role.id}
                         className="border-b border-line last:border-0 hover:bg-surface-faint"
                       >
-                        <td className="sticky left-0 z-[1] min-w-[12rem] bg-white px-3 py-2 hover:bg-surface-faint">
+                        <td
+                          className="sticky left-0 z-[1] bg-white px-3 py-2 hover:bg-surface-faint"
+                          style={nameColStyle}
+                        >
                           <SheetText
                             value={role.name}
                             placeholder={t("personnel.field.namePlaceholder")}
-                            className="!w-full min-w-[11rem]"
+                            className="!w-full"
                             onCommit={(name) => {
                               if (!name) return;
                               patch(role, { name });
@@ -1352,6 +1628,7 @@ function PersonnelRolesSection({
                           />
                         </td>
                         <CtcBreakdownCell role={priced} locale={locale} />
+                        <PackagesBreakdownCell role={priced} locale={locale} />
                         {anyScaling ? (
                           <>
                             <td className="border-l border-line px-2 py-2 text-center">

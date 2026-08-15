@@ -29,6 +29,10 @@ import type {
   SalesPlanRowMeta,
   SalesPlanScenario,
   SalesPlanSettings,
+  RevenuePlanCell,
+  CogsPlanCell,
+  CogsCategory,
+  CogsLineItem,
   Supplier,
 } from "@/lib/types";
 import { EMPTY_COMPANY_SETTINGS, EMPTY_DATA } from "@/lib/types";
@@ -41,6 +45,8 @@ import {
   scrubDealerFromRowMeta,
   scrubDealerFromSalesPlan,
 } from "@/lib/salesPlan";
+import { mergeRevenuePlan } from "@/lib/revenuePlan";
+import { mergeCogsPlan } from "@/lib/cogsPlan";
 import { detachDealerFromSale } from "@/lib/storage";
 
 type StoreContextValue = {
@@ -88,6 +94,14 @@ type StoreContextValue = {
   deletePersonnelTeam: (id: string) => void;
   /** Zellen mergen; quantity 0 entfernt den Eintrag */
   applySalesPlanUpdates: (updates: SalesPlanCell[]) => void;
+  /** Umsatzplan-Zellen mergen; amount 0 entfernt den Eintrag */
+  applyRevenuePlanUpdates: (updates: RevenuePlanCell[]) => void;
+  /** Wareneinsatz-Plan mergen */
+  applyCogsPlanUpdates: (updates: CogsPlanCell[]) => void;
+  upsertCogsCategory: (category: CogsCategory) => void;
+  deleteCogsCategory: (id: string) => void;
+  upsertCogsLineItem: (item: CogsLineItem) => void;
+  deleteCogsLineItem: (id: string) => void;
   upsertSalesPlanRowMeta: (meta: SalesPlanRowMeta) => void;
   patchSalesPlanSettings: (patch: Partial<SalesPlanSettings>) => void;
   patchCompanySettings: (patch: Partial<CompanySettings>) => void;
@@ -666,6 +680,90 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [commit],
   );
 
+  const applyRevenuePlanUpdates = useCallback(
+    (updates: RevenuePlanCell[]) => {
+      commit((prev) => ({
+        ...prev,
+        revenuePlan: mergeRevenuePlan(prev.revenuePlan ?? [], updates),
+      }));
+    },
+    [commit],
+  );
+
+  const applyCogsPlanUpdates = useCallback(
+    (updates: CogsPlanCell[]) => {
+      commit((prev) => ({
+        ...prev,
+        cogsPlan: mergeCogsPlan(prev.cogsPlan ?? [], updates),
+      }));
+    },
+    [commit],
+  );
+
+  const upsertCogsCategory = useCallback(
+    (category: CogsCategory) => {
+      commit((prev) => {
+        const list = prev.cogsCategories ?? [];
+        const idx = list.findIndex((c) => c.id === category.id);
+        const next = [...list];
+        if (idx >= 0) next[idx] = category;
+        else next.push(category);
+        return { ...prev, cogsCategories: next };
+      });
+    },
+    [commit],
+  );
+
+  const deleteCogsCategory = useCallback(
+    (id: string) => {
+      commit((prev) => {
+        const lineIds = new Set(
+          (prev.cogsLineItems ?? [])
+            .filter((l) => l.categoryId === id)
+            .map((l) => l.id),
+        );
+        return {
+          ...prev,
+          cogsCategories: (prev.cogsCategories ?? []).filter(
+            (c) => c.id !== id,
+          ),
+          cogsLineItems: (prev.cogsLineItems ?? []).filter(
+            (l) => l.categoryId !== id,
+          ),
+          cogsPlan: (prev.cogsPlan ?? []).filter(
+            (c) => !lineIds.has(c.lineItemId),
+          ),
+        };
+      });
+    },
+    [commit],
+  );
+
+  const upsertCogsLineItem = useCallback(
+    (item: CogsLineItem) => {
+      commit((prev) => {
+        const list = prev.cogsLineItems ?? [];
+        const idx = list.findIndex((c) => c.id === item.id);
+        const next = [...list];
+        if (idx >= 0) next[idx] = item;
+        else next.push(item);
+        return { ...prev, cogsLineItems: next };
+      });
+    },
+    [commit],
+  );
+
+  const deleteCogsLineItem = useCallback(
+    (id: string) => {
+      commit((prev) => ({
+        ...prev,
+        cogsLineItems: (prev.cogsLineItems ?? []).filter((l) => l.id !== id),
+        cogsPlan: (prev.cogsPlan ?? []).filter((c) => c.lineItemId !== id),
+      }));
+    },
+    [commit],
+  );
+
   const upsertSalesPlanRowMeta = useCallback(
     (meta: SalesPlanRowMeta) => {
       commit((prev) => ({
@@ -783,6 +881,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       upsertPersonnelTeam,
       deletePersonnelTeam,
       applySalesPlanUpdates,
+      applyRevenuePlanUpdates,
+      applyCogsPlanUpdates,
+      upsertCogsCategory,
+      deleteCogsCategory,
+      upsertCogsLineItem,
+      deleteCogsLineItem,
       upsertSalesPlanRowMeta,
       patchSalesPlanSettings,
       patchCompanySettings,
@@ -822,6 +926,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       upsertPersonnelTeam,
       deletePersonnelTeam,
       applySalesPlanUpdates,
+      applyRevenuePlanUpdates,
+      applyCogsPlanUpdates,
+      upsertCogsCategory,
+      deleteCogsCategory,
+      upsertCogsLineItem,
+      deleteCogsLineItem,
       upsertSalesPlanRowMeta,
       patchSalesPlanSettings,
       patchCompanySettings,
