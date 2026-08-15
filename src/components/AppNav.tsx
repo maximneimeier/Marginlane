@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  ArrowLeftRight,
   BarChart3,
   Building2,
   ChevronRight,
@@ -23,6 +24,7 @@ import {
 import {
   initialsFromName,
   usePrefs,
+  type AppModule,
 } from "@/context/PreferencesContext";
 import { useI18n } from "@/hooks/useI18n";
 import type { MessageKey } from "@/lib/i18n";
@@ -32,8 +34,8 @@ type NavLink = {
   href: string;
   key: MessageKey;
   icon: LucideIcon;
-  /** If set, link is only shown when this feature flag is true */
   feature?: keyof typeof FEATURES;
+  modules?: AppModule[];
 };
 
 type NavGroupId =
@@ -49,6 +51,7 @@ type NavGroup = {
   labelKey: MessageKey;
   collapsible: boolean;
   defaultOpen: boolean;
+  modules: AppModule[];
   links: NavLink[];
 };
 
@@ -58,26 +61,25 @@ const NAV_GROUPS: NavGroup[] = [
     labelKey: "nav.group.analyse",
     collapsible: false,
     defaultOpen: true,
+    modules: ["invest", "batches"],
     links: [
       { href: "/overview", key: "nav.overview", icon: LayoutDashboard },
     ],
   },
-
   {
     id: "umsatz",
     labelKey: "nav.group.umsatz",
     collapsible: false,
     defaultOpen: true,
-    links: [
-      { href: "/revenue", key: "nav.revenue", icon: TrendingUp },
-    ],
+    modules: ["invest"],
+    links: [{ href: "/revenue", key: "nav.revenue", icon: TrendingUp }],
   },
-
   {
     id: "planung",
     labelKey: "nav.group.planung",
     collapsible: false,
     defaultOpen: true,
+    modules: ["invest"],
     links: [
       {
         href: "/sales-volume",
@@ -88,10 +90,34 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    id: "gemeinkosten",
+    labelKey: "nav.group.gemeinkosten",
+    collapsible: true,
+    defaultOpen: true,
+    modules: ["invest"],
+    links: [
+      { href: "/cogs", key: "nav.cogs", icon: PackageOpen },
+      {
+        href: "/overhead",
+        key: "nav.overheadPositions",
+        icon: Receipt,
+        feature: "overheadTopLevelNav",
+      },
+      {
+        href: "/overhead/personnel",
+        key: "nav.overheadPersonnel",
+        icon: UserRound,
+        feature: "overheadTopLevelNav",
+      },
+      { href: "/company", key: "nav.company", icon: Building2 },
+    ],
+  },
+  {
     id: "stammdaten",
     labelKey: "nav.group.stammdaten",
     collapsible: true,
     defaultOpen: true,
+    modules: ["batches"],
     links: [
       { href: "/company", key: "nav.company", icon: Building2 },
       { href: "/products", key: "nav.products", icon: Package },
@@ -106,32 +132,8 @@ const NAV_GROUPS: NavGroup[] = [
     labelKey: "nav.group.abwicklung",
     collapsible: false,
     defaultOpen: true,
+    modules: ["batches"],
     links: [{ href: "/batches", key: "nav.batches", icon: Layers }],
-  },
-  {
-    id: "gemeinkosten",
-    labelKey: "nav.group.gemeinkosten",
-    collapsible: true,
-    defaultOpen: true,
-    links: [
-      {
-        href: "/cogs",
-        key: "nav.cogs",
-        icon: PackageOpen,
-      },
-      {
-        href: "/overhead",
-        key: "nav.overheadPositions",
-        icon: Receipt,
-        feature: "overheadTopLevelNav",
-      },
-      {
-        href: "/overhead/personnel",
-        key: "nav.overheadPersonnel",
-        icon: UserRound,
-        feature: "overheadTopLevelNav",
-      },
-    ],
   },
 ];
 
@@ -153,25 +155,20 @@ function NavItemIcon({
 }
 
 function visibleLinks(links: NavLink[]): NavLink[] {
-  return links.filter(
-    (link) => !link.feature || FEATURES[link.feature],
-  );
+  return links.filter((link) => !link.feature || FEATURES[link.feature]);
 }
 
-function visibleGroups(): NavGroup[] {
-  return NAV_GROUPS.map((g) => ({
-    ...g,
-    links: visibleLinks(g.links),
-  })).filter((g) => g.links.length > 0);
+function visibleGroups(module: AppModule | null): NavGroup[] {
+  const active = module ?? "batches";
+  return NAV_GROUPS.filter((g) => g.modules.includes(active))
+    .map((g) => ({ ...g, links: visibleLinks(g.links) }))
+    .filter((g) => g.links.length > 0);
 }
-
-const FLAT_LINKS = visibleGroups().flatMap((g) => g.links);
 
 const NAV_OPEN_STORAGE_KEY = "marginlane-nav-open";
 
 function isActive(pathname: string, href: string) {
   if (pathname === href) return true;
-  // /overhead must not highlight when on /overhead/personnel
   if (href === "/overhead") return false;
   return pathname.startsWith(`${href}/`);
 }
@@ -198,6 +195,10 @@ export function AppNav() {
   const { t } = useI18n();
   const settingsActive = pathname.startsWith("/settings");
   const initials = initialsFromName(prefs.displayName);
+  const groups = useMemo(
+    () => visibleGroups(prefs.activeModule),
+    [prefs.activeModule],
+  );
 
   const [openMap, setOpenMap] = useState<Partial<Record<NavGroupId, boolean>>>(
     {},
@@ -211,11 +212,10 @@ export function AppNav() {
 
   useEffect(() => {
     if (!hydrated) return;
-    // Aktive Gruppe immer offen halten
     setOpenMap((prev) => {
       let changed = false;
       const next = { ...prev };
-      for (const group of NAV_GROUPS) {
+      for (const group of groups) {
         if (groupHasActive(pathname, group) && next[group.id] === false) {
           next[group.id] = true;
           changed = true;
@@ -223,7 +223,7 @@ export function AppNav() {
       }
       return changed ? next : prev;
     });
-  }, [pathname, hydrated]);
+  }, [pathname, hydrated, groups]);
 
   function isGroupOpen(group: NavGroup) {
     if (!group.collapsible) return true;
@@ -234,7 +234,6 @@ export function AppNav() {
 
   function toggleGroup(group: NavGroup) {
     if (!group.collapsible) return;
-    // Aktive Gruppe nicht zuklappen
     if (groupHasActive(pathname, group)) return;
     setOpenMap((prev) => {
       const currently = prev[group.id] ?? group.defaultOpen;
@@ -248,6 +247,13 @@ export function AppNav() {
     });
   }
 
+  const moduleLabel =
+    prefs.activeModule === "invest"
+      ? t("moduleChooser.invest.title")
+      : prefs.activeModule === "batches"
+        ? t("moduleChooser.batches.title")
+        : t("moduleChooser.navHint");
+
   return (
     <aside className="sticky top-0 hidden h-screen w-[220px] shrink-0 flex-col border-r border-line bg-sidebar md:flex">
       <div className="flex items-center gap-2.5 px-4 py-4">
@@ -258,12 +264,12 @@ export function AppNav() {
           <p className="truncate text-[13px] font-semibold tracking-tight text-foreground">
             Marginlane
           </p>
-          <p className="truncate text-[11px] text-muted-soft">Unit Economics</p>
+          <p className="truncate text-[11px] text-muted-soft">{moduleLabel}</p>
         </div>
       </div>
 
       <nav className="flex flex-1 flex-col gap-3 overflow-y-auto px-2 pb-3 pt-1">
-        {visibleGroups().map((group) => {
+        {groups.map((group) => {
           const open = isGroupOpen(group);
           return (
             <div key={group.id}>
@@ -310,7 +316,19 @@ export function AppNav() {
         })}
       </nav>
 
-      <div className="border-t border-line p-2">
+      <div className="space-y-1 border-t border-line p-2">
+        <Link
+          href="/"
+          className="flex items-center gap-2.5 rounded-[8px] px-2.5 py-2 text-[12px] text-muted transition-colors hover:bg-white/70 hover:text-foreground"
+        >
+          <ArrowLeftRight
+            size={14}
+            strokeWidth={1.75}
+            className="shrink-0 text-muted-soft"
+            aria-hidden
+          />
+          {t("moduleChooser.switch")}
+        </Link>
         <Link
           href="/settings"
           className={`flex items-center gap-2.5 rounded-[10px] px-2 py-2 transition-colors ${
@@ -339,11 +357,22 @@ export function AppNav() {
 
 export function MobileNav() {
   const pathname = usePathname();
+  const { prefs } = usePrefs();
   const { t } = useI18n();
+  const flatLinks = useMemo(
+    () => visibleGroups(prefs.activeModule).flatMap((g) => g.links),
+    [prefs.activeModule],
+  );
 
   return (
     <nav className="flex gap-1 overflow-x-auto border-b border-line px-3 py-2 md:hidden">
-      {FLAT_LINKS.map((link) => {
+      <Link
+        href="/"
+        className="shrink-0 rounded-[8px] px-3 py-1.5 text-[13px] text-muted"
+      >
+        {t("moduleChooser.switchShort")}
+      </Link>
+      {flatLinks.map((link) => {
         const active = isActive(pathname, link.href);
         return (
           <Link

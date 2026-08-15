@@ -47,6 +47,21 @@ const de = {
   "nav.overheadPersonnel": "Personalkosten",
   "nav.cogs": "Wareneinsatz",
 
+  "moduleChooser.title": "Welches Modul?",
+  "moduleChooser.description":
+    "Wähle den Arbeitsbereich. Du kannst später jederzeit wechseln.",
+  "moduleChooser.invest.title": "Invest",
+  "moduleChooser.invest.description":
+    "FP&A-Planung: Umsatz, Wareneinsatz, SG&A und Personalkosten über den Modellzeitraum.",
+  "moduleChooser.invest.cta": "Invest öffnen",
+  "moduleChooser.batches.title": "Chargen",
+  "moduleChooser.batches.description":
+    "Einzelne Chargen planen, Landed Cost kalkulieren und Finanzen konsolidieren.",
+  "moduleChooser.batches.cta": "Chargen öffnen",
+  "moduleChooser.switch": "Modul wechseln",
+  "moduleChooser.switchShort": "Module",
+  "moduleChooser.navHint": "Modul wählen",
+
   "unit.pcs": "Stk.",
   "unit.g": "g",
   "unit.kg": "kg",
@@ -1636,6 +1651,21 @@ const en: Record<MessageKey, string> = {
   "nav.overheadPositions": "SG&A",
   "nav.overheadPersonnel": "Personnel costs",
   "nav.cogs": "COGS",
+
+  "moduleChooser.title": "Which module?",
+  "moduleChooser.description":
+    "Pick your workspace. You can switch anytime.",
+  "moduleChooser.invest.title": "Invest",
+  "moduleChooser.invest.description":
+    "FP&A planning: revenue, COGS, SG&A and personnel costs across the model horizon.",
+  "moduleChooser.invest.cta": "Open Invest",
+  "moduleChooser.batches.title": "Batches",
+  "moduleChooser.batches.description":
+    "Plan individual batches, calculate landed cost and consolidate finances.",
+  "moduleChooser.batches.cta": "Open Batches",
+  "moduleChooser.switch": "Switch module",
+  "moduleChooser.switchShort": "Modules",
+  "moduleChooser.navHint": "Choose module",
 
   "unit.pcs": "pcs",
   "unit.g": "g",

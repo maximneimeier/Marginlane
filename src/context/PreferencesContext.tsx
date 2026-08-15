@@ -14,12 +14,16 @@ import type { NumberFormatStyle } from "@/lib/types";
 
 export type { AppLanguage };
 
+export type AppModule = "invest" | "batches";
+
 export type UserPrefs = {
   displayName: string;
   email: string;
   language: AppLanguage;
   /** Zahlenanzeige: DE 1.234,56 vs. US 1,234.56 */
   numberFormat: NumberFormatStyle;
+  /** Aktives App-Modul; null = noch nicht gewählt */
+  activeModule: AppModule | null;
 };
 
 const STORAGE_KEY = "marginlane-prefs-v1";
@@ -29,18 +33,25 @@ const DEFAULT_PREFS: UserPrefs = {
   email: "account@maximneimeier.de",
   language: "de",
   numberFormat: "de",
+  activeModule: null,
 };
 
 type PrefsContextValue = {
   ready: boolean;
   prefs: UserPrefs;
   setPrefs: (patch: Partial<UserPrefs>) => void;
+  setActiveModule: (module: AppModule | null) => void;
 };
 
 const PrefsContext = createContext<PrefsContextValue | null>(null);
 
 function normalizeNumberFormat(value: unknown): NumberFormatStyle {
   return value === "en" ? "en" : "de";
+}
+
+function normalizeActiveModule(value: unknown): AppModule | null {
+  if (value === "invest" || value === "batches") return value;
+  return null;
 }
 
 function loadPrefs(): UserPrefs {
@@ -54,6 +65,7 @@ function loadPrefs(): UserPrefs {
       email: parsed.email?.trim() || DEFAULT_PREFS.email,
       language: parsed.language === "en" ? "en" : "de",
       numberFormat: normalizeNumberFormat(parsed.numberFormat),
+      activeModule: normalizeActiveModule(parsed.activeModule),
     };
   } catch {
     return DEFAULT_PREFS;
@@ -92,15 +104,23 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
           patch.numberFormat !== undefined
             ? normalizeNumberFormat(patch.numberFormat)
             : prev.numberFormat,
+        activeModule:
+          patch.activeModule !== undefined
+            ? normalizeActiveModule(patch.activeModule)
+            : prev.activeModule,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
       return next;
     });
   }, []);
 
+  const setActiveModule = useCallback((module: AppModule | null) => {
+    setPrefs({ activeModule: module });
+  }, [setPrefs]);
+
   const value = useMemo(
-    () => ({ ready, prefs, setPrefs }),
-    [ready, prefs, setPrefs],
+    () => ({ ready, prefs, setPrefs, setActiveModule }),
+    [ready, prefs, setPrefs, setActiveModule],
   );
 
   return (
@@ -120,3 +140,8 @@ export function initialsFromName(name: string) {
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
+
+export const MODULE_HOME: Record<AppModule, string> = {
+  invest: "/revenue",
+  batches: "/batches",
+};

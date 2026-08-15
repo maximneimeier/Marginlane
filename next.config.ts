@@ -24,7 +24,6 @@ const nextConfig: NextConfig = {
         destination: "/company?tab=personnel",
         permanent: true,
       },
-      { source: "/", destination: "/overview", permanent: false },
     ];
   },
 };

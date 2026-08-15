@@ -1,8 +1,11 @@
-/**
- * `/` is redirected to `/overview` via `next.config.ts`.
- * Avoid `redirect()` here — in Next.js 16 + Turbopack it can race the
- * client router during HMR ("Router action dispatched before initialization").
- */
-export default function HomePage() {
-  return null;
+import ModuleChooserPageClient from "./ModuleChooserPageClient";
+
+type PageProps = {
+  params: Promise<Record<string, never>>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function HomePage({ params, searchParams }: PageProps) {
+  await Promise.all([params, searchParams]);
+  return <ModuleChooserPageClient />;
 }
