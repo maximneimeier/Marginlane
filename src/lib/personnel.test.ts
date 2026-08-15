@@ -56,16 +56,18 @@ function role(partial: Partial<PersonnelRole> = {}): PersonnelRole {
 describe("personnel costs", () => {
   it("computes employer CTC with taxes, extras and benefits", () => {
     // 4000 * (1 + 0.22 + 0.02) + 100 = 4000 * 1.24 + 100 = 5060
-    expect(employerCostPerFte(role())).toBe(5060);
+    expect(employerCostPerFte(role({ lohnnebenkostenPercent: 22 }))).toBe(5060);
   });
 
   it("sums recurring monthly including packages × headcount", () => {
     // 5060 * 2 + 350 * 2
-    expect(recurringMonthlyTotal(role())).toBe(5060 * 2 + 700);
+    expect(recurringMonthlyTotal(role({ lohnnebenkostenPercent: 22 }))).toBe(
+      5060 * 2 + 700,
+    );
   });
 
   it("preview +1 person includes CTC, monthly package, one-time", () => {
-    const h = hireExtraPersonCost(role());
+    const h = hireExtraPersonCost(role({ lohnnebenkostenPercent: 22 }));
     expect(h.salary).toBe(5060);
     expect(h.monthlyPackages).toBe(350);
     expect(h.oneTime).toBe(1200);
@@ -73,11 +75,19 @@ describe("personnel costs", () => {
   });
 
   it("expands only recurring lines to overhead items", () => {
-    const items = expandPersonnelRolesToOverheadItems([role()]);
+    const items = expandPersonnelRolesToOverheadItems([
+      role({ lohnnebenkostenPercent: 22 }),
+    ]);
     expect(items).toHaveLength(2);
     expect(items[0].name).toContain("Gehalt+NK");
     expect(items[0].betrag).toBe(5060 * 2);
     expect(items[1].name).toContain("Desk");
     expect(items[1].betrag).toBe(700);
+  });
+
+  it("uses 11.75% as default employer payroll burden", () => {
+    // 4000 * (1 + 0.1175 + 0.02) + 100 = 4650
+    expect(employerCostPerFte(role())).toBe(4650);
+    expect(DEFAULT_LOHNNEBENKOSTEN_PERCENT).toBe(11.75);
   });
 });

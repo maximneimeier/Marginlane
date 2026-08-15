@@ -547,15 +547,19 @@ const de = {
     "Kapital, Cash und offene Steuern bezogen auf den Modellstart.",
   "company.section.taxes": "Ertragsteuern",
   "company.section.taxesHint":
-    "Eingaben für die Planung — keine Steuerberatung und kein verbindlicher Steuerbescheid.",
+    "Land wählen und Sätze für die Planung hinterlegen.",
+  "company.tax.legalNoticeTitle": "Nicht verbindlich — keine Steuerberatung",
+  "company.tax.legalNotice":
+    "Die hier hinterlegten Steuersätze und Berechnungen dienen ausschließlich der finanziellen Planung und sind nicht verbindlich. Sie ersetzen keine Steuerberatung und keinen Steuerbescheid. In steuerlichen Angelegenheiten solltest du dich von einem Steuerberater oder einer entsprechenden Fachperson beraten lassen.",
   "company.section.vat": "Umsatzsteuer",
-  "company.section.vatHint": "Regelsatz und Voranmeldungsrhythmus.",
+  "company.section.vatHint":
+    "Mehrere USt-Sätze pflegen und den Standard wählen — z. B. 19 %, 7 %, 0 %.",
   "company.section.personnel": "Personal-Defaults",
   "company.section.personnelHint":
-    "Vorgaben für neue Gehaltsrollen (Lohnnebenkosten, Benefits, …).",
+    "Pflicht-AG-Abgaben und weitere Vorgaben für neue Gehaltsrollen.",
   "company.section.valuation": "Bewertung (optional)",
   "company.section.valuationHint":
-    "WACC und Terminal Growth für spätere Bewertungsrechnungen.",
+    "Kapitalkostensätze und Annahmen für spätere Bewertungsrechnungen.",
   "company.field.companyName": "Firmenname",
   "company.field.companyNamePlaceholder": "z. B. Muster GmbH",
   "company.field.baseCurrency": "Basiswährung",
@@ -589,21 +593,45 @@ const de = {
   "company.de.gewstEffective": "Effektive Gewerbesteuer: {rate} %",
   "company.de.combinedRateHint":
     "Berechnung: KSt × (1 + Soli) + effektive Gewerbesteuer",
+  "company.de.breakdownTitle": "Berechnung",
+  "company.de.line.kst": "Körperschaftsteuer",
+  "company.de.line.soli": "Solidaritätszuschlag",
+  "company.de.line.gewst": "Effektive Gewerbesteuer",
+  "company.de.formula.soli": "{kst} % × {soli} %",
+  "company.de.formula.gewst": "{messzahl} % × {hebesatz} ÷ 100",
+  "company.de.nominalTotal": "Gesamtsteuersatz (Planung)",
   "company.combinedTaxRate": "Gesamtsteuersatz (Planung): {rate} %",
-  "company.field.usFederal": "Federal Income Tax Rate %",
-  "company.field.usFederalHint": "Flat U.S. C-Corp-Satz (typisch 21 %)",
-  "company.us.jurisdictionsTitle": "Bundesstaaten / Jurisdiktionen",
-  "company.us.jurisdictionsHint":
-    "Freie Eingabe je Staat — kein festes Dropdown.",
-  "company.us.jurisdictionsEmpty":
-    "Noch keine Jurisdiktion. z. B. California oder Delaware anlegen.",
-  "company.us.addJurisdiction": "+ Jurisdiktion",
-  "company.us.col.name": "Name",
-  "company.us.col.namePlaceholder": "z. B. California",
-  "company.us.col.rate": "Income Tax %",
-  "company.us.col.franchise": "Franchise Tax (Minimum)",
-  "company.us.col.apportionment": "Apportionment %",
-  "company.us.combinedRateHint": "Ohne Franchise-Mindeststeuern",
+  "company.field.usFederal": "Bundessteuersatz %",
+  "company.field.usFederalHint":
+    "Federal Corporate Income Tax, einheitlicher Flat Rate für alle C-Corporations.",
+  "company.us.federalEditWarn":
+    "Gesetzlich seit 2018 typisch {rate} %. Abweichungen nur als Planungsannahme.",
+  "company.field.usState": "Bundesstaat",
+  "company.field.usStateRate": "Staatlicher Steuersatz %",
+  "company.field.usStateRateHint":
+    "Vorbefüllt aus der Referenztabelle — für die Planung editierbar.",
+  "company.us.graduatedHint":
+    "Gestaffelter Tarif ({range}). Planungswert = oberer Satz, editierbar.",
+  "company.us.alternativeTaxWarn":
+    "Dieser Staat ({state}) erhebt keine klassische Körperschaftsteuer, sondern eine alternative Abgabe (z. B. Franchise Tax, Gross Receipts Tax). Die hier hinterlegte Berechnung bildet das nicht ab.",
+  "company.us.alternativeTaxCalc":
+    "Für {state} keine Prozent-basierte Berechnung möglich – siehe Hinweis oben.",
+  "company.us.localTitle": "Lokale Steuer (optional)",
+  "company.us.localEnable": "Lokale Unternehmenssteuer aktivieren",
+  "company.field.usLocalRate": "Lokale Steuer %",
+  "company.field.usLocalRateHint":
+    "Nur relevant bei Städten mit eigener Unternehmenssteuer, z. B. New York City.",
+  "company.us.breakdownTitle": "Berechnung",
+  "company.us.line.federal": "Bundessteuer",
+  "company.us.line.state": "Staatliche Steuer (nach Bundesabzug)",
+  "company.us.line.local": "Lokale Steuer (nach Bundesabzug)",
+  "company.us.formula.federal": "fix",
+  "company.us.formula.state": "{state} % × (1 − {federal} %)",
+  "company.us.formula.local": "{local} % × (1 − {federal} %)",
+  "company.us.nominalTotal": "Gesamtsteuersatz (Planung)",
+  "company.us.combinedRateHint":
+    "Bund + (Staat + Lokal) × (1 − Bund). State-Steuer von der Bundesbemessungsgrundlage abzugsfähig.",
+  "company.us.refYear": "Referenzsätze Stand Steuerjahr {year} (Planung).",
   "company.field.corporateTax": "Corporation Tax %",
   "company.field.overallTaxRate": "Gesamtsteuersatz %",
   "company.field.overallTaxRateHint":
@@ -650,15 +678,54 @@ const de = {
     "Bitte prüfen: Die eingegebenen Schweizer Steuerparameter führen zu einer nominalen Gesamtsteuerbelastung von {rate} %. Prüfe, ob Grundtarif, kantonaler Steuerfuss und Gemeindesteuerfuss dem gewünschten Standort und Steuerjahr entsprechen.",
   "company.ch.plausibility.warnParams":
     "Bitte prüfen: Einzelne Schweizer Steuerparameter wirken ungewöhnlich. Nominale Gesamtsteuerbelastung: {rate} %. Werte werden nicht überschrieben — bitte Eingaben und Standort/Steuerjahr kontrollieren.",
+  "company.vat.ratesTitle": "Umsatzsteuersätze",
+  "company.vat.ratesHint":
+    "Lege die Sätze an, die du später an Produkten oder Buchungen auswählen kannst.",
+  "company.vat.ratesEmpty":
+    "Noch kein USt-Satz. Lege z. B. Regelsteuersatz 19 % an.",
+  "company.vat.addRate": "+ USt-Satz",
+  "company.vat.col.name": "Bezeichnung",
+  "company.vat.col.namePlaceholder": "z. B. Regelsteuersatz",
+  "company.vat.col.rate": "Satz %",
+  "company.vat.default": "Standard",
+  "company.vat.defaultHint":
+    "Wird als Vorgabe verwendet, wenn kein anderer Satz gewählt ist.",
+  "company.vat.deleteTitle": "USt-Satz löschen?",
+  "company.vat.deleteDescription":
+    "„{name}“ wird aus der Liste der Umsatzsteuersätze entfernt.",
   "company.field.vatRate": "USt-Satz %",
   "company.field.vatCadence": "Voranmeldungsrhythmus",
   "company.vatCadence.monthly": "Monatlich",
   "company.vatCadence.quarterly": "Vierteljährlich",
   "company.vatCadence.annual": "Jährlich",
+  "company.personnel.mandatoryTitle": "Pflicht-AG-Lohnsteuern",
+  "company.field.socialSecurity": "Social Security %",
+  "company.field.medicare": "Medicare %",
+  "company.field.futa": "FUTA (Federal Unemployment) %",
+  "company.field.suta": "SUTA (State UI) %",
+  "company.field.ett": "Employment Training Tax (ETT) %",
+  "company.personnel.mandatoryTotal": "Summe Pflicht-AG-Abgaben",
+  "company.personnel.benefitsTitle": "Arbeitgeber-Benefits (Schätzung)",
+  "company.field.healthInsurance": "Krankenversicherung / Jahr",
+  "company.field.dentalVision": "Zahn & Sehen / Jahr",
+  "company.field.match401k": "401(k)-Zuschuss %",
+  "company.field.workersComp": "Workers' Comp Insurance %",
+  "company.field.otherPerks": "Sonstige Benefits / Jahr",
+  "company.personnel.benefitsAnnualTotal": "Health und sonstige Benefits",
+  "company.personnel.benefitsPercentTotal": "401(k) und Workers' Comp",
+  "company.personnel.perYear": "Jahr",
   "company.field.defaultNk": "Default Lohnnebenkosten %",
   "company.field.defaultZusatz": "Default Zusatz AG %",
   "company.field.defaultBenefits": "Default Benefits / Monat",
   "company.field.defaultIncrease": "Default jährliche Steigerung %",
+  "company.field.costOfEquity": "Cost of Equity %",
+  "company.field.costOfDebt": "Cost of Debt %",
+  "company.field.valuationCorporateTax": "Corporate Tax Rate %",
+  "company.field.expectedMarketReturn":
+    "Expected market return % (z. B. S&P 500)",
+  "company.field.riskFreeRate":
+    "Risk-free rate % (z. B. 10Y Government Bond)",
+  "company.field.equityBeta": "Beta (Marktsensitivität)",
   "company.field.wacc": "WACC %",
   "company.field.terminalGrowth": "Terminal Growth %",
 
@@ -1913,15 +1980,19 @@ const en: Record<MessageKey, string> = {
     "Equity, cash and unpaid taxes relative to the model start.",
   "company.section.taxes": "Income taxes",
   "company.section.taxesHint":
-    "Planning inputs only — not tax advice and not a binding tax assessment.",
+    "Pick a country and enter rates for planning.",
+  "company.tax.legalNoticeTitle": "Not binding — not tax advice",
+  "company.tax.legalNotice":
+    "The tax rates and calculations entered here are for financial planning only and are not binding. They are not tax advice and not a tax assessment. For tax matters, please consult a tax advisor or other qualified professional.",
   "company.section.vat": "VAT",
-  "company.section.vatHint": "Standard rate and filing cadence.",
+  "company.section.vatHint":
+    "Maintain multiple VAT rates and pick the default — e.g. 19%, 7%, 0%.",
   "company.section.personnel": "Personnel defaults",
   "company.section.personnelHint":
-    "Defaults for new salary roles (employer burden, benefits, …).",
+    "Mandatory employer payroll taxes and other defaults for new salary roles.",
   "company.section.valuation": "Valuation (optional)",
   "company.section.valuationHint":
-    "WACC and terminal growth for later valuation models.",
+    "Cost of capital inputs and assumptions for later valuation models.",
   "company.field.companyName": "Company name",
   "company.field.companyNamePlaceholder": "e.g. Acme GmbH",
   "company.field.baseCurrency": "Base currency",
@@ -1955,21 +2026,45 @@ const en: Record<MessageKey, string> = {
   "company.de.gewstEffective": "Effective trade tax: {rate}%",
   "company.de.combinedRateHint":
     "Formula: CIT × (1 + solidarity) + effective trade tax",
+  "company.de.breakdownTitle": "Calculation",
+  "company.de.line.kst": "Corporate tax",
+  "company.de.line.soli": "Solidarity surcharge",
+  "company.de.line.gewst": "Effective trade tax",
+  "company.de.formula.soli": "{kst}% × {soli}%",
+  "company.de.formula.gewst": "{messzahl}% × {hebesatz} ÷ 100",
+  "company.de.nominalTotal": "Combined tax rate (planning)",
   "company.combinedTaxRate": "Combined tax rate (planning): {rate}%",
-  "company.field.usFederal": "Federal Income Tax Rate %",
-  "company.field.usFederalHint": "Flat U.S. C-Corp rate (typically 21%)",
-  "company.us.jurisdictionsTitle": "States / jurisdictions",
-  "company.us.jurisdictionsHint":
-    "Enter each state freely — no fixed state dropdown.",
-  "company.us.jurisdictionsEmpty":
-    "No jurisdictions yet. Add e.g. California or Delaware.",
-  "company.us.addJurisdiction": "+ Jurisdiction",
-  "company.us.col.name": "Name",
-  "company.us.col.namePlaceholder": "e.g. California",
-  "company.us.col.rate": "Income Tax %",
-  "company.us.col.franchise": "Franchise Tax (minimum)",
-  "company.us.col.apportionment": "Apportionment %",
-  "company.us.combinedRateHint": "Excluding franchise minimums",
+  "company.field.usFederal": "Federal tax rate %",
+  "company.field.usFederalHint":
+    "Federal Corporate Income Tax, flat rate for all C-Corporations.",
+  "company.us.federalEditWarn":
+    "Statutory rate typically {rate}% since 2018. Deviations are planning assumptions only.",
+  "company.field.usState": "State",
+  "company.field.usStateRate": "State tax rate %",
+  "company.field.usStateRateHint":
+    "Prefilled from the reference table — editable for planning.",
+  "company.us.graduatedHint":
+    "Graduated schedule ({range}). Planning value = top rate, editable.",
+  "company.us.alternativeTaxWarn":
+    "This state ({state}) does not levy a classic corporate income tax, but an alternative levy (e.g. franchise tax, gross receipts tax). The calculation here does not model that.",
+  "company.us.alternativeTaxCalc":
+    "No percentage-based calculation available for {state} — see notice above.",
+  "company.us.localTitle": "Local tax (optional)",
+  "company.us.localEnable": "Enable local business tax",
+  "company.field.usLocalRate": "Local tax %",
+  "company.field.usLocalRateHint":
+    "Only relevant for cities with their own business tax, e.g. New York City.",
+  "company.us.breakdownTitle": "Calculation",
+  "company.us.line.federal": "Federal tax",
+  "company.us.line.state": "State tax (after federal deduction)",
+  "company.us.line.local": "Local tax (after federal deduction)",
+  "company.us.formula.federal": "fixed",
+  "company.us.formula.state": "{state}% × (1 − {federal}%)",
+  "company.us.formula.local": "{local}% × (1 − {federal}%)",
+  "company.us.nominalTotal": "Combined tax rate (planning)",
+  "company.us.combinedRateHint":
+    "Federal + (state + local) × (1 − federal). State tax deductible from the federal base.",
+  "company.us.refYear": "Reference rates as of tax year {year} (planning).",
   "company.field.corporateTax": "Corporation Tax %",
   "company.field.overallTaxRate": "Overall tax rate %",
   "company.field.overallTaxRateHint":
@@ -2016,15 +2111,53 @@ const en: Record<MessageKey, string> = {
     "Please review: these Swiss tax parameters yield a nominal overall tax burden of {rate}%. Check whether base rate, cantonal multiplier and municipal multiplier match the intended location and tax year.",
   "company.ch.plausibility.warnParams":
     "Please review: some Swiss tax parameters look unusual. Nominal overall tax burden: {rate}%. Values are not overwritten — verify inputs and location/tax year.",
+  "company.vat.ratesTitle": "VAT rates",
+  "company.vat.ratesHint":
+    "Define the rates you can later select on products or bookings.",
+  "company.vat.ratesEmpty": "No VAT rates yet. Add e.g. standard rate 19%.",
+  "company.vat.addRate": "+ VAT rate",
+  "company.vat.col.name": "Label",
+  "company.vat.col.namePlaceholder": "e.g. Standard rate",
+  "company.vat.col.rate": "Rate %",
+  "company.vat.default": "Default",
+  "company.vat.defaultHint":
+    "Used as the default when no other rate is selected.",
+  "company.vat.deleteTitle": "Delete VAT rate?",
+  "company.vat.deleteDescription":
+    "“{name}” will be removed from the list of VAT rates.",
   "company.field.vatRate": "VAT rate %",
   "company.field.vatCadence": "Filing cadence",
   "company.vatCadence.monthly": "Monthly",
   "company.vatCadence.quarterly": "Quarterly",
   "company.vatCadence.annual": "Annual",
+  "company.personnel.mandatoryTitle": "Mandatory employer payroll taxes",
+  "company.field.socialSecurity": "Social Security %",
+  "company.field.medicare": "Medicare %",
+  "company.field.futa": "FUTA (Federal Unemployment) %",
+  "company.field.suta": "SUTA (State UI) %",
+  "company.field.ett": "Employment Training Tax (ETT) %",
+  "company.personnel.mandatoryTotal": "Total mandatory employer taxes",
+  "company.personnel.benefitsTitle": "Employer benefits costs (estimates)",
+  "company.field.healthInsurance": "Health insurance / year",
+  "company.field.dentalVision": "Dental & vision / year",
+  "company.field.match401k": "401(k) match %",
+  "company.field.workersComp": "Workers' Comp Insurance %",
+  "company.field.otherPerks": "Other perks / year",
+  "company.personnel.benefitsAnnualTotal": "Health and other perks",
+  "company.personnel.benefitsPercentTotal": "401(k) and Workers' Comp",
+  "company.personnel.perYear": "year",
   "company.field.defaultNk": "Default employer burden %",
   "company.field.defaultZusatz": "Default extra employer %",
   "company.field.defaultBenefits": "Default benefits / month",
   "company.field.defaultIncrease": "Default annual increase %",
+  "company.field.costOfEquity": "Cost of Equity %",
+  "company.field.costOfDebt": "Cost of Debt %",
+  "company.field.valuationCorporateTax": "Corporate Tax Rate %",
+  "company.field.expectedMarketReturn":
+    "Expected market return % (e.g. S&P 500)",
+  "company.field.riskFreeRate":
+    "Risk-free rate % (e.g. 10Y government bond)",
+  "company.field.equityBeta": "Beta (firm’s sensitivity to the market)",
   "company.field.wacc": "WACC %",
   "company.field.terminalGrowth": "Terminal growth %",
 

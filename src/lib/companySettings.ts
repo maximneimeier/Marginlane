@@ -7,6 +7,7 @@ import {
   type TaxRegime,
   type UsTaxJurisdiction,
   type VatFilingCadence,
+  type VatRate,
 } from "./types";
 import { EMPTY_COMPANY_SETTINGS, VAT_FILING_CADENCES } from "./types";
 import { createId } from "./format";
@@ -15,6 +16,8 @@ import {
   computeSwissTax,
   deCombinedIncomeTaxPercent,
   deEffectiveGewerbesteuerPercent,
+  getUsStateTaxRate,
+  isUsStateWithoutClassicCit,
   usCombinedIncomeTaxPercent,
 } from "./taxModels";
 
@@ -117,6 +120,82 @@ export function emptyUsTaxJurisdiction(): UsTaxJurisdiction {
   };
 }
 
+export function emptyVatRate(partial?: Partial<VatRate>): VatRate {
+  return {
+    id: typeof partial?.id === "string" && partial.id ? partial.id : createId("vat"),
+    name: typeof partial?.name === "string" ? partial.name : "",
+    ratePercent: finiteNumber(partial?.ratePercent, 0),
+  };
+}
+
+export function normalizeVatRate(
+  raw: Partial<VatRate> | null | undefined,
+): VatRate {
+  return emptyVatRate(raw ?? undefined);
+}
+
+/** Standard-USt-Sätze (DE-typisch) für neue Workspaces / leere Listen */
+export function defaultVatRates(): VatRate[] {
+  return EMPTY_COMPANY_SETTINGS.vatRates.map((r) => ({ ...r }));
+}
+
+export function normalizeVatRates(
+  raw: unknown,
+  legacyRatePercent: number,
+): VatRate[] {
+  if (Array.isArray(raw) && raw.length > 0) {
+    return raw.map((row) =>
+      normalizeVatRate((row ?? {}) as Partial<VatRate>),
+    );
+  }
+  // Legacy: ein einzelner vatRatePercent → Liste aufbauen
+  const rate = Math.max(0, legacyRatePercent);
+  const rates: VatRate[] = [
+    {
+      id: "vat_standard",
+      name: "Regelsteuersatz",
+      ratePercent: rate > 0 ? rate : 19,
+    },
+  ];
+  if (rate === 19 || rate === 0) {
+    rates.push({
+      id: "vat_reduced",
+      name: "Ermäßigter Steuersatz",
+      ratePercent: 7,
+    });
+    rates.push({
+      id: "vat_zero",
+      name: "Steuerfrei / 0 %",
+      ratePercent: 0,
+    });
+  }
+  return rates;
+}
+
+export function resolveDefaultVatRateId(
+  rates: VatRate[],
+  preferredId: unknown,
+): string {
+  if (
+    typeof preferredId === "string" &&
+    preferredId &&
+    rates.some((r) => r.id === preferredId)
+  ) {
+    return preferredId;
+  }
+  return rates[0]?.id ?? "";
+}
+
+export function resolveVatRatePercent(
+  settings: Pick<CompanySettings, "vatRates" | "defaultVatRateId" | "vatRatePercent">,
+): number {
+  const rates = settings.vatRates ?? [];
+  const match = rates.find((r) => r.id === settings.defaultVatRateId);
+  if (match) return Math.max(0, match.ratePercent || 0);
+  if (rates[0]) return Math.max(0, rates[0].ratePercent || 0);
+  return Math.max(0, settings.vatRatePercent || 0);
+}
+
 export function normalizeUsTaxJurisdiction(
   raw: Partial<UsTaxJurisdiction> | null | undefined,
 ): UsTaxJurisdiction {
@@ -163,14 +242,6 @@ export function normalizeCompanySettings(
       ? raw.baseCurrency
       : EMPTY_COMPANY_SETTINGS.baseCurrency;
 
-  const usTaxJurisdictions = Array.isArray(raw.usTaxJurisdictions)
-    ? raw.usTaxJurisdictions.map((row) =>
-        normalizeUsTaxJurisdiction(
-          (row ?? {}) as Partial<UsTaxJurisdiction>,
-        ),
-      )
-    : [];
-
   return {
     companyName:
       typeof raw.companyName === "string" ? raw.companyName : "",
@@ -198,7 +269,11 @@ export function normalizeCompanySettings(
       return finiteNumber(legacy, EMPTY_COMPANY_SETTINGS.incomeTaxesOwedAtStart);
     })(),
     taxRegime: (() => {
-      if (isTaxRegime(raw.taxRegime)) return raw.taxRegime;
+      if (isTaxRegime(raw.taxRegime)) {
+        // CH/US vorerst nicht wählbar → Anderes Land
+        if (raw.taxRegime === "ch" || raw.taxRegime === "us") return "other";
+        return raw.taxRegime;
+      }
       const legacy = (raw as { taxRegime?: string }).taxRegime;
       // Legacy-Regime → Anderes Land
       if (legacy === "at" || legacy === "uk" || legacy === "nl") return "other";
@@ -253,7 +328,65 @@ export function normalizeCompanySettings(
       raw.usFederalIncomeTaxPercent,
       EMPTY_COMPANY_SETTINGS.usFederalIncomeTaxPercent,
     ),
-    usTaxJurisdictions,
+    ...(() => {
+      const usTaxJurisdictions = Array.isArray(raw.usTaxJurisdictions)
+        ? raw.usTaxJurisdictions.map((row) =>
+            normalizeUsTaxJurisdiction(
+              (row ?? {}) as Partial<UsTaxJurisdiction>,
+            ),
+          )
+        : [];
+      const rawCode =
+        typeof (raw as { usStateCode?: unknown }).usStateCode === "string"
+          ? (raw as { usStateCode: string }).usStateCode.trim().toUpperCase()
+          : "";
+      const ref = getUsStateTaxRate(rawCode);
+      const usStateCode =
+        rawCode && ref
+          ? rawCode
+          : EMPTY_COMPANY_SETTINGS.usStateCode;
+
+      let usStateTaxPercent: number;
+      if (
+        typeof (raw as { usStateTaxPercent?: unknown }).usStateTaxPercent ===
+          "number" &&
+        Number.isFinite((raw as { usStateTaxPercent: number }).usStateTaxPercent)
+      ) {
+        usStateTaxPercent = Math.max(
+          0,
+          (raw as { usStateTaxPercent: number }).usStateTaxPercent,
+        );
+      } else if (usTaxJurisdictions[0]) {
+        usStateTaxPercent = Math.max(
+          0,
+          usTaxJurisdictions[0].incomeTaxPercent || 0,
+        );
+      } else {
+        const fallbackRef = getUsStateTaxRate(usStateCode);
+        usStateTaxPercent = isUsStateWithoutClassicCit(fallbackRef)
+          ? 0
+          : finiteNumber(
+              fallbackRef?.rate_percent,
+              EMPTY_COMPANY_SETTINGS.usStateTaxPercent,
+            );
+      }
+
+      if (isUsStateWithoutClassicCit(getUsStateTaxRate(usStateCode))) {
+        usStateTaxPercent = 0;
+      }
+
+      const usLocalTaxPercent = finiteNumber(
+        (raw as { usLocalTaxPercent?: unknown }).usLocalTaxPercent,
+        EMPTY_COMPANY_SETTINGS.usLocalTaxPercent,
+      );
+
+      return {
+        usStateCode,
+        usStateTaxPercent,
+        usLocalTaxPercent,
+        usTaxJurisdictions,
+      };
+    })(),
     chFederalTaxPercent: finiteNumber(
       raw.chFederalTaxPercent,
       EMPTY_COMPANY_SETTINGS.chFederalTaxPercent,
@@ -292,30 +425,114 @@ export function normalizeCompanySettings(
       if (legacy === "at") return "Österreich";
       if (legacy === "uk") return "Vereinigtes Königreich";
       if (legacy === "nl") return "Niederlande";
+      if (legacy === "ch") return "Schweiz";
+      if (legacy === "us") return "USA";
       return "";
     })(),
-    vatRatePercent: finiteNumber(
-      raw.vatRatePercent,
-      EMPTY_COMPANY_SETTINGS.vatRatePercent,
-    ),
+    ...(() => {
+      const legacyRate = finiteNumber(
+        raw.vatRatePercent,
+        EMPTY_COMPANY_SETTINGS.vatRatePercent,
+      );
+      const vatRates = normalizeVatRates(
+        (raw as { vatRates?: unknown }).vatRates,
+        legacyRate,
+      );
+      const defaultVatRateId = resolveDefaultVatRateId(
+        vatRates,
+        (raw as { defaultVatRateId?: unknown }).defaultVatRateId,
+      );
+      const vatRatePercent = resolveVatRatePercent({
+        vatRates,
+        defaultVatRateId,
+        vatRatePercent: legacyRate,
+      });
+      return { vatRates, defaultVatRateId, vatRatePercent };
+    })(),
     vatFilingCadence: isVatFilingCadence(raw.vatFilingCadence)
       ? raw.vatFilingCadence
       : EMPTY_COMPANY_SETTINGS.vatFilingCadence,
-    defaultLohnnebenkostenPercent: finiteNumber(
-      raw.defaultLohnnebenkostenPercent,
-      DEFAULT_LOHNNEBENKOSTEN_PERCENT,
-    ),
-    defaultZusatzAgPercent: finiteNumber(
-      raw.defaultZusatzAgPercent,
-      EMPTY_COMPANY_SETTINGS.defaultZusatzAgPercent,
-    ),
-    defaultBenefitsMonthly: finiteNumber(
-      raw.defaultBenefitsMonthly,
-      EMPTY_COMPANY_SETTINGS.defaultBenefitsMonthly,
-    ),
+    ...(() => {
+      const personnel = {
+        defaultSocialSecurityPercent: finiteNumber(
+          (raw as { defaultSocialSecurityPercent?: unknown })
+            .defaultSocialSecurityPercent,
+          EMPTY_COMPANY_SETTINGS.defaultSocialSecurityPercent,
+        ),
+        defaultMedicarePercent: finiteNumber(
+          (raw as { defaultMedicarePercent?: unknown }).defaultMedicarePercent,
+          EMPTY_COMPANY_SETTINGS.defaultMedicarePercent,
+        ),
+        defaultFutaPercent: finiteNumber(
+          (raw as { defaultFutaPercent?: unknown }).defaultFutaPercent,
+          EMPTY_COMPANY_SETTINGS.defaultFutaPercent,
+        ),
+        defaultSutaPercent: finiteNumber(
+          (raw as { defaultSutaPercent?: unknown }).defaultSutaPercent,
+          EMPTY_COMPANY_SETTINGS.defaultSutaPercent,
+        ),
+        defaultEttPercent: finiteNumber(
+          (raw as { defaultEttPercent?: unknown }).defaultEttPercent,
+          EMPTY_COMPANY_SETTINGS.defaultEttPercent,
+        ),
+        defaultHealthInsuranceAnnual: finiteNumber(
+          (raw as { defaultHealthInsuranceAnnual?: unknown })
+            .defaultHealthInsuranceAnnual,
+          EMPTY_COMPANY_SETTINGS.defaultHealthInsuranceAnnual,
+        ),
+        defaultDentalVisionAnnual: finiteNumber(
+          (raw as { defaultDentalVisionAnnual?: unknown })
+            .defaultDentalVisionAnnual,
+          EMPTY_COMPANY_SETTINGS.defaultDentalVisionAnnual,
+        ),
+        defaultOtherPerksAnnual: finiteNumber(
+          (raw as { defaultOtherPerksAnnual?: unknown }).defaultOtherPerksAnnual,
+          EMPTY_COMPANY_SETTINGS.defaultOtherPerksAnnual,
+        ),
+        default401kMatchPercent: finiteNumber(
+          (raw as { default401kMatchPercent?: unknown }).default401kMatchPercent,
+          EMPTY_COMPANY_SETTINGS.default401kMatchPercent,
+        ),
+        defaultWorkersCompPercent: finiteNumber(
+          (raw as { defaultWorkersCompPercent?: unknown })
+            .defaultWorkersCompPercent,
+          EMPTY_COMPANY_SETTINGS.defaultWorkersCompPercent,
+        ),
+      };
+      return {
+        ...personnel,
+        ...derivePersonnelAggregates(personnel),
+      };
+    })(),
     defaultAnnualIncreasePercent: finiteNumber(
       raw.defaultAnnualIncreasePercent,
       EMPTY_COMPANY_SETTINGS.defaultAnnualIncreasePercent,
+    ),
+    costOfEquityPercent: finiteNumber(
+      (raw as { costOfEquityPercent?: unknown }).costOfEquityPercent,
+      EMPTY_COMPANY_SETTINGS.costOfEquityPercent,
+    ),
+    costOfDebtPercent: finiteNumber(
+      (raw as { costOfDebtPercent?: unknown }).costOfDebtPercent,
+      EMPTY_COMPANY_SETTINGS.costOfDebtPercent,
+    ),
+    valuationCorporateTaxPercent: finiteNumber(
+      (raw as { valuationCorporateTaxPercent?: unknown })
+        .valuationCorporateTaxPercent,
+      EMPTY_COMPANY_SETTINGS.valuationCorporateTaxPercent,
+    ),
+    expectedMarketReturnPercent: finiteNumber(
+      (raw as { expectedMarketReturnPercent?: unknown })
+        .expectedMarketReturnPercent,
+      EMPTY_COMPANY_SETTINGS.expectedMarketReturnPercent,
+    ),
+    riskFreeRatePercent: finiteNumber(
+      (raw as { riskFreeRatePercent?: unknown }).riskFreeRatePercent,
+      EMPTY_COMPANY_SETTINGS.riskFreeRatePercent,
+    ),
+    equityBeta: finiteNumber(
+      (raw as { equityBeta?: unknown }).equityBeta,
+      EMPTY_COMPANY_SETTINGS.equityBeta,
     ),
     waccPercent: optionalFiniteNumber(
       raw.waccPercent,
@@ -334,6 +551,67 @@ export type PersonnelCostDefaults = {
   benefitsMonthly: number;
   annualIncreasePercent: number;
 };
+
+export function sumDefaultEmployerPayrollTaxes(settings: {
+  defaultSocialSecurityPercent: number;
+  defaultMedicarePercent: number;
+  defaultFutaPercent: number;
+  defaultSutaPercent: number;
+  defaultEttPercent: number;
+}): number {
+  return (
+    Math.max(0, settings.defaultSocialSecurityPercent || 0) +
+    Math.max(0, settings.defaultMedicarePercent || 0) +
+    Math.max(0, settings.defaultFutaPercent || 0) +
+    Math.max(0, settings.defaultSutaPercent || 0) +
+    Math.max(0, settings.defaultEttPercent || 0)
+  );
+}
+
+export function sumDefaultBenefitsAnnual(settings: {
+  defaultHealthInsuranceAnnual: number;
+  defaultDentalVisionAnnual: number;
+  defaultOtherPerksAnnual: number;
+}): number {
+  return (
+    Math.max(0, settings.defaultHealthInsuranceAnnual || 0) +
+    Math.max(0, settings.defaultDentalVisionAnnual || 0) +
+    Math.max(0, settings.defaultOtherPerksAnnual || 0)
+  );
+}
+
+export function sumDefaultBenefitsPercent(settings: {
+  default401kMatchPercent: number;
+  defaultWorkersCompPercent: number;
+}): number {
+  return (
+    Math.max(0, settings.default401kMatchPercent || 0) +
+    Math.max(0, settings.defaultWorkersCompPercent || 0)
+  );
+}
+
+export function derivePersonnelAggregates(settings: {
+  defaultSocialSecurityPercent: number;
+  defaultMedicarePercent: number;
+  defaultFutaPercent: number;
+  defaultSutaPercent: number;
+  defaultEttPercent: number;
+  defaultHealthInsuranceAnnual: number;
+  defaultDentalVisionAnnual: number;
+  defaultOtherPerksAnnual: number;
+  default401kMatchPercent: number;
+  defaultWorkersCompPercent: number;
+}): {
+  defaultLohnnebenkostenPercent: number;
+  defaultZusatzAgPercent: number;
+  defaultBenefitsMonthly: number;
+} {
+  return {
+    defaultLohnnebenkostenPercent: sumDefaultEmployerPayrollTaxes(settings),
+    defaultZusatzAgPercent: sumDefaultBenefitsPercent(settings),
+    defaultBenefitsMonthly: sumDefaultBenefitsAnnual(settings) / 12,
+  };
+}
 
 export function personnelDefaultsFromCompany(
   settings: CompanySettings | null | undefined,

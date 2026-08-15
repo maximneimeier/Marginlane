@@ -201,6 +201,14 @@ export const VAT_FILING_CADENCES: VatFilingCadence[] = [
   "annual",
 ];
 
+/** Einzelner Umsatzsteuersatz (Stammdaten, zur Auswahl an Produkten/Buchungen) */
+export type VatRate = {
+  id: string;
+  /** Anzeigename, z. B. „Regelsteuersatz“ */
+  name: string;
+  ratePercent: number;
+};
+
 /** Anzeige/Eingabe von Zahlen: DE 1.234,56 vs. US 1,234.56 */
 export type NumberFormatStyle = "de" | "en";
 
@@ -209,7 +217,11 @@ export const NUMBER_FORMAT_STYLES: NumberFormatStyle[] = ["de", "en"];
 /** Ertragsteuer-Regime (Felder je Land) */
 export type TaxRegime = "de" | "us" | "ch" | "other";
 
+/** Alle bekannten Regime (inkl. noch nicht freigeschalteter) */
 export const TAX_REGIMES: TaxRegime[] = ["de", "ch", "us", "other"];
+
+/** Im UI wählbar (MVP) */
+export const SELECTABLE_TAX_REGIMES: TaxRegime[] = ["de", "other"];
 
 /** Regime mit nur einem Gesamtsteuersatz-Feld */
 export const SIMPLE_TAX_REGIMES: TaxRegime[] = ["other"];
@@ -258,9 +270,17 @@ export type CompanySettings = {
   gewerbesteuerMesszahlPercent: number;
   /** DE: Hebesatz der Gemeinde (z. B. 400) */
   gewerbesteuerHebesatz: number;
-  /** US: Federal Income Tax % */
+  /** US: Federal Income Tax % (gesetzlich typisch 21) */
   usFederalIncomeTaxPercent: number;
-  /** US: Bundesstaaten / Jurisdiktionen */
+  /** US: Sitzstaat (ISO-ähnlich, z. B. CA, NY, DC) */
+  usStateCode: string;
+  /** US: staatlicher Körperschaftsteuersatz % (editierbarer Planungswert) */
+  usStateTaxPercent: number;
+  /** US: optionale lokale Unternehmenssteuer % */
+  usLocalTaxPercent: number;
+  /**
+   * @deprecated Multi-State-UI entfernt — nur noch für Migration alter Daten.
+   */
   usTaxJurisdictions: UsTaxJurisdiction[];
   /** CH: Direkte Bundessteuer % (nominal typisch 8,5) */
   chFederalTaxPercent: number;
@@ -278,12 +298,49 @@ export type CompanySettings = {
   corporateTaxPercent: number;
   /** Bei Regime „other“: freier Ländername */
   otherTaxCountryName: string;
+  /**
+   * Pflegbare Umsatzsteuersätze (DE z. B. 19 % / 7 % / 0 %).
+   * Auswahl erfolgt über `defaultVatRateId` bzw. später produktbezogen.
+   */
+  vatRates: VatRate[];
+  /** Aktiver/Standard-USt-Satz aus `vatRates` */
+  defaultVatRateId: string;
+  /**
+   * @deprecated Abgeleitet aus dem Default-Satz — bleibt für Rückwärtskompatibilität.
+   */
   vatRatePercent: number;
   vatFilingCadence: VatFilingCadence;
   defaultLohnnebenkostenPercent: number;
+  /** Aufschlüsselung AG-Lohnnebenkosten (Summe → defaultLohnnebenkostenPercent) */
+  defaultSocialSecurityPercent: number;
+  defaultMedicarePercent: number;
+  defaultFutaPercent: number;
+  defaultSutaPercent: number;
+  defaultEttPercent: number;
+  /** AG-Benefits (Schätzwerte, Jahresbeträge bzw. %) */
+  defaultHealthInsuranceAnnual: number;
+  defaultDentalVisionAnnual: number;
+  defaultOtherPerksAnnual: number;
+  default401kMatchPercent: number;
+  defaultWorkersCompPercent: number;
+  /**
+   * Abgeleitet: 401(k) + Workers' Comp.
+   * @deprecated Direkt aus Benefits-% berechnet
+   */
   defaultZusatzAgPercent: number;
+  /**
+   * Abgeleitet: (Health + Dental + Other Perks) / 12.
+   * @deprecated Direkt aus Jahres-Benefits berechnet
+   */
   defaultBenefitsMonthly: number;
   defaultAnnualIncreasePercent: number;
+  /** Bewertung / Capital Cost Inputs */
+  costOfEquityPercent: number;
+  costOfDebtPercent: number;
+  valuationCorporateTaxPercent: number;
+  expectedMarketReturnPercent: number;
+  riskFreeRatePercent: number;
+  equityBeta: number;
   /** Optional Bewertung */
   waccPercent: number | null;
   terminalGrowthPercent: number | null;
@@ -307,6 +364,9 @@ export const EMPTY_COMPANY_SETTINGS: CompanySettings = {
   gewerbesteuerMesszahlPercent: 3.5,
   gewerbesteuerHebesatz: 400,
   usFederalIncomeTaxPercent: 21,
+  usStateCode: "DE",
+  usStateTaxPercent: 8.7,
+  usLocalTaxPercent: 0,
   usTaxJurisdictions: [],
   chFederalTaxPercent: 8.5,
   chCantonalTaxPercent: 3.5,
@@ -316,12 +376,34 @@ export const EMPTY_COMPANY_SETTINGS: CompanySettings = {
   chCapitalTaxPermille: 0,
   corporateTaxPercent: 25,
   otherTaxCountryName: "",
+  vatRates: [
+    { id: "vat_standard", name: "Regelsteuersatz", ratePercent: 19 },
+    { id: "vat_reduced", name: "Ermäßigter Steuersatz", ratePercent: 7 },
+    { id: "vat_zero", name: "Steuerfrei / 0 %", ratePercent: 0 },
+  ],
+  defaultVatRateId: "vat_standard",
   vatRatePercent: 19,
   vatFilingCadence: "monthly",
-  defaultLohnnebenkostenPercent: 22,
-  defaultZusatzAgPercent: 0,
-  defaultBenefitsMonthly: 0,
+  defaultLohnnebenkostenPercent: 11.75,
+  defaultSocialSecurityPercent: 6.2,
+  defaultMedicarePercent: 1.45,
+  defaultFutaPercent: 0.6,
+  defaultSutaPercent: 3.4,
+  defaultEttPercent: 0.1,
+  defaultHealthInsuranceAnnual: 7200,
+  defaultDentalVisionAnnual: 650,
+  defaultOtherPerksAnnual: 1000,
+  default401kMatchPercent: 2,
+  defaultWorkersCompPercent: 1.5,
+  defaultZusatzAgPercent: 3.5,
+  defaultBenefitsMonthly: 8850 / 12,
   defaultAnnualIncreasePercent: 3,
+  costOfEquityPercent: 7.17,
+  costOfDebtPercent: 7.85,
+  valuationCorporateTaxPercent: 29.84,
+  expectedMarketReturnPercent: 9,
+  riskFreeRatePercent: 4.43,
+  equityBeta: 0.6,
   waccPercent: null,
   terminalGrowthPercent: null,
 };
@@ -871,8 +953,8 @@ export const PERSONNEL_HIRE_FREQUENCIES: PersonnelHireFrequency[] = [
   "monthly",
 ];
 
-/** Default AG-Lohnnebenkosten % (grobe DE-Planung, kein SV-Rechner) */
-export const DEFAULT_LOHNNEBENKOSTEN_PERCENT = 22;
+/** Default AG-Lohnnebenkosten % (Summe der Pflicht-AG-Abgaben, Planung) */
+export const DEFAULT_LOHNNEBENKOSTEN_PERCENT = 11.75;
 
 export const EMPTY_DATA: AppData = {
   suppliers: [],

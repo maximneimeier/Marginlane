@@ -23,14 +23,27 @@ export function computeIncomeTax(
 }
 
 export {
+  computeGermanTaxBreakdown,
   deCombinedIncomeTaxPercent,
   deEffectiveGewerbesteuerPercent,
   TaxModelGermany,
+  type GermanTaxBreakdown,
 } from "./germany";
 export {
+  computeUsTaxBreakdown,
   usCombinedIncomeTaxPercent,
   TaxModelUnitedStates,
+  US_FEDERAL_CORPORATE_TAX_PERCENT_DEFAULT,
+  type UsTaxBreakdown,
 } from "./unitedStates";
+export {
+  getUsStateTaxRate,
+  isUsStateWithoutClassicCit,
+  listUsStateTaxRates,
+  usStateTaxRatesAsOfYear,
+  type UsStateRateType,
+  type UsStateTaxRateRow,
+} from "./usStateTaxRates";
 export { TaxModelOther } from "./other";
 export type { TaxComputationResult, TaxPlausibilityResult } from "./types";
 export {

@@ -14,28 +14,39 @@ import {
   CURRENCIES,
   EMPTY_COMPANY_SETTINGS,
   SIMPLE_TAX_REGIMES,
-  TAX_REGIMES,
+  SELECTABLE_TAX_REGIMES,
   VAT_FILING_CADENCES,
   type CompanySettings,
   type NumberFormatStyle,
   type TaxRegime,
-  type UsTaxJurisdiction,
   type VatFilingCadence,
+  type VatRate,
 } from "@/lib/types";
 import type { MessageKey } from "@/lib/i18n";
 import {
-  emptyUsTaxJurisdiction,
+  emptyVatRate,
   isAllowedNumberDraft,
+  normalizeCompanySettings,
   parseLocalizedNumber,
   combinedIncomeTaxPercent,
-  deEffectiveGewerbesteuerPercent,
+  resolveVatRatePercent,
+  derivePersonnelAggregates,
+  sumDefaultBenefitsAnnual,
+  sumDefaultBenefitsPercent,
+  sumDefaultEmployerPayrollTaxes,
 } from "@/lib/companySettings";
 import {
-  assessSwissTaxPlausibility,
+  computeGermanTaxBreakdown,
   computeSwissTax,
+  computeUsTaxBreakdown,
+  getUsStateTaxRate,
+  isUsStateWithoutClassicCit,
+  listUsStateTaxRates,
+  usStateTaxRatesAsOfYear,
+  US_FEDERAL_CORPORATE_TAX_PERCENT_DEFAULT,
 } from "@/lib/taxModels";
 import { formatNumber } from "@/lib/format";
-import { Button, Card, Field, PageHeader, Select, TextInput } from "@/components/ui";
+import { Button, Card, ConfirmDialog, Field, PageHeader, Select, TextInput } from "@/components/ui";
 
 function formatTaxRate(value: number, locale: string): string {
   return new Intl.NumberFormat(locale, {
@@ -193,7 +204,6 @@ function SwissTaxSection({
     (settings.modelStartMonth || settings.lastActualMonth || "").slice(0, 4) ||
     String(new Date().getFullYear());
   const swiss = computeSwissTax(settings);
-  const plausibility = assessSwissTaxPlausibility(swiss);
 
   return (
     <div className="space-y-5">
@@ -341,24 +351,205 @@ function SwissTaxSection({
             : ""}
         </p>
       </div>
+    </div>
+  );
+}
 
-      <div
-        className={`rounded-[10px] border px-3 py-2.5 ${
-          plausibility.level === "warn"
-            ? "border-amber-300 bg-amber-50"
-            : "border-line bg-surface-soft"
-        }`}
+function UsTaxSection({
+  settings,
+  patch,
+  locale,
+  t,
+}: {
+  settings: CompanySettings;
+  patch: (partial: Partial<CompanySettings>) => void;
+  locale: string;
+  t: (key: MessageKey, vars?: Record<string, string | number>) => string;
+}) {
+  const [localOpen, setLocalOpen] = useState(
+    () => (settings.usLocalTaxPercent || 0) > 0,
+  );
+  const us = computeUsTaxBreakdown(settings);
+  const states = listUsStateTaxRates();
+  const ref = getUsStateTaxRate(settings.usStateCode);
+  const federalEdited =
+    Math.abs(
+      settings.usFederalIncomeTaxPercent -
+        US_FEDERAL_CORPORATE_TAX_PERCENT_DEFAULT,
+    ) > 0.001;
+
+  return (
+    <div className="space-y-5">
+      <Field
+        label={t("company.field.usFederal")}
+        hint={t("company.field.usFederalHint")}
       >
-        <p className="mb-1 text-[13px] font-medium text-foreground">
-          {t("company.ch.plausibilityTitle")}
-        </p>
-        <p className="text-[12.5px] leading-relaxed text-muted">
-          {plausibility.level === "ok" ? "✓ " : "⚠ "}
-          {t(plausibility.messageKey, {
-            rate: formatTaxRate(swiss.nominalCombinedPercent, locale),
+        <NumField
+          value={settings.usFederalIncomeTaxPercent}
+          onValueChange={(n) =>
+            patch({ usFederalIncomeTaxPercent: n ?? 0 })
+          }
+        />
+      </Field>
+      {federalEdited ? (
+        <p className="rounded-[8px] border border-amber-300 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900/90">
+          {t("company.us.federalEditWarn", {
+            rate: formatTaxRate(US_FEDERAL_CORPORATE_TAX_PERCENT_DEFAULT, locale),
           })}
         </p>
+      ) : null}
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label={t("company.field.usState")}>
+          <Select
+            value={settings.usStateCode}
+            onChange={(e) => {
+              const code = e.target.value;
+              const next = getUsStateTaxRate(code);
+              patch({
+                usStateCode: code,
+                usStateTaxPercent: isUsStateWithoutClassicCit(next)
+                  ? 0
+                  : (next?.rate_percent ?? 0),
+              });
+            }}
+          >
+            {states.map((s) => (
+              <option key={s.state_code} value={s.state_code}>
+                {s.state_name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field
+          label={t("company.field.usStateRate")}
+          hint={
+            us.graduated && us.rateRange
+              ? t("company.us.graduatedHint", { range: us.rateRange })
+              : t("company.field.usStateRateHint")
+          }
+        >
+          <NumField
+            value={settings.usStateTaxPercent}
+            onValueChange={(n) => patch({ usStateTaxPercent: n ?? 0 })}
+          />
+        </Field>
       </div>
+
+      {us.alternativeTaxOnly ? (
+        <p className="rounded-[8px] border border-amber-300 bg-amber-50 px-3 py-2 text-[12.5px] leading-relaxed text-amber-900/90">
+          {t("company.us.alternativeTaxWarn", {
+            state: us.stateName || settings.usStateCode,
+          })}
+        </p>
+      ) : null}
+
+      <div className="space-y-3 rounded-[10px] border border-line p-3">
+        <p className="text-[13px] font-medium text-foreground">
+          {t("company.us.localTitle")}
+        </p>
+        <label className="flex cursor-pointer items-center gap-2 text-[13px]">
+          <input
+            type="checkbox"
+            checked={localOpen}
+            onChange={(e) => {
+              const on = e.target.checked;
+              setLocalOpen(on);
+              if (!on) patch({ usLocalTaxPercent: 0 });
+            }}
+            className="size-4 rounded border-line"
+          />
+          {t("company.us.localEnable")}
+        </label>
+        {localOpen ? (
+          <Field
+            label={t("company.field.usLocalRate")}
+            hint={t("company.field.usLocalRateHint")}
+          >
+            <NumField
+              value={settings.usLocalTaxPercent}
+              onValueChange={(n) => patch({ usLocalTaxPercent: n ?? 0 })}
+            />
+          </Field>
+        ) : null}
+      </div>
+
+      <div className="rounded-[10px] border border-line p-3">
+        <p className="mb-3 text-[13px] font-medium text-foreground">
+          {t("company.us.breakdownTitle")}
+        </p>
+        {us.alternativeTaxOnly ? (
+          <p className="text-[13px] leading-relaxed text-muted">
+            {t("company.us.alternativeTaxCalc", {
+              state: us.stateName || settings.usStateCode,
+            })}
+          </p>
+        ) : (
+          <div className="space-y-2.5 text-[13px]">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-muted">{t("company.us.line.federal")}</p>
+                <p className="text-[12px] text-muted">
+                  {t("company.us.formula.federal")}
+                </p>
+              </div>
+              <span className="font-medium tabular-nums">
+                {formatTaxRate(us.federalPercent, locale)} %
+              </span>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-muted">{t("company.us.line.state")}</p>
+                <p className="text-[12px] text-muted">
+                  {t("company.us.formula.state", {
+                    state: formatTaxRate(us.statePercent, locale),
+                    federal: formatTaxRate(us.federalPercent, locale),
+                  })}
+                </p>
+              </div>
+              <span className="font-medium tabular-nums">
+                {formatTaxRate(us.stateAfterFederalDeductionPercent, locale)} %
+              </span>
+            </div>
+            {us.localPercent > 0 ? (
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-muted">{t("company.us.line.local")}</p>
+                  <p className="text-[12px] text-muted">
+                    {t("company.us.formula.local", {
+                      local: formatTaxRate(us.localPercent, locale),
+                      federal: formatTaxRate(us.federalPercent, locale),
+                    })}
+                  </p>
+                </div>
+                <span className="font-medium tabular-nums">
+                  {formatTaxRate(us.localAfterFederalDeductionPercent, locale)} %
+                </span>
+              </div>
+            ) : null}
+            <div className="border-t border-line pt-2.5">
+              <div className="flex items-start justify-between gap-3">
+                <span className="font-medium text-foreground">
+                  {t("company.us.nominalTotal")}
+                </span>
+                <span className="font-semibold tabular-nums">
+                  {formatTaxRate(us.nominalCombinedPercent, locale)} %
+                </span>
+              </div>
+              <p className="mt-1 text-[12px] text-muted">
+                {t("company.us.combinedRateHint")}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+      {ref ? (
+        <p className="text-[11px] text-muted">
+          {t("company.us.refYear", {
+            year: String(usStateTaxRatesAsOfYear()),
+          })}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -564,6 +755,7 @@ export default function CompanyPageClient() {
   const { ready, data, patchCompanySettings } = useStore();
   const { t, locale, numberFormat } = useI18n();
   const [tab, setTab] = useState<CompanyTab>("general");
+  const [vatDeleteTarget, setVatDeleteTarget] = useState<VatRate | null>(null);
 
   const numberInputCtx = useMemo(
     () => ({ numberFormat, locale }),
@@ -574,10 +766,10 @@ export default function CompanyPageClient() {
     return <p className="text-[13px] text-muted">{t("common.loading")}</p>;
   }
 
-  const settings: CompanySettings = {
+  const settings: CompanySettings = normalizeCompanySettings({
     ...EMPTY_COMPANY_SETTINGS,
     ...(data.companySettings ?? {}),
-  };
+  });
 
   const patch = (partial: Partial<CompanySettings>) => {
     patchCompanySettings(partial);
@@ -629,6 +821,41 @@ export default function CompanyPageClient() {
   return (
     <NumberInputCtx.Provider value={numberInputCtx}>
     <div>
+      <ConfirmDialog
+        open={Boolean(vatDeleteTarget)}
+        onClose={() => setVatDeleteTarget(null)}
+        title={t("company.vat.deleteTitle")}
+        description={
+          vatDeleteTarget
+            ? t("company.vat.deleteDescription", {
+                name:
+                  vatDeleteTarget.name.trim() ||
+                  `${formatTaxRate(vatDeleteTarget.ratePercent, locale)} %`,
+              })
+            : ""
+        }
+        confirmLabel={t("common.deleteConfirm")}
+        onConfirm={() => {
+          if (!vatDeleteTarget) return;
+          const nextRates = (settings.vatRates ?? []).filter(
+            (r) => r.id !== vatDeleteTarget.id,
+          );
+          const nextDefault =
+            settings.defaultVatRateId === vatDeleteTarget.id
+              ? (nextRates[0]?.id ?? "")
+              : settings.defaultVatRateId;
+          patch({
+            vatRates: nextRates,
+            defaultVatRateId: nextDefault,
+            vatRatePercent: resolveVatRatePercent({
+              vatRates: nextRates,
+              defaultVatRateId: nextDefault,
+              vatRatePercent: settings.vatRatePercent,
+            }),
+          });
+        }}
+      />
+
       <PageHeader
         title={t("company.title")}
         description={t("company.description")}
@@ -761,6 +988,15 @@ export default function CompanyPageClient() {
 
         {tab === "taxes" ? (
           <div className="space-y-5">
+            <div className="rounded-[10px] border border-amber-300 bg-amber-50 px-3 py-2.5 text-amber-950">
+              <p className="text-[13px] font-medium">
+                {t("company.tax.legalNoticeTitle")}
+              </p>
+              <p className="mt-1 text-[12.5px] leading-relaxed text-amber-900/90">
+                {t("company.tax.legalNotice")}
+              </p>
+            </div>
+
             <Field label={t("company.field.taxRegime")}>
               <Select
                 value={settings.taxRegime}
@@ -769,7 +1005,7 @@ export default function CompanyPageClient() {
                 }
                 className="max-w-sm"
               >
-                {TAX_REGIMES.map((regime) => (
+                {SELECTABLE_TAX_REGIMES.map((regime) => (
                   <option key={regime} value={regime}>
                     {t(`company.taxRegime.${regime}`)}
                   </option>
@@ -877,139 +1113,105 @@ export default function CompanyPageClient() {
                     />
                   </Field>
                 </div>
-                <p className="text-[13px] text-muted">
-                  {t("company.de.gewstEffective", {
-                    rate: formatNumber(
-                      deEffectiveGewerbesteuerPercent(settings),
-                      locale,
-                    ),
-                  })}
-                </p>
+                {(() => {
+                  const de = computeGermanTaxBreakdown(settings);
+                  return (
+                    <div className="rounded-[10px] border border-line p-3">
+                      <p className="mb-3 text-[13px] font-medium text-foreground">
+                        {t("company.de.breakdownTitle")}
+                      </p>
+                      <div className="space-y-2.5 text-[13px]">
+                        <div className="flex items-start justify-between gap-3">
+                          <span className="text-muted">
+                            {t("company.de.line.kst")}
+                          </span>
+                          <span className="font-medium tabular-nums">
+                            {formatTaxRate(
+                              de.koerperschaftsteuerPercent,
+                              locale,
+                            )}{" "}
+                            %
+                          </span>
+                        </div>
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-muted">
+                              {t("company.de.line.soli")}
+                            </p>
+                            <p className="text-[12px] text-muted">
+                              {t("company.de.formula.soli", {
+                                kst: formatTaxRate(
+                                  de.koerperschaftsteuerPercent,
+                                  locale,
+                                ),
+                                soli: formatTaxRate(
+                                  de.solidaritaetszuschlagPercent,
+                                  locale,
+                                ),
+                              })}
+                            </p>
+                          </div>
+                          <span className="font-medium tabular-nums">
+                            {formatTaxRate(de.soliAbsolutePercent, locale)} %
+                          </span>
+                        </div>
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-muted">
+                              {t("company.de.line.gewst")}
+                            </p>
+                            <p className="text-[12px] text-muted">
+                              {t("company.de.formula.gewst", {
+                                messzahl: formatTaxRate(
+                                  de.gewerbesteuerMesszahlPercent,
+                                  locale,
+                                ),
+                                hebesatz: formatTaxRate(
+                                  de.gewerbesteuerHebesatz,
+                                  locale,
+                                ),
+                              })}
+                            </p>
+                          </div>
+                          <span className="font-medium tabular-nums">
+                            {formatTaxRate(
+                              de.gewerbesteuerEffectivePercent,
+                              locale,
+                            )}{" "}
+                            %
+                          </span>
+                        </div>
+                        <div className="border-t border-line pt-2.5">
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="font-medium text-foreground">
+                              {t("company.de.nominalTotal")}
+                            </span>
+                            <span className="font-semibold tabular-nums">
+                              {formatTaxRate(
+                                de.nominalCombinedPercent,
+                                locale,
+                              )}{" "}
+                              %
+                            </span>
+                          </div>
+                          <p className="mt-1 text-[12px] text-muted">
+                            {t("company.de.combinedRateHint")}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             ) : null}
 
             {settings.taxRegime === "us" ? (
-              <div className="space-y-4">
-                <Field
-                  label={t("company.field.usFederal")}
-                  hint={t("company.field.usFederalHint")}
-                >
-                  <NumField
-                    value={settings.usFederalIncomeTaxPercent}
-                    onValueChange={(n) =>
-                      patch({ usFederalIncomeTaxPercent: n ?? 0 })
-                    }
-                  />
-                </Field>
-
-                <div>
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <div>
-                      <p className="text-[13px] font-medium text-foreground">
-                        {t("company.us.jurisdictionsTitle")}
-                      </p>
-                      <p className="text-[12px] text-muted">
-                        {t("company.us.jurisdictionsHint")}
-                      </p>
-                    </div>
-                    <Button
-                      variant="secondary"
-                      onClick={() =>
-                        patch({
-                          usTaxJurisdictions: [
-                            ...(settings.usTaxJurisdictions ?? []),
-                            emptyUsTaxJurisdiction(),
-                          ],
-                        })
-                      }
-                    >
-                      {t("company.us.addJurisdiction")}
-                    </Button>
-                  </div>
-
-                  {(settings.usTaxJurisdictions ?? []).length === 0 ? (
-                    <p className="rounded-[8px] border border-dashed border-line px-3 py-6 text-center text-[13px] text-muted">
-                      {t("company.us.jurisdictionsEmpty")}
-                    </p>
-                  ) : (
-                    <div className="space-y-3">
-                      {(settings.usTaxJurisdictions ?? []).map((row) => {
-                        const updateRow = (
-                          patchRow: Partial<UsTaxJurisdiction>,
-                        ) => {
-                          patch({
-                            usTaxJurisdictions: (
-                              settings.usTaxJurisdictions ?? []
-                            ).map((j) =>
-                              j.id === row.id ? { ...j, ...patchRow } : j,
-                            ),
-                          });
-                        };
-                        return (
-                          <div
-                            key={row.id}
-                            className="rounded-[10px] border border-line p-3"
-                          >
-                            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                              <Field label={t("company.us.col.name")}>
-                                <TextInput
-                                  value={row.name}
-                                  onChange={(e) =>
-                                    updateRow({ name: e.target.value })
-                                  }
-                                  placeholder={t(
-                                    "company.us.col.namePlaceholder",
-                                  )}
-                                />
-                              </Field>
-                              <Field label={t("company.us.col.rate")}>
-                                <NumField
-                                  value={row.incomeTaxPercent}
-                                  onValueChange={(n) =>
-                                    updateRow({ incomeTaxPercent: n ?? 0 })
-                                  }
-                                />
-                              </Field>
-                              <Field label={t("company.us.col.franchise")}>
-                                <NumField
-                                  value={row.franchiseTaxMin}
-                                  onValueChange={(n) =>
-                                    updateRow({ franchiseTaxMin: n ?? 0 })
-                                  }
-                                />
-                              </Field>
-                              <Field label={t("company.us.col.apportionment")}>
-                                <NumField
-                                  value={row.apportionmentPercent}
-                                  onValueChange={(n) =>
-                                    updateRow({
-                                      apportionmentPercent: n ?? 0,
-                                    })
-                                  }
-                                />
-                              </Field>
-                            </div>
-                            <div className="mt-2 flex justify-end">
-                              <Button
-                                variant="ghost"
-                                onClick={() =>
-                                  patch({
-                                    usTaxJurisdictions: (
-                                      settings.usTaxJurisdictions ?? []
-                                    ).filter((j) => j.id !== row.id),
-                                  })
-                                }
-                              >
-                                {t("common.delete")}
-                              </Button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
+              <UsTaxSection
+                settings={settings}
+                patch={patch}
+                locale={locale}
+                t={t}
+              />
             ) : null}
 
             {settings.taxRegime === "ch" ? (
@@ -1046,7 +1248,7 @@ export default function CompanyPageClient() {
               </div>
             ) : null}
 
-            {settings.taxRegime !== "ch" ? (
+            {settings.taxRegime === "other" ? (
               <div className="rounded-[8px] bg-surface-soft px-3 py-2">
                 <p className="text-[13px] font-medium text-foreground">
                   {t("company.combinedTaxRate", {
@@ -1056,29 +1258,124 @@ export default function CompanyPageClient() {
                     ),
                   })}
                 </p>
-                {settings.taxRegime === "us" ? (
-                  <p className="mt-0.5 text-[12px] text-muted">
-                    {t("company.us.combinedRateHint")}
-                  </p>
-                ) : null}
-                {settings.taxRegime === "de" ? (
-                  <p className="mt-0.5 text-[12px] text-muted">
-                    {t("company.de.combinedRateHint")}
-                  </p>
-                ) : null}
               </div>
             ) : null}
           </div>
         ) : null}
 
         {tab === "vat" ? (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label={t("company.field.vatRate")}>
-              <NumField
-                value={settings.vatRatePercent}
-                onValueChange={(n) => patch({ vatRatePercent: n ?? 0 })}
-              />
-            </Field>
+          <div className="space-y-5">
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-[13px] font-medium text-foreground">
+                    {t("company.vat.ratesTitle")}
+                  </p>
+                  <p className="text-[12px] text-muted">
+                    {t("company.vat.ratesHint")}
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={() =>
+                    patch({
+                      vatRates: [
+                        ...(settings.vatRates ?? []),
+                        emptyVatRate({
+                          name: "",
+                          ratePercent: 0,
+                        }),
+                      ],
+                    })
+                  }
+                >
+                  {t("company.vat.addRate")}
+                </Button>
+              </div>
+
+              {(settings.vatRates ?? []).length === 0 ? (
+                <p className="rounded-[8px] border border-dashed border-line px-3 py-6 text-center text-[13px] text-muted">
+                  {t("company.vat.ratesEmpty")}
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {(settings.vatRates ?? []).map((row) => {
+                    const updateRow = (patchRow: Partial<VatRate>) => {
+                      const nextRates = (settings.vatRates ?? []).map((r) =>
+                        r.id === row.id ? { ...r, ...patchRow } : r,
+                      );
+                      patch({
+                        vatRates: nextRates,
+                        vatRatePercent: resolveVatRatePercent({
+                          vatRates: nextRates,
+                          defaultVatRateId: settings.defaultVatRateId,
+                          vatRatePercent: settings.vatRatePercent,
+                        }),
+                      });
+                    };
+                    const isDefault = settings.defaultVatRateId === row.id;
+                    return (
+                      <div
+                        key={row.id}
+                        className="rounded-[10px] border border-line p-3"
+                      >
+                        <div className="grid gap-3 sm:grid-cols-[1fr_120px_auto] sm:items-end">
+                          <Field label={t("company.vat.col.name")}>
+                            <TextInput
+                              value={row.name}
+                              onChange={(e) =>
+                                updateRow({ name: e.target.value })
+                              }
+                              placeholder={t(
+                                "company.vat.col.namePlaceholder",
+                              )}
+                            />
+                          </Field>
+                          <Field label={t("company.vat.col.rate")}>
+                            <NumField
+                              value={row.ratePercent}
+                              onValueChange={(n) =>
+                                updateRow({ ratePercent: n ?? 0 })
+                              }
+                            />
+                          </Field>
+                          <label className="mb-1 flex cursor-pointer items-center gap-2 pb-2 text-[13px]">
+                            <input
+                              type="radio"
+                              name="defaultVatRate"
+                              checked={isDefault}
+                              onChange={() =>
+                                patch({
+                                  defaultVatRateId: row.id,
+                                  vatRatePercent: Math.max(
+                                    0,
+                                    row.ratePercent || 0,
+                                  ),
+                                })
+                              }
+                              className="size-4 border-line"
+                            />
+                            {t("company.vat.default")}
+                          </label>
+                        </div>
+                        <div className="mt-2 flex justify-end">
+                          <Button
+                            variant="ghost"
+                            onClick={() => setVatDeleteTarget(row)}
+                          >
+                            {t("common.delete")}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <p className="mt-2 text-[12px] text-muted">
+                {t("company.vat.defaultHint")}
+              </p>
+            </div>
+
             <Field label={t("company.field.vatCadence")}>
               <Select
                 value={settings.vatFilingCadence}
@@ -1087,6 +1384,7 @@ export default function CompanyPageClient() {
                     vatFilingCadence: e.target.value as VatFilingCadence,
                   })
                 }
+                className="max-w-sm"
               >
                 {VAT_FILING_CADENCES.map((c) => (
                   <option key={c} value={c}>
@@ -1099,56 +1397,285 @@ export default function CompanyPageClient() {
         ) : null}
 
         {tab === "personnel" ? (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label={t("company.field.defaultNk")}>
-              <NumField
-                value={settings.defaultLohnnebenkostenPercent}
-                onValueChange={(n) =>
-                  patch({ defaultLohnnebenkostenPercent: n ?? 0 })
-                }
-              />
-            </Field>
-            <Field label={t("company.field.defaultZusatz")}>
-              <NumField
-                value={settings.defaultZusatzAgPercent}
-                onValueChange={(n) => patch({ defaultZusatzAgPercent: n ?? 0 })}
-              />
-            </Field>
-            <Field label={t("company.field.defaultBenefits")}>
-              <NumField
-                value={settings.defaultBenefitsMonthly}
-                onValueChange={(n) => patch({ defaultBenefitsMonthly: n ?? 0 })}
-              />
-            </Field>
-            <Field label={t("company.field.defaultIncrease")}>
-              <NumField
-                value={settings.defaultAnnualIncreasePercent}
-                onValueChange={(n) =>
-                  patch({ defaultAnnualIncreasePercent: n ?? 0 })
-                }
-              />
-            </Field>
+          <div className="space-y-5">
+            <div className="rounded-[10px] border border-line p-3">
+              <p className="mb-3 text-[13px] font-medium text-foreground">
+                {t("company.personnel.mandatoryTitle")}
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label={t("company.field.socialSecurity")}>
+                  <NumField
+                    value={settings.defaultSocialSecurityPercent}
+                    onValueChange={(n) => {
+                      const next = {
+                        ...settings,
+                        defaultSocialSecurityPercent: n ?? 0,
+                      };
+                      patch({
+                        defaultSocialSecurityPercent: n ?? 0,
+                        ...derivePersonnelAggregates(next),
+                      });
+                    }}
+                  />
+                </Field>
+                <Field label={t("company.field.medicare")}>
+                  <NumField
+                    value={settings.defaultMedicarePercent}
+                    onValueChange={(n) => {
+                      const next = {
+                        ...settings,
+                        defaultMedicarePercent: n ?? 0,
+                      };
+                      patch({
+                        defaultMedicarePercent: n ?? 0,
+                        ...derivePersonnelAggregates(next),
+                      });
+                    }}
+                  />
+                </Field>
+                <Field label={t("company.field.futa")}>
+                  <NumField
+                    value={settings.defaultFutaPercent}
+                    onValueChange={(n) => {
+                      const next = {
+                        ...settings,
+                        defaultFutaPercent: n ?? 0,
+                      };
+                      patch({
+                        defaultFutaPercent: n ?? 0,
+                        ...derivePersonnelAggregates(next),
+                      });
+                    }}
+                  />
+                </Field>
+                <Field label={t("company.field.suta")}>
+                  <NumField
+                    value={settings.defaultSutaPercent}
+                    onValueChange={(n) => {
+                      const next = {
+                        ...settings,
+                        defaultSutaPercent: n ?? 0,
+                      };
+                      patch({
+                        defaultSutaPercent: n ?? 0,
+                        ...derivePersonnelAggregates(next),
+                      });
+                    }}
+                  />
+                </Field>
+                <Field label={t("company.field.ett")}>
+                  <NumField
+                    value={settings.defaultEttPercent}
+                    onValueChange={(n) => {
+                      const next = {
+                        ...settings,
+                        defaultEttPercent: n ?? 0,
+                      };
+                      patch({
+                        defaultEttPercent: n ?? 0,
+                        ...derivePersonnelAggregates(next),
+                      });
+                    }}
+                  />
+                </Field>
+              </div>
+              <div className="mt-3 flex items-center justify-between rounded-[8px] bg-surface-soft px-3 py-2 text-[13px]">
+                <span className="font-medium text-foreground">
+                  {t("company.personnel.mandatoryTotal")}
+                </span>
+                <span className="font-semibold tabular-nums">
+                  {formatTaxRate(
+                    sumDefaultEmployerPayrollTaxes(settings),
+                    locale,
+                  )}{" "}
+                  %
+                </span>
+              </div>
+            </div>
+
+            <div className="rounded-[10px] border border-line p-3">
+              <p className="mb-3 text-[13px] font-medium text-foreground">
+                {t("company.personnel.benefitsTitle")}
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label={t("company.field.healthInsurance")}>
+                  <NumField
+                    value={settings.defaultHealthInsuranceAnnual}
+                    onValueChange={(n) => {
+                      const next = {
+                        ...settings,
+                        defaultHealthInsuranceAnnual: n ?? 0,
+                      };
+                      patch({
+                        defaultHealthInsuranceAnnual: n ?? 0,
+                        ...derivePersonnelAggregates(next),
+                      });
+                    }}
+                  />
+                </Field>
+                <Field label={t("company.field.dentalVision")}>
+                  <NumField
+                    value={settings.defaultDentalVisionAnnual}
+                    onValueChange={(n) => {
+                      const next = {
+                        ...settings,
+                        defaultDentalVisionAnnual: n ?? 0,
+                      };
+                      patch({
+                        defaultDentalVisionAnnual: n ?? 0,
+                        ...derivePersonnelAggregates(next),
+                      });
+                    }}
+                  />
+                </Field>
+                <Field label={t("company.field.match401k")}>
+                  <NumField
+                    value={settings.default401kMatchPercent}
+                    onValueChange={(n) => {
+                      const next = {
+                        ...settings,
+                        default401kMatchPercent: n ?? 0,
+                      };
+                      patch({
+                        default401kMatchPercent: n ?? 0,
+                        ...derivePersonnelAggregates(next),
+                      });
+                    }}
+                  />
+                </Field>
+                <Field label={t("company.field.workersComp")}>
+                  <NumField
+                    value={settings.defaultWorkersCompPercent}
+                    onValueChange={(n) => {
+                      const next = {
+                        ...settings,
+                        defaultWorkersCompPercent: n ?? 0,
+                      };
+                      patch({
+                        defaultWorkersCompPercent: n ?? 0,
+                        ...derivePersonnelAggregates(next),
+                      });
+                    }}
+                  />
+                </Field>
+                <Field label={t("company.field.otherPerks")}>
+                  <NumField
+                    value={settings.defaultOtherPerksAnnual}
+                    onValueChange={(n) => {
+                      const next = {
+                        ...settings,
+                        defaultOtherPerksAnnual: n ?? 0,
+                      };
+                      patch({
+                        defaultOtherPerksAnnual: n ?? 0,
+                        ...derivePersonnelAggregates(next),
+                      });
+                    }}
+                  />
+                </Field>
+              </div>
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center justify-between rounded-[8px] bg-surface-soft px-3 py-2 text-[13px]">
+                  <span className="font-medium text-foreground">
+                    {t("company.personnel.benefitsAnnualTotal")}
+                  </span>
+                  <span className="font-semibold tabular-nums">
+                    {formatTaxRate(sumDefaultBenefitsAnnual(settings), locale)}{" "}
+                    / {t("company.personnel.perYear")}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between rounded-[8px] bg-surface-soft px-3 py-2 text-[13px]">
+                  <span className="font-medium text-foreground">
+                    {t("company.personnel.benefitsPercentTotal")}
+                  </span>
+                  <span className="font-semibold tabular-nums">
+                    {formatTaxRate(sumDefaultBenefitsPercent(settings), locale)}{" "}
+                    %
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label={t("company.field.defaultIncrease")}>
+                <NumField
+                  value={settings.defaultAnnualIncreasePercent}
+                  onValueChange={(n) =>
+                    patch({ defaultAnnualIncreasePercent: n ?? 0 })
+                  }
+                />
+              </Field>
+            </div>
           </div>
         ) : null}
 
         {tab === "valuation" ? (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label={t("company.field.wacc")}>
-              <NumField
-                value={settings.waccPercent}
-                emptyAs={null}
-                placeholder={t("common.emDash")}
-                onValueChange={(n) => patch({ waccPercent: n })}
-              />
-            </Field>
-            <Field label={t("company.field.terminalGrowth")}>
-              <NumField
-                value={settings.terminalGrowthPercent}
-                emptyAs={null}
-                placeholder={t("common.emDash")}
-                onValueChange={(n) => patch({ terminalGrowthPercent: n })}
-              />
-            </Field>
+          <div className="space-y-5">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label={t("company.field.costOfEquity")}>
+                <NumField
+                  value={settings.costOfEquityPercent}
+                  onValueChange={(n) =>
+                    patch({ costOfEquityPercent: n ?? 0 })
+                  }
+                />
+              </Field>
+              <Field label={t("company.field.costOfDebt")}>
+                <NumField
+                  value={settings.costOfDebtPercent}
+                  onValueChange={(n) => patch({ costOfDebtPercent: n ?? 0 })}
+                />
+              </Field>
+              <Field label={t("company.field.valuationCorporateTax")}>
+                <NumField
+                  value={settings.valuationCorporateTaxPercent}
+                  onValueChange={(n) =>
+                    patch({ valuationCorporateTaxPercent: n ?? 0 })
+                  }
+                />
+              </Field>
+              <Field label={t("company.field.expectedMarketReturn")}>
+                <NumField
+                  value={settings.expectedMarketReturnPercent}
+                  onValueChange={(n) =>
+                    patch({ expectedMarketReturnPercent: n ?? 0 })
+                  }
+                />
+              </Field>
+              <Field label={t("company.field.riskFreeRate")}>
+                <NumField
+                  value={settings.riskFreeRatePercent}
+                  onValueChange={(n) =>
+                    patch({ riskFreeRatePercent: n ?? 0 })
+                  }
+                />
+              </Field>
+              <Field label={t("company.field.equityBeta")}>
+                <NumField
+                  value={settings.equityBeta}
+                  onValueChange={(n) => patch({ equityBeta: n ?? 0 })}
+                />
+              </Field>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label={t("company.field.wacc")}>
+                <NumField
+                  value={settings.waccPercent}
+                  emptyAs={null}
+                  placeholder={t("common.emDash")}
+                  onValueChange={(n) => patch({ waccPercent: n })}
+                />
+              </Field>
+              <Field label={t("company.field.terminalGrowth")}>
+                <NumField
+                  value={settings.terminalGrowthPercent}
+                  emptyAs={null}
+                  placeholder={t("common.emDash")}
+                  onValueChange={(n) => patch({ terminalGrowthPercent: n })}
+                />
+              </Field>
+            </div>
           </div>
         ) : null}
       </Card>

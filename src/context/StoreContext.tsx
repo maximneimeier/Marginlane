@@ -32,6 +32,7 @@ import type {
   Supplier,
 } from "@/lib/types";
 import { EMPTY_COMPANY_SETTINGS, EMPTY_DATA } from "@/lib/types";
+import { normalizeCompanySettings } from "@/lib/companySettings";
 import { migrateAppData } from "@/lib/migrateAppData";
 import {
   freezeKey,
@@ -697,10 +698,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     (patch: Partial<CompanySettings>) => {
       commit((prev) => ({
         ...prev,
-        companySettings: {
+        companySettings: normalizeCompanySettings({
           ...(prev.companySettings ?? EMPTY_COMPANY_SETTINGS),
           ...patch,
-        },
+        }),
       }));
     },
     [commit],
