@@ -1,5 +1,3 @@
-"use client";
-
 import { useCallback, useMemo } from "react";
 import { usePrefs, type AppLanguage } from "@/context/PreferencesContext";
 import type {
@@ -7,11 +5,13 @@ import type {
   CostPhase,
   DealerChannel,
   DealerStatus,
+  NumberFormatStyle,
   PricingUnit,
   SupplierStatus,
 } from "@/lib/types";
 import { COST_TYPE_PRESETS, PRICING_UNITS } from "@/lib/types";
 import type { OptionalColumn } from "@/lib/supplierRows";
+import { numberLocaleTag } from "@/lib/companySettings";
 import {
   localeTag,
   translate,
@@ -28,7 +28,11 @@ const COST_TYPE_KEYS = Object.fromEntries(
 export function useI18n() {
   const { prefs, ready } = usePrefs();
   const lang: AppLanguage = prefs.language;
-  const locale = localeTag(lang);
+  const uiLocale = localeTag(lang);
+  const numberFormat: NumberFormatStyle =
+    prefs.numberFormat === "en" ? "en" : "de";
+  /** Zahlen/Datum-Anzeige (Einstellung in localStorage) */
+  const locale = numberLocaleTag(numberFormat);
 
   const t = useCallback(
     (key: MessageKey, vars?: Record<string, string | number>) =>
@@ -69,7 +73,6 @@ export function useI18n() {
       percentOfRevenueOrUnit: boolean | string = false,
       unit?: string,
     ) => {
-      // Back-compat: (allocation, percentOfRevenue) oder (allocation, false, unit)
       const percentOfRevenue =
         typeof percentOfRevenueOrUnit === "boolean"
           ? percentOfRevenueOrUnit
@@ -130,13 +133,14 @@ export function useI18n() {
       if (!code) return translate(lang, "common.emDash");
       try {
         return (
-          new Intl.DisplayNames([locale], { type: "region" }).of(code) ?? code
+          new Intl.DisplayNames([uiLocale], { type: "region" }).of(code) ??
+          code
         );
       } catch {
         return code;
       }
     },
-    [lang, locale],
+    [lang, uiLocale],
   );
 
   const waterfallLabel = useCallback(
@@ -162,6 +166,8 @@ export function useI18n() {
       plural,
       lang,
       locale,
+      numberFormat,
+      uiLocale,
       ready,
       costTypeLabel,
       phaseLabel,
@@ -180,6 +186,8 @@ export function useI18n() {
       plural,
       lang,
       locale,
+      numberFormat,
+      uiLocale,
       ready,
       costTypeLabel,
       phaseLabel,

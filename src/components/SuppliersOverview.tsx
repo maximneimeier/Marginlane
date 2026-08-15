@@ -425,7 +425,7 @@ export function SuppliersOverview({
                             </td>
                             <td className="hidden px-3 py-2.5 text-right tabular-nums lg:table-cell">
                               {row.avgLandedCost != null
-                                ? formatEuro(row.avgLandedCost)
+                                ? formatEuro(row.avgLandedCost, locale)
                                 : "—"}
                             </td>
                             <td className="hidden px-3 py-2.5 text-muted lg:table-cell">
@@ -610,7 +610,7 @@ function MobileExtras({
       <div className="flex justify-between gap-2">
         <dt className="text-muted-soft">{t("suppliers.col.avgLanded")}</dt>
         <dd>
-          {row.avgLandedCost != null ? formatEuro(row.avgLandedCost) : t("common.emDash")}
+          {row.avgLandedCost != null ? formatEuro(row.avgLandedCost, locale) : t("common.emDash")}
         </dd>
       </div>
       <div className="flex justify-between gap-2">

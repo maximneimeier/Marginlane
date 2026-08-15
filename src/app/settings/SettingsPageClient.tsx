@@ -10,6 +10,7 @@ import {
   buildSuppliersCsv,
   downloadCsv,
 } from "@/lib/exportCsv";
+import { NUMBER_FORMAT_STYLES, type NumberFormatStyle } from "@/lib/types";
 import { Button, Card, Field, PageHeader, Select, TextInput } from "@/components/ui";
 
 export default function EinstellungenPage() {
@@ -62,18 +63,38 @@ export default function EinstellungenPage() {
           <p className="mb-4 text-[13px] text-muted">
             {t("settings.languageHint")}
           </p>
-          <Field label={t("settings.appLanguage")}>
-            <Select
-              value={prefs.language}
-              onChange={(e) =>
-                setPrefs({ language: e.target.value as AppLanguage })
-              }
-              className="max-w-[240px]"
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label={t("settings.appLanguage")}>
+              <Select
+                value={prefs.language}
+                onChange={(e) =>
+                  setPrefs({ language: e.target.value as AppLanguage })
+                }
+              >
+                <option value="de">{t("settings.lang.de")}</option>
+                <option value="en">{t("settings.lang.en")}</option>
+              </Select>
+            </Field>
+            <Field
+              label={t("settings.numberFormat")}
+              hint={t("settings.numberFormatHint")}
             >
-              <option value="de">{t("settings.lang.de")}</option>
-              <option value="en">{t("settings.lang.en")}</option>
-            </Select>
-          </Field>
+              <Select
+                value={prefs.numberFormat}
+                onChange={(e) =>
+                  setPrefs({
+                    numberFormat: e.target.value as NumberFormatStyle,
+                  })
+                }
+              >
+                {NUMBER_FORMAT_STYLES.map((style) => (
+                  <option key={style} value={style}>
+                    {t(`settings.numberFormat.${style}`)}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
           <p className="mt-3 text-[12px] text-muted-soft">
             {t("settings.savedLocally")}
           </p>
@@ -142,6 +163,7 @@ export default function EinstellungenPage() {
                 displayName: "Maxim Neimeier",
                 email: "account@maximneimeier.de",
                 language: "de",
+                numberFormat: "de",
               })
             }
           >

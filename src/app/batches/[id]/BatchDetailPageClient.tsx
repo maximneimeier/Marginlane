@@ -178,7 +178,7 @@ export default function ChargeDetailPage({ id }: { id: string }) {
             {t("batchDetail.purchase")}
           </p>
           <p className="mt-1 text-xl tabular-nums">
-            {formatEuro(econ.purchasePerUnit)}
+            {formatEuro(econ.purchasePerUnit, locale)}
           </p>
         </Card>
         <Card>
@@ -186,7 +186,7 @@ export default function ChargeDetailPage({ id }: { id: string }) {
             {t("batchDetail.landedCost")}
           </p>
           <p className="mt-1 text-xl tabular-nums font-medium text-accent">
-            {formatEuro(econ.landedCostPerUnit)}
+            {formatEuro(econ.landedCostPerUnit, locale)}
           </p>
         </Card>
         <Card>
@@ -194,7 +194,7 @@ export default function ChargeDetailPage({ id }: { id: string }) {
             {t("batchDetail.sellPriceShort")}
           </p>
           <p className="mt-1 text-xl tabular-nums">
-            {formatEuro(econ.sellPrice)}
+            {formatEuro(econ.sellPrice, locale)}
           </p>
         </Card>
         <Card>
@@ -206,7 +206,7 @@ export default function ChargeDetailPage({ id }: { id: string }) {
               econ.contributionPerUnit >= 0 ? "text-accent" : "text-red-700"
             }`}
           >
-            {formatEuro(econ.contributionPerUnit)}
+            {formatEuro(econ.contributionPerUnit, locale)}
           </p>
           <p className="text-xs text-muted">
             {formatPercent(econ.contributionPercent)}
@@ -418,7 +418,7 @@ export default function ChargeDetailPage({ id }: { id: string }) {
                                 <option key={d.id} value={d.id}>
                                   {d.name}
                                   {d.defaultSellPrice > 0
-                                    ? ` · VK ${formatEuro(d.defaultSellPrice)}`
+                                    ? ` · VK ${formatEuro(d.defaultSellPrice, locale)}`
                                     : ""}
                                 </option>
                               ))}
@@ -609,9 +609,9 @@ export default function ChargeDetailPage({ id }: { id: string }) {
                           </span>
                         </span>
                         <span className="tabular-nums">
-                          {formatEuro(row.perUnit)}
+                          {formatEuro(row.perUnit, locale)}
                           <span className="ml-2 text-xs text-muted">
-                            ({formatEuro(row.total)} {t("common.total")})
+                            ({formatEuro(row.total, locale)} {t("common.total")})
                           </span>
                         </span>
                       </li>
@@ -637,7 +637,7 @@ export default function ChargeDetailPage({ id }: { id: string }) {
                     </h2>
                     <p className="mb-3 text-sm text-muted">
                       {t("batchDetail.sellPrice", { unit })}:{" "}
-                      {formatEuro(row.sellPrice)}
+                      {formatEuro(row.sellPrice, locale)}
                       {row.sale.quantity > 0 ? (
                         <span className="ml-2">
                           · {t("unit.qtyLabel", { unit })}:{" "}

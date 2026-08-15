@@ -201,6 +201,29 @@ export const VAT_FILING_CADENCES: VatFilingCadence[] = [
   "annual",
 ];
 
+/** Anzeige/Eingabe von Zahlen: DE 1.234,56 vs. US 1,234.56 */
+export type NumberFormatStyle = "de" | "en";
+
+export const NUMBER_FORMAT_STYLES: NumberFormatStyle[] = ["de", "en"];
+
+/** Ertragsteuer-Regime (Felder je Land) */
+export type TaxRegime = "de" | "us" | "ch" | "other";
+
+export const TAX_REGIMES: TaxRegime[] = ["de", "ch", "us", "other"];
+
+/** Regime mit nur einem Gesamtsteuersatz-Feld */
+export const SIMPLE_TAX_REGIMES: TaxRegime[] = ["other"];
+
+/** US State / Jurisdiction — freie Eingabe, kein festes State-Dropdown */
+export type UsTaxJurisdiction = {
+  id: string;
+  name: string;
+  incomeTaxPercent: number;
+  franchiseTaxMin: number;
+  /** Anteil am steuerpflichtigen Einkommen 0–100 */
+  apportionmentPercent: number;
+};
+
 /**
  * Workspace-Unternehmensdaten (Finanzmodell-Annahmen).
  * Getrennt von Profil/Sprache in localStorage (`marginlane-prefs-v1`).
@@ -215,13 +238,40 @@ export type CompanySettings = {
   lastActualMonth: string;
   startingEquity: number;
   startingCash: number;
-  unpaidTaxesAtStart: number;
-  /** Körperschaftsteuer % */
+  /** Offene USt zum Modellstart */
+  vatOwedAtStart: number;
+  /** Offene Ertragsteuern zum Modellstart */
+  incomeTaxesOwedAtStart: number;
+  /** Welches Länder-Feldset unter Ertragsteuern */
+  taxRegime: TaxRegime;
+  /** Fiskaljahr-Startmonat 1–12 */
+  fiscalYearStartMonth: number;
+  /** Monat der Steuerkonsolidierung / Filing 1–12 */
+  taxConsolidationMonth: number;
+  /** Vorauszahlungsrhythmus Ertragsteuern */
+  incomeTaxPaymentCadence: VatFilingCadence;
+  /** DE: Körperschaftsteuer % */
   koerperschaftsteuerPercent: number;
-  /** Solidaritätszuschlag % auf KSt */
+  /** DE: Solidaritätszuschlag % auf KSt */
   solidaritaetszuschlagPercent: number;
-  /** Effektive Gewerbesteuer % (vereinfacht) */
-  gewerbesteuerPercent: number;
+  /** DE: Steuermesszahl GewSt % (typisch 3,5) */
+  gewerbesteuerMesszahlPercent: number;
+  /** DE: Hebesatz der Gemeinde (z. B. 400) */
+  gewerbesteuerHebesatz: number;
+  /** US: Federal Income Tax % */
+  usFederalIncomeTaxPercent: number;
+  /** US: Bundesstaaten / Jurisdiktionen */
+  usTaxJurisdictions: UsTaxJurisdiction[];
+  /** CH: Direkte Bundessteuer % (nominal typisch 8,5) */
+  chFederalTaxPercent: number;
+  /** CH: Kantonale Gewinnsteuer % (Basissatz) */
+  chCantonalTaxPercent: number;
+  /** CH: Gemeindesteuerfuss (Multiplikator auf Kanton, z. B. 100) */
+  chMunicipalTaxFoot: number;
+  /** UK / NL / other: Körperschaft- bzw. Gesamtsteuersatz % */
+  corporateTaxPercent: number;
+  /** Bei Regime „other“: freier Ländername */
+  otherTaxCountryName: string;
   vatRatePercent: number;
   vatFilingCadence: VatFilingCadence;
   defaultLohnnebenkostenPercent: number;
@@ -240,10 +290,23 @@ export const EMPTY_COMPANY_SETTINGS: CompanySettings = {
   lastActualMonth: "",
   startingEquity: 0,
   startingCash: 0,
-  unpaidTaxesAtStart: 0,
+  vatOwedAtStart: 0,
+  incomeTaxesOwedAtStart: 0,
+  taxRegime: "de",
+  fiscalYearStartMonth: 1,
+  taxConsolidationMonth: 4,
+  incomeTaxPaymentCadence: "quarterly",
   koerperschaftsteuerPercent: 15,
   solidaritaetszuschlagPercent: 5.5,
-  gewerbesteuerPercent: 14,
+  gewerbesteuerMesszahlPercent: 3.5,
+  gewerbesteuerHebesatz: 400,
+  usFederalIncomeTaxPercent: 21,
+  usTaxJurisdictions: [],
+  chFederalTaxPercent: 8.5,
+  chCantonalTaxPercent: 0,
+  chMunicipalTaxFoot: 100,
+  corporateTaxPercent: 25,
+  otherTaxCountryName: "",
   vatRatePercent: 19,
   vatFilingCadence: "monthly",
   defaultLohnnebenkostenPercent: 22,

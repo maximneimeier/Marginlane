@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import type { AppLanguage } from "@/lib/i18n";
+import type { NumberFormatStyle } from "@/lib/types";
 
 export type { AppLanguage };
 
@@ -17,6 +18,8 @@ export type UserPrefs = {
   displayName: string;
   email: string;
   language: AppLanguage;
+  /** Zahlenanzeige: DE 1.234,56 vs. US 1,234.56 */
+  numberFormat: NumberFormatStyle;
 };
 
 const STORAGE_KEY = "marginlane-prefs-v1";
@@ -25,6 +28,7 @@ const DEFAULT_PREFS: UserPrefs = {
   displayName: "Maxim Neimeier",
   email: "account@maximneimeier.de",
   language: "de",
+  numberFormat: "de",
 };
 
 type PrefsContextValue = {
@@ -34,6 +38,10 @@ type PrefsContextValue = {
 };
 
 const PrefsContext = createContext<PrefsContextValue | null>(null);
+
+function normalizeNumberFormat(value: unknown): NumberFormatStyle {
+  return value === "en" ? "en" : "de";
+}
 
 function loadPrefs(): UserPrefs {
   if (typeof window === "undefined") return DEFAULT_PREFS;
@@ -45,6 +53,7 @@ function loadPrefs(): UserPrefs {
       displayName: parsed.displayName?.trim() || DEFAULT_PREFS.displayName,
       email: parsed.email?.trim() || DEFAULT_PREFS.email,
       language: parsed.language === "en" ? "en" : "de",
+      numberFormat: normalizeNumberFormat(parsed.numberFormat),
     };
   } catch {
     return DEFAULT_PREFS;
@@ -79,6 +88,10 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
             : patch.language === "de"
               ? "de"
               : prev.language,
+        numberFormat:
+          patch.numberFormat !== undefined
+            ? normalizeNumberFormat(patch.numberFormat)
+            : prev.numberFormat,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
       return next;
