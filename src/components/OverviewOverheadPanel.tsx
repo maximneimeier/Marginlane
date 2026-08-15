@@ -1306,7 +1306,7 @@ function PersonnelRolesSection({
                         <td className="px-2 py-2">
                           <SheetSelect
                             value={role.roleType}
-                            className="w-[9.5rem] min-w-0"
+                            className="!w-[9.5rem] min-w-[9.5rem]"
                             title={t("personnel.col.roleType")}
                             onChange={(roleType) =>
                               patch(role, {
@@ -1379,7 +1379,7 @@ function PersonnelRolesSection({
                               {isScaling ? (
                                 <SheetSelect
                                   value={role.hireFrequency}
-                                  className="w-[8rem] min-w-0"
+                                  className="!w-[9.25rem] min-w-[9.25rem]"
                                   title={t("personnel.col.hireFrequency")}
                                   onChange={(hireFrequency) =>
                                     patch(role, {

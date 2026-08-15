@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   CatalogProduct,
   OverheadAllocation,
@@ -38,14 +38,6 @@ import type { MessageKey } from "@/lib/i18n";
 import { usePrefs } from "@/context/PreferencesContext";
 import Link from "next/link";
 import { Button, Field, Modal, Select, TextInput } from "@/components/ui";
-
-function LockedValue({ children }: { children: ReactNode }) {
-  return (
-    <p className="flex min-h-[38px] items-center text-[13px] tabular-nums text-foreground">
-      {children}
-    </p>
-  );
-}
 
 type Props = {
   open: boolean;
@@ -303,7 +295,7 @@ export function PersonnelRoleFormModal({
           </Field>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <Field label={t("personnel.field.brutto")} required>
             <TextInput
               type="number"
@@ -318,47 +310,63 @@ export function PersonnelRoleFormModal({
               }
             />
           </Field>
-          <Field
-            label={t("personnel.field.nebenkosten")}
-            hint={t("personnel.field.fromDefaultsHint")}
-          >
-            <LockedValue>
-              {formatNumber(priced.lohnnebenkostenPercent, locale)} %
-            </LockedValue>
-          </Field>
-          <Field
-            label={t("overhead.field.waehrung")}
-            hint={t("personnel.field.fromCompanyCurrencyHint")}
-          >
-            <LockedValue>{defaultCurrency}</LockedValue>
-          </Field>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Field
-            label={t("personnel.field.benefits")}
-            hint={t("personnel.field.fromDefaultsHint")}
-          >
-            <LockedValue>
-              {formatNumber(priced.benefitsMonthly, locale)}
-            </LockedValue>
-          </Field>
-          <Field
-            label={t("personnel.field.zusatzAg")}
-            hint={t("personnel.field.fromDefaultsHint")}
-          >
-            <LockedValue>
-              {formatNumber(priced.zusatzAgPercent, locale)} %
-            </LockedValue>
-          </Field>
-          <Field
-            label={t("personnel.field.increase")}
-            hint={t("personnel.field.fromDefaultsHint")}
-          >
-            <LockedValue>
-              {formatNumber(priced.annualIncreasePercent, locale)} %
-            </LockedValue>
-          </Field>
+        <div className="rounded-[10px] border border-line bg-surface-faint px-3.5 py-3">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <p className="text-[13px] font-medium text-foreground">
+              {t("personnel.companyDefaults.title")}
+            </p>
+            <p className="text-[12px] text-muted-soft">
+              {t("personnel.companyDefaults.hint")}{" "}
+              <Link
+                href="/company?tab=personnel"
+                className="text-accent hover:underline"
+              >
+                {t("personnel.companyDefaults.personnelLink")}
+              </Link>
+              <span className="text-muted-soft"> · </span>
+              <Link href="/company" className="text-accent hover:underline">
+                {t("personnel.companyDefaults.currencyLink")}
+              </Link>
+            </p>
+          </div>
+          <dl className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
+            {(
+              [
+                {
+                  label: t("personnel.field.nebenkosten"),
+                  value: `${formatNumber(priced.lohnnebenkostenPercent, locale)} %`,
+                },
+                {
+                  label: t("personnel.field.zusatzAg"),
+                  value: `${formatNumber(priced.zusatzAgPercent, locale)} %`,
+                },
+                {
+                  label: t("personnel.field.benefits"),
+                  value: formatNumber(priced.benefitsMonthly, locale),
+                },
+                {
+                  label: t("personnel.field.increase"),
+                  value: `${formatNumber(priced.annualIncreasePercent, locale)} %`,
+                },
+                {
+                  label: t("overhead.field.waehrung"),
+                  value: defaultCurrency,
+                },
+              ] as const
+            ).map((row) => (
+              <div
+                key={row.label}
+                className="flex items-baseline justify-between gap-3"
+              >
+                <dt className="text-[12px] text-muted">{row.label}</dt>
+                <dd className="shrink-0 text-[13px] font-medium tabular-nums text-foreground">
+                  {row.value}
+                </dd>
+              </div>
+            ))}
+          </dl>
         </div>
 
         {draft.roleType === "scaling" ? (

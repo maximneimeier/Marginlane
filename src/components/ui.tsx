@@ -8,22 +8,24 @@ export function Field({
 }: {
   label: string;
   children: ReactNode;
-  hint?: string;
+  hint?: ReactNode;
   required?: boolean;
 }) {
   return (
-    <label className="block">
-      <span className="mb-1.5 block text-[12px] font-medium text-muted">
-        {label}
-        {required ? <span className="ml-0.5 text-danger">*</span> : null}
-      </span>
-      {children}
-      {hint ? (
-        <span className="mt-1.5 block text-[12px] leading-snug text-muted-soft">
-          {hint}
+    <div className="block">
+      <label className="block">
+        <span className="mb-1.5 block text-[12px] font-medium text-muted">
+          {label}
+          {required ? <span className="ml-0.5 text-danger">*</span> : null}
         </span>
+        {children}
+      </label>
+      {hint ? (
+        <div className="mt-1.5 text-[12px] leading-snug text-muted-soft">
+          {hint}
+        </div>
       ) : null}
-    </label>
+    </div>
   );
 }
 
