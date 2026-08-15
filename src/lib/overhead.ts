@@ -15,13 +15,18 @@ import type {
 } from "./types";
 import { OVERHEAD_CATEGORIES } from "./types";
 import { resolvePlanUnitPrice } from "./salesPlan";
-import { expandPersonnelRolesToOverheadItems } from "./personnel";
+import { expandPersonnelRolesToOverheadItems, withCompanyPersonnelDefaults } from "./personnel";
+import { personnelDefaultsFromCompany } from "./companySettings";
 
 /** Plan-Positionen inkl. expandierter Personalrollen (für Umlegung & Totals). */
 export function effectivePlanOverheadItems(data: AppData): OverheadItem[] {
+  const defaults = personnelDefaultsFromCompany(data.companySettings);
+  const roles = (data.personnelRoles ?? []).map((role) =>
+    withCompanyPersonnelDefaults(role, defaults),
+  );
   return [
     ...(data.overheadItems ?? []),
-    ...expandPersonnelRolesToOverheadItems(data.personnelRoles ?? []),
+    ...expandPersonnelRolesToOverheadItems(roles),
   ];
 }
 

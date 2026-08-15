@@ -119,57 +119,57 @@ export default function OverheadPageClient({ section }: Props) {
         }
       />
 
-      <Card className="!p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div className="grid flex-1 gap-3 sm:grid-cols-3">
-            <Field label={t("overviewPage.from")}>
-              <TextInput
-                type="date"
-                value={range.from}
-                onChange={(e) => updateRange({ from: e.target.value })}
-              />
-            </Field>
-            <Field label={t("overviewPage.to")}>
-              <TextInput
-                type="date"
-                value={range.to}
-                onChange={(e) => updateRange({ to: e.target.value })}
-              />
-            </Field>
-            <Field label={t("overviewPage.preset")}>
-              <Select
-                value={preset}
-                onChange={(e) => applyPreset(e.target.value as DatePreset)}
-              >
-                <option value="this_year">
-                  {t("overviewPage.preset.thisYear")}
-                </option>
-                <option value="last_quarter">
-                  {t("overviewPage.preset.lastQuarter")}
-                </option>
-                <option value="last_12_months">
-                  {t("overviewPage.preset.last12")}
-                </option>
-                <option value="custom">{t("overviewPage.preset.custom")}</option>
-              </Select>
-            </Field>
+      {!isPersonnel ? (
+        <Card className="!p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div className="grid flex-1 gap-3 sm:grid-cols-3">
+              <Field label={t("overviewPage.from")}>
+                <TextInput
+                  type="date"
+                  value={range.from}
+                  onChange={(e) => updateRange({ from: e.target.value })}
+                />
+              </Field>
+              <Field label={t("overviewPage.to")}>
+                <TextInput
+                  type="date"
+                  value={range.to}
+                  onChange={(e) => updateRange({ to: e.target.value })}
+                />
+              </Field>
+              <Field label={t("overviewPage.preset")}>
+                <Select
+                  value={preset}
+                  onChange={(e) => applyPreset(e.target.value as DatePreset)}
+                >
+                  <option value="this_year">
+                    {t("overviewPage.preset.thisYear")}
+                  </option>
+                  <option value="last_quarter">
+                    {t("overviewPage.preset.lastQuarter")}
+                  </option>
+                  <option value="last_12_months">
+                    {t("overviewPage.preset.last12")}
+                  </option>
+                  <option value="custom">
+                    {t("overviewPage.preset.custom")}
+                  </option>
+                </Select>
+              </Field>
+            </div>
+            <p className="shrink-0 text-[12px] text-muted lg:pb-2">
+              {t("overhead.itemCount", { count: data.overheadItems.length })}
+            </p>
           </div>
-          <p className="shrink-0 text-[12px] text-muted lg:pb-2">
-            {isPersonnel
-              ? t("personnel.itemCount", {
-                  count: (data.personnelRoles ?? []).length,
-                })
-              : t("overhead.itemCount", { count: data.overheadItems.length })}
-          </p>
-        </div>
-        {!isPersonnel && FEATURES.overheadRunRate ? (
-          <OverheadRunRateStrip
-            items={data.overheadItems}
-            range={range}
-            data={data}
-          />
-        ) : null}
-      </Card>
+          {FEATURES.overheadRunRate ? (
+            <OverheadRunRateStrip
+              items={data.overheadItems}
+              range={range}
+              data={data}
+            />
+          ) : null}
+        </Card>
+      ) : null}
 
       <OverviewOverheadPanel
         range={range}

@@ -85,9 +85,9 @@ describe("personnel costs", () => {
     expect(items[1].betrag).toBe(700);
   });
 
-  it("uses 11.75% as default employer payroll burden", () => {
-    // 4000 * (1 + 0.1175 + 0.02) + 100 = 4650
-    expect(employerCostPerFte(role())).toBe(4650);
-    expect(DEFAULT_LOHNNEBENKOSTEN_PERCENT).toBe(11.75);
+  it("uses 0% as default employer payroll burden when unset", () => {
+    // 4000 * (1 + 0 + 0.02) + 100 = 4180
+    expect(employerCostPerFte(role())).toBe(4180);
+    expect(DEFAULT_LOHNNEBENKOSTEN_PERCENT).toBe(0);
   });
 });

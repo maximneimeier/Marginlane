@@ -19,6 +19,11 @@ const nextConfig: NextConfig = {
       { source: "/vergleich", destination: "/overview", permanent: true },
       { source: "/compare", destination: "/overview", permanent: true },
       { source: "/gemeinkosten", destination: "/overhead", permanent: true },
+      {
+        source: "/teams",
+        destination: "/company?tab=personnel",
+        permanent: true,
+      },
       { source: "/", destination: "/overview", permanent: false },
     ];
   },

@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  Suspense,
   useContext,
   useEffect,
   useMemo,
@@ -30,10 +31,6 @@ import {
   parseLocalizedNumber,
   combinedIncomeTaxPercent,
   resolveVatRatePercent,
-  derivePersonnelAggregates,
-  sumDefaultBenefitsAnnual,
-  sumDefaultBenefitsPercent,
-  sumDefaultEmployerPayrollTaxes,
 } from "@/lib/companySettings";
 import {
   computeGermanTaxBreakdown,
@@ -47,6 +44,9 @@ import {
 } from "@/lib/taxModels";
 import { formatNumber } from "@/lib/format";
 import { Button, Card, ConfirmDialog, Field, PageHeader, Select, TextInput } from "@/components/ui";
+import { PersonnelTeamsManager } from "@/components/PersonnelTeamsManager";
+import { PersonnelDefaultsEditor } from "@/components/PersonnelDefaultsEditor";
+import { useSearchParams } from "next/navigation";
 
 function formatTaxRate(value: number, locale: string): string {
   return new Intl.NumberFormat(locale, {
@@ -752,9 +752,35 @@ function MonthCalendarPicker({
 }
 
 export default function CompanyPageClient() {
+  const { t } = useI18n();
+  return (
+    <Suspense
+      fallback={<p className="text-[13px] text-muted">{t("common.loading")}</p>}
+    >
+      <CompanyPageInner />
+    </Suspense>
+  );
+}
+
+function CompanyPageInner() {
   const { ready, data, patchCompanySettings } = useStore();
   const { t, locale, numberFormat } = useI18n();
-  const [tab, setTab] = useState<CompanyTab>("general");
+  const searchParams = useSearchParams();
+  const initialTab = (() => {
+    const raw = searchParams.get("tab");
+    if (
+      raw === "general" ||
+      raw === "starting" ||
+      raw === "taxes" ||
+      raw === "vat" ||
+      raw === "personnel" ||
+      raw === "valuation"
+    ) {
+      return raw;
+    }
+    return "general";
+  })();
+  const [tab, setTab] = useState<CompanyTab>(initialTab);
   const [vatDeleteTarget, setVatDeleteTarget] = useState<VatRate | null>(null);
 
   const numberInputCtx = useMemo(
@@ -866,7 +892,16 @@ export default function CompanyPageClient() {
           <button
             key={item.id}
             type="button"
-            onClick={() => setTab(item.id)}
+            onClick={() => {
+              setTab(item.id);
+              if (typeof window !== "undefined") {
+                const url =
+                  item.id === "general"
+                    ? "/company"
+                    : `/company?tab=${item.id}`;
+                window.history.replaceState(window.history.state, "", url);
+              }
+            }}
             className={`rounded-[6px] px-2.5 py-1 text-[12px] font-medium ${
               tab === item.id
                 ? "bg-surface-soft text-foreground"
@@ -1399,202 +1434,15 @@ export default function CompanyPageClient() {
         {tab === "personnel" ? (
           <div className="space-y-5">
             <div className="rounded-[10px] border border-line p-3">
-              <p className="mb-3 text-[13px] font-medium text-foreground">
-                {t("company.personnel.mandatoryTitle")}
-              </p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field label={t("company.field.socialSecurity")}>
-                  <NumField
-                    value={settings.defaultSocialSecurityPercent}
-                    onValueChange={(n) => {
-                      const next = {
-                        ...settings,
-                        defaultSocialSecurityPercent: n ?? 0,
-                      };
-                      patch({
-                        defaultSocialSecurityPercent: n ?? 0,
-                        ...derivePersonnelAggregates(next),
-                      });
-                    }}
-                  />
-                </Field>
-                <Field label={t("company.field.medicare")}>
-                  <NumField
-                    value={settings.defaultMedicarePercent}
-                    onValueChange={(n) => {
-                      const next = {
-                        ...settings,
-                        defaultMedicarePercent: n ?? 0,
-                      };
-                      patch({
-                        defaultMedicarePercent: n ?? 0,
-                        ...derivePersonnelAggregates(next),
-                      });
-                    }}
-                  />
-                </Field>
-                <Field label={t("company.field.futa")}>
-                  <NumField
-                    value={settings.defaultFutaPercent}
-                    onValueChange={(n) => {
-                      const next = {
-                        ...settings,
-                        defaultFutaPercent: n ?? 0,
-                      };
-                      patch({
-                        defaultFutaPercent: n ?? 0,
-                        ...derivePersonnelAggregates(next),
-                      });
-                    }}
-                  />
-                </Field>
-                <Field label={t("company.field.suta")}>
-                  <NumField
-                    value={settings.defaultSutaPercent}
-                    onValueChange={(n) => {
-                      const next = {
-                        ...settings,
-                        defaultSutaPercent: n ?? 0,
-                      };
-                      patch({
-                        defaultSutaPercent: n ?? 0,
-                        ...derivePersonnelAggregates(next),
-                      });
-                    }}
-                  />
-                </Field>
-                <Field label={t("company.field.ett")}>
-                  <NumField
-                    value={settings.defaultEttPercent}
-                    onValueChange={(n) => {
-                      const next = {
-                        ...settings,
-                        defaultEttPercent: n ?? 0,
-                      };
-                      patch({
-                        defaultEttPercent: n ?? 0,
-                        ...derivePersonnelAggregates(next),
-                      });
-                    }}
-                  />
-                </Field>
-              </div>
-              <div className="mt-3 flex items-center justify-between rounded-[8px] bg-surface-soft px-3 py-2 text-[13px]">
-                <span className="font-medium text-foreground">
-                  {t("company.personnel.mandatoryTotal")}
-                </span>
-                <span className="font-semibold tabular-nums">
-                  {formatTaxRate(
-                    sumDefaultEmployerPayrollTaxes(settings),
-                    locale,
-                  )}{" "}
-                  %
-                </span>
-              </div>
+              <PersonnelTeamsManager compact />
             </div>
 
-            <div className="rounded-[10px] border border-line p-3">
-              <p className="mb-3 text-[13px] font-medium text-foreground">
-                {t("company.personnel.benefitsTitle")}
-              </p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field label={t("company.field.healthInsurance")}>
-                  <NumField
-                    value={settings.defaultHealthInsuranceAnnual}
-                    onValueChange={(n) => {
-                      const next = {
-                        ...settings,
-                        defaultHealthInsuranceAnnual: n ?? 0,
-                      };
-                      patch({
-                        defaultHealthInsuranceAnnual: n ?? 0,
-                        ...derivePersonnelAggregates(next),
-                      });
-                    }}
-                  />
-                </Field>
-                <Field label={t("company.field.dentalVision")}>
-                  <NumField
-                    value={settings.defaultDentalVisionAnnual}
-                    onValueChange={(n) => {
-                      const next = {
-                        ...settings,
-                        defaultDentalVisionAnnual: n ?? 0,
-                      };
-                      patch({
-                        defaultDentalVisionAnnual: n ?? 0,
-                        ...derivePersonnelAggregates(next),
-                      });
-                    }}
-                  />
-                </Field>
-                <Field label={t("company.field.match401k")}>
-                  <NumField
-                    value={settings.default401kMatchPercent}
-                    onValueChange={(n) => {
-                      const next = {
-                        ...settings,
-                        default401kMatchPercent: n ?? 0,
-                      };
-                      patch({
-                        default401kMatchPercent: n ?? 0,
-                        ...derivePersonnelAggregates(next),
-                      });
-                    }}
-                  />
-                </Field>
-                <Field label={t("company.field.workersComp")}>
-                  <NumField
-                    value={settings.defaultWorkersCompPercent}
-                    onValueChange={(n) => {
-                      const next = {
-                        ...settings,
-                        defaultWorkersCompPercent: n ?? 0,
-                      };
-                      patch({
-                        defaultWorkersCompPercent: n ?? 0,
-                        ...derivePersonnelAggregates(next),
-                      });
-                    }}
-                  />
-                </Field>
-                <Field label={t("company.field.otherPerks")}>
-                  <NumField
-                    value={settings.defaultOtherPerksAnnual}
-                    onValueChange={(n) => {
-                      const next = {
-                        ...settings,
-                        defaultOtherPerksAnnual: n ?? 0,
-                      };
-                      patch({
-                        defaultOtherPerksAnnual: n ?? 0,
-                        ...derivePersonnelAggregates(next),
-                      });
-                    }}
-                  />
-                </Field>
-              </div>
-              <div className="mt-3 space-y-2">
-                <div className="flex items-center justify-between rounded-[8px] bg-surface-soft px-3 py-2 text-[13px]">
-                  <span className="font-medium text-foreground">
-                    {t("company.personnel.benefitsAnnualTotal")}
-                  </span>
-                  <span className="font-semibold tabular-nums">
-                    {formatTaxRate(sumDefaultBenefitsAnnual(settings), locale)}{" "}
-                    / {t("company.personnel.perYear")}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between rounded-[8px] bg-surface-soft px-3 py-2 text-[13px]">
-                  <span className="font-medium text-foreground">
-                    {t("company.personnel.benefitsPercentTotal")}
-                  </span>
-                  <span className="font-semibold tabular-nums">
-                    {formatTaxRate(sumDefaultBenefitsPercent(settings), locale)}{" "}
-                    %
-                  </span>
-                </div>
-              </div>
-            </div>
+            <PersonnelDefaultsEditor
+              settings={settings}
+              onPatch={patch}
+              numberFormat={numberFormat}
+              locale={locale}
+            />
 
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label={t("company.field.defaultIncrease")}>
@@ -1624,14 +1472,6 @@ export default function CompanyPageClient() {
                 <NumField
                   value={settings.costOfDebtPercent}
                   onValueChange={(n) => patch({ costOfDebtPercent: n ?? 0 })}
-                />
-              </Field>
-              <Field label={t("company.field.valuationCorporateTax")}>
-                <NumField
-                  value={settings.valuationCorporateTaxPercent}
-                  onValueChange={(n) =>
-                    patch({ valuationCorporateTaxPercent: n ?? 0 })
-                  }
                 />
               </Field>
               <Field label={t("company.field.expectedMarketReturn")}>

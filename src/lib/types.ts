@@ -209,6 +209,19 @@ export type VatRate = {
   ratePercent: number;
 };
 
+/** Einzelne Personal-Default-Zeile (Pflichtabgabe oder Benefit) */
+export type PersonnelDefaultKind = "mandatory" | "benefit";
+/** Einheit der Zeile — Pflichtabgaben sind immer percent */
+export type PersonnelDefaultUnit = "percent" | "annual" | "monthly";
+
+export type PersonnelDefaultLine = {
+  id: string;
+  name: string;
+  kind: PersonnelDefaultKind;
+  unit: PersonnelDefaultUnit;
+  value: number;
+};
+
 /** Anzeige/Eingabe von Zahlen: DE 1.234,56 vs. US 1,234.56 */
 export type NumberFormatStyle = "de" | "en";
 
@@ -246,7 +259,7 @@ export type CompanySettings = {
   baseCurrency: string;
   /** Modellstart YYYY-MM */
   modelStartMonth: string;
-  /** Letzter Ist-Monat YYYY-MM */
+  /** Modellende YYYY-MM */
   lastActualMonth: string;
   startingEquity: number;
   startingCash: number;
@@ -310,27 +323,21 @@ export type CompanySettings = {
    */
   vatRatePercent: number;
   vatFilingCadence: VatFilingCadence;
-  defaultLohnnebenkostenPercent: number;
-  /** Aufschlüsselung AG-Lohnnebenkosten (Summe → defaultLohnnebenkostenPercent) */
-  defaultSocialSecurityPercent: number;
-  defaultMedicarePercent: number;
-  defaultFutaPercent: number;
-  defaultSutaPercent: number;
-  defaultEttPercent: number;
-  /** AG-Benefits (Schätzwerte, Jahresbeträge bzw. %) */
-  defaultHealthInsuranceAnnual: number;
-  defaultDentalVisionAnnual: number;
-  defaultOtherPerksAnnual: number;
-  default401kMatchPercent: number;
-  defaultWorkersCompPercent: number;
   /**
-   * Abgeleitet: 401(k) + Workers' Comp.
-   * @deprecated Direkt aus Benefits-% berechnet
+   * Freie Personal-Defaults: Pflichtabgaben (%) und Benefits (% / Jahr / Monat).
+   * Aggregate unten werden daraus abgeleitet.
+   */
+  personnelDefaultLines: PersonnelDefaultLine[];
+  /** Summe Pflichtabgaben % (aus personnelDefaultLines) */
+  defaultLohnnebenkostenPercent: number;
+  /**
+   * Summe Benefit-% (aus personnelDefaultLines).
+   * @deprecated Abgeleitet — bleibt für Rollen-Defaults
    */
   defaultZusatzAgPercent: number;
   /**
-   * Abgeleitet: (Health + Dental + Other Perks) / 12.
-   * @deprecated Direkt aus Jahres-Benefits berechnet
+   * Summe fester Benefits / Monat (Jahresbeträge / 12 + Monatsbeträge).
+   * @deprecated Abgeleitet — bleibt für Rollen-Defaults
    */
   defaultBenefitsMonthly: number;
   defaultAnnualIncreasePercent: number;
@@ -384,19 +391,10 @@ export const EMPTY_COMPANY_SETTINGS: CompanySettings = {
   defaultVatRateId: "vat_standard",
   vatRatePercent: 19,
   vatFilingCadence: "monthly",
-  defaultLohnnebenkostenPercent: 11.75,
-  defaultSocialSecurityPercent: 6.2,
-  defaultMedicarePercent: 1.45,
-  defaultFutaPercent: 0.6,
-  defaultSutaPercent: 3.4,
-  defaultEttPercent: 0.1,
-  defaultHealthInsuranceAnnual: 7200,
-  defaultDentalVisionAnnual: 650,
-  defaultOtherPerksAnnual: 1000,
-  default401kMatchPercent: 2,
-  defaultWorkersCompPercent: 1.5,
-  defaultZusatzAgPercent: 3.5,
-  defaultBenefitsMonthly: 8850 / 12,
+  personnelDefaultLines: [],
+  defaultLohnnebenkostenPercent: 0,
+  defaultZusatzAgPercent: 0,
+  defaultBenefitsMonthly: 0,
   defaultAnnualIncreasePercent: 3,
   costOfEquityPercent: 7.17,
   costOfDebtPercent: 7.85,
@@ -953,8 +951,8 @@ export const PERSONNEL_HIRE_FREQUENCIES: PersonnelHireFrequency[] = [
   "monthly",
 ];
 
-/** Default AG-Lohnnebenkosten % (Summe der Pflicht-AG-Abgaben, Planung) */
-export const DEFAULT_LOHNNEBENKOSTEN_PERCENT = 11.75;
+/** Default AG-Lohnnebenkosten % wenn keine Firmen-Defaults gesetzt */
+export const DEFAULT_LOHNNEBENKOSTEN_PERCENT = 0;
 
 export const EMPTY_DATA: AppData = {
   suppliers: [],

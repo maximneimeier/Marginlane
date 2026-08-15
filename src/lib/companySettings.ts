@@ -4,6 +4,9 @@ import {
   TAX_REGIMES,
   type CompanySettings,
   type NumberFormatStyle,
+  type PersonnelDefaultKind,
+  type PersonnelDefaultLine,
+  type PersonnelDefaultUnit,
   type TaxRegime,
   type UsTaxJurisdiction,
   type VatFilingCadence,
@@ -44,6 +47,54 @@ function monthKey(value: unknown): string {
   if (typeof value !== "string") return "";
   const trimmed = value.trim();
   return /^\d{4}-\d{2}$/.test(trimmed) ? trimmed : "";
+}
+
+/** Erster Kalendertag eines Monats YYYY-MM → YYYY-MM-DD. */
+export function monthKeyToStartDate(month: string): string | null {
+  const key = monthKey(month);
+  return key ? `${key}-01` : null;
+}
+
+/** Letzter Kalendertag eines Monats YYYY-MM → YYYY-MM-DD. */
+export function monthKeyToEndDate(month: string): string | null {
+  const key = monthKey(month);
+  if (!key) return null;
+  const year = Number(key.slice(0, 4));
+  const mon = Number(key.slice(5, 7));
+  const lastDay = new Date(Date.UTC(year, mon, 0)).getUTCDate();
+  return `${key}-${String(lastDay).padStart(2, "0")}`;
+}
+
+/** Datum in [min, max] klemmen (ISO YYYY-MM-DD). Leere Werte bleiben null. */
+export function clampIsoDate(
+  value: string | null,
+  min: string | null | undefined,
+  max: string | null | undefined,
+): string | null {
+  if (!value) return null;
+  if (min && value < min) return min;
+  if (max && value > max) return max;
+  return value;
+}
+
+/** Früheres von zwei ISO-Daten (null = egal). */
+export function earlierIsoDate(
+  a: string | null | undefined,
+  b: string | null | undefined,
+): string | null {
+  if (!a) return b ?? null;
+  if (!b) return a;
+  return a < b ? a : b;
+}
+
+/** Späteres von zwei ISO-Daten (null = egal). */
+export function laterIsoDate(
+  a: string | null | undefined,
+  b: string | null | undefined,
+): string | null {
+  if (!a) return b ?? null;
+  if (!b) return a;
+  return a > b ? a : b;
 }
 
 function clampMonth(value: unknown, fallback: number): number {
@@ -453,55 +504,10 @@ export function normalizeCompanySettings(
       ? raw.vatFilingCadence
       : EMPTY_COMPANY_SETTINGS.vatFilingCadence,
     ...(() => {
-      const personnel = {
-        defaultSocialSecurityPercent: finiteNumber(
-          (raw as { defaultSocialSecurityPercent?: unknown })
-            .defaultSocialSecurityPercent,
-          EMPTY_COMPANY_SETTINGS.defaultSocialSecurityPercent,
-        ),
-        defaultMedicarePercent: finiteNumber(
-          (raw as { defaultMedicarePercent?: unknown }).defaultMedicarePercent,
-          EMPTY_COMPANY_SETTINGS.defaultMedicarePercent,
-        ),
-        defaultFutaPercent: finiteNumber(
-          (raw as { defaultFutaPercent?: unknown }).defaultFutaPercent,
-          EMPTY_COMPANY_SETTINGS.defaultFutaPercent,
-        ),
-        defaultSutaPercent: finiteNumber(
-          (raw as { defaultSutaPercent?: unknown }).defaultSutaPercent,
-          EMPTY_COMPANY_SETTINGS.defaultSutaPercent,
-        ),
-        defaultEttPercent: finiteNumber(
-          (raw as { defaultEttPercent?: unknown }).defaultEttPercent,
-          EMPTY_COMPANY_SETTINGS.defaultEttPercent,
-        ),
-        defaultHealthInsuranceAnnual: finiteNumber(
-          (raw as { defaultHealthInsuranceAnnual?: unknown })
-            .defaultHealthInsuranceAnnual,
-          EMPTY_COMPANY_SETTINGS.defaultHealthInsuranceAnnual,
-        ),
-        defaultDentalVisionAnnual: finiteNumber(
-          (raw as { defaultDentalVisionAnnual?: unknown })
-            .defaultDentalVisionAnnual,
-          EMPTY_COMPANY_SETTINGS.defaultDentalVisionAnnual,
-        ),
-        defaultOtherPerksAnnual: finiteNumber(
-          (raw as { defaultOtherPerksAnnual?: unknown }).defaultOtherPerksAnnual,
-          EMPTY_COMPANY_SETTINGS.defaultOtherPerksAnnual,
-        ),
-        default401kMatchPercent: finiteNumber(
-          (raw as { default401kMatchPercent?: unknown }).default401kMatchPercent,
-          EMPTY_COMPANY_SETTINGS.default401kMatchPercent,
-        ),
-        defaultWorkersCompPercent: finiteNumber(
-          (raw as { defaultWorkersCompPercent?: unknown })
-            .defaultWorkersCompPercent,
-          EMPTY_COMPANY_SETTINGS.defaultWorkersCompPercent,
-        ),
-      };
+      const lines = normalizePersonnelDefaultLines(raw);
       return {
-        ...personnel,
-        ...derivePersonnelAggregates(personnel),
+        personnelDefaultLines: lines,
+        ...derivePersonnelAggregatesFromLines(lines),
       };
     })(),
     defaultAnnualIncreasePercent: finiteNumber(
@@ -552,65 +558,207 @@ export type PersonnelCostDefaults = {
   annualIncreasePercent: number;
 };
 
-export function sumDefaultEmployerPayrollTaxes(settings: {
-  defaultSocialSecurityPercent: number;
-  defaultMedicarePercent: number;
-  defaultFutaPercent: number;
-  defaultSutaPercent: number;
-  defaultEttPercent: number;
-}): number {
+const PERSONNEL_DEFAULT_UNITS: PersonnelDefaultUnit[] = [
+  "percent",
+  "annual",
+  "monthly",
+];
+
+function isPersonnelDefaultUnit(value: unknown): value is PersonnelDefaultUnit {
   return (
-    Math.max(0, settings.defaultSocialSecurityPercent || 0) +
-    Math.max(0, settings.defaultMedicarePercent || 0) +
-    Math.max(0, settings.defaultFutaPercent || 0) +
-    Math.max(0, settings.defaultSutaPercent || 0) +
-    Math.max(0, settings.defaultEttPercent || 0)
+    typeof value === "string" &&
+    PERSONNEL_DEFAULT_UNITS.includes(value as PersonnelDefaultUnit)
   );
 }
 
-export function sumDefaultBenefitsAnnual(settings: {
-  defaultHealthInsuranceAnnual: number;
-  defaultDentalVisionAnnual: number;
-  defaultOtherPerksAnnual: number;
-}): number {
-  return (
-    Math.max(0, settings.defaultHealthInsuranceAnnual || 0) +
-    Math.max(0, settings.defaultDentalVisionAnnual || 0) +
-    Math.max(0, settings.defaultOtherPerksAnnual || 0)
-  );
+function isPersonnelDefaultKind(value: unknown): value is PersonnelDefaultKind {
+  return value === "mandatory" || value === "benefit";
 }
 
-export function sumDefaultBenefitsPercent(settings: {
-  default401kMatchPercent: number;
-  defaultWorkersCompPercent: number;
-}): number {
-  return (
-    Math.max(0, settings.default401kMatchPercent || 0) +
-    Math.max(0, settings.defaultWorkersCompPercent || 0)
-  );
+export function emptyPersonnelDefaultLine(
+  kind: PersonnelDefaultKind,
+): PersonnelDefaultLine {
+  return {
+    id: createId("pdl"),
+    name: "",
+    kind,
+    unit: kind === "mandatory" ? "percent" : "annual",
+    value: 0,
+  };
 }
 
-export function derivePersonnelAggregates(settings: {
-  defaultSocialSecurityPercent: number;
-  defaultMedicarePercent: number;
-  defaultFutaPercent: number;
-  defaultSutaPercent: number;
-  defaultEttPercent: number;
-  defaultHealthInsuranceAnnual: number;
-  defaultDentalVisionAnnual: number;
-  defaultOtherPerksAnnual: number;
-  default401kMatchPercent: number;
-  defaultWorkersCompPercent: number;
-}): {
+export function normalizePersonnelDefaultLine(
+  raw: Partial<PersonnelDefaultLine> | null | undefined,
+  fallbackKind: PersonnelDefaultKind = "benefit",
+): PersonnelDefaultLine {
+  const kind = isPersonnelDefaultKind(raw?.kind) ? raw.kind : fallbackKind;
+  const unitRaw = isPersonnelDefaultUnit(raw?.unit) ? raw.unit : undefined;
+  const unit: PersonnelDefaultUnit =
+    kind === "mandatory" ? "percent" : (unitRaw ?? "annual");
+  return {
+    id:
+      typeof raw?.id === "string" && raw.id.trim()
+        ? raw.id
+        : createId("pdl"),
+    name: typeof raw?.name === "string" ? raw.name : "",
+    kind,
+    unit,
+    value: Math.max(0, finiteNumber(raw?.value, 0)),
+  };
+}
+
+/** Legacy-Felder → Zeilen (einmalig bei Migration). */
+function legacyPersonnelDefaultLines(raw: Record<string, unknown>): PersonnelDefaultLine[] {
+  const lines: PersonnelDefaultLine[] = [];
+  const pushPct = (name: string, key: string) => {
+    const v = finiteNumber(raw[key], NaN);
+    if (!Number.isFinite(v) || v === 0) return;
+    lines.push({
+      id: createId("pdl"),
+      name,
+      kind: "mandatory",
+      unit: "percent",
+      value: v,
+    });
+  };
+  const pushBenefitPct = (name: string, key: string) => {
+    const v = finiteNumber(raw[key], NaN);
+    if (!Number.isFinite(v) || v === 0) return;
+    lines.push({
+      id: createId("pdl"),
+      name,
+      kind: "benefit",
+      unit: "percent",
+      value: v,
+    });
+  };
+  const pushAnnual = (name: string, key: string) => {
+    const v = finiteNumber(raw[key], NaN);
+    if (!Number.isFinite(v) || v === 0) return;
+    lines.push({
+      id: createId("pdl"),
+      name,
+      kind: "benefit",
+      unit: "annual",
+      value: v,
+    });
+  };
+
+  pushPct("Social Security", "defaultSocialSecurityPercent");
+  pushPct("Medicare", "defaultMedicarePercent");
+  pushPct("FUTA", "defaultFutaPercent");
+  pushPct("SUTA", "defaultSutaPercent");
+  pushPct("ETT", "defaultEttPercent");
+  pushAnnual("Health Insurance", "defaultHealthInsuranceAnnual");
+  pushAnnual("Dental & Vision", "defaultDentalVisionAnnual");
+  pushAnnual("Other perks", "defaultOtherPerksAnnual");
+  pushBenefitPct("401(k) match", "default401kMatchPercent");
+  pushBenefitPct("Workers' Comp", "defaultWorkersCompPercent");
+
+  // Noch ältere Einzel-Aggregate ohne Aufschlüsselung
+  if (lines.length === 0) {
+    const nk = finiteNumber(raw.defaultLohnnebenkostenPercent, NaN);
+    if (Number.isFinite(nk) && nk > 0) {
+      lines.push({
+        id: createId("pdl"),
+        name: "Lohnnebenkosten",
+        kind: "mandatory",
+        unit: "percent",
+        value: nk,
+      });
+    }
+    const zusatz = finiteNumber(raw.defaultZusatzAgPercent, NaN);
+    if (Number.isFinite(zusatz) && zusatz > 0) {
+      lines.push({
+        id: createId("pdl"),
+        name: "Zusatz AG",
+        kind: "benefit",
+        unit: "percent",
+        value: zusatz,
+      });
+    }
+    const benefits = finiteNumber(raw.defaultBenefitsMonthly, NaN);
+    if (Number.isFinite(benefits) && benefits > 0) {
+      lines.push({
+        id: createId("pdl"),
+        name: "Benefits",
+        kind: "benefit",
+        unit: "monthly",
+        value: benefits,
+      });
+    }
+  }
+
+  return lines;
+}
+
+export function normalizePersonnelDefaultLines(
+  raw: Partial<CompanySettings> | null | undefined,
+): PersonnelDefaultLine[] {
+  const record = (raw ?? {}) as Record<string, unknown>;
+  if (Array.isArray(record.personnelDefaultLines)) {
+    return (record.personnelDefaultLines as unknown[])
+      .filter((item) => item && typeof item === "object")
+      .map((item) =>
+        normalizePersonnelDefaultLine(
+          item as Partial<PersonnelDefaultLine>,
+        ),
+      );
+  }
+  return legacyPersonnelDefaultLines(record);
+}
+
+export function sumMandatoryPercent(lines: PersonnelDefaultLine[]): number {
+  return lines
+    .filter((l) => l.kind === "mandatory" && l.unit === "percent")
+    .reduce((sum, l) => sum + Math.max(0, l.value || 0), 0);
+}
+
+export function sumBenefitPercent(lines: PersonnelDefaultLine[]): number {
+  return lines
+    .filter((l) => l.kind === "benefit" && l.unit === "percent")
+    .reduce((sum, l) => sum + Math.max(0, l.value || 0), 0);
+}
+
+export function sumBenefitMonthly(lines: PersonnelDefaultLine[]): number {
+  let monthly = 0;
+  for (const line of lines) {
+    if (line.kind !== "benefit") continue;
+    const v = Math.max(0, line.value || 0);
+    if (line.unit === "annual") monthly += v / 12;
+    else if (line.unit === "monthly") monthly += v;
+  }
+  return monthly;
+}
+
+export function derivePersonnelAggregatesFromLines(
+  lines: PersonnelDefaultLine[],
+): {
   defaultLohnnebenkostenPercent: number;
   defaultZusatzAgPercent: number;
   defaultBenefitsMonthly: number;
 } {
   return {
-    defaultLohnnebenkostenPercent: sumDefaultEmployerPayrollTaxes(settings),
-    defaultZusatzAgPercent: sumDefaultBenefitsPercent(settings),
-    defaultBenefitsMonthly: sumDefaultBenefitsAnnual(settings) / 12,
+    defaultLohnnebenkostenPercent: sumMandatoryPercent(lines),
+    defaultZusatzAgPercent: sumBenefitPercent(lines),
+    defaultBenefitsMonthly: sumBenefitMonthly(lines),
   };
+}
+
+/** @deprecated Use derivePersonnelAggregatesFromLines */
+export function derivePersonnelAggregates(
+  settings: CompanySettings | {
+    personnelDefaultLines?: PersonnelDefaultLine[];
+  },
+): {
+  defaultLohnnebenkostenPercent: number;
+  defaultZusatzAgPercent: number;
+  defaultBenefitsMonthly: number;
+} {
+  const lines = Array.isArray(settings.personnelDefaultLines)
+    ? settings.personnelDefaultLines
+    : [];
+  return derivePersonnelAggregatesFromLines(lines);
 }
 
 export function personnelDefaultsFromCompany(
@@ -620,7 +768,8 @@ export function personnelDefaultsFromCompany(
     ? normalizeCompanySettings(settings)
     : EMPTY_COMPANY_SETTINGS;
   return {
-    lohnnebenkostenPercent: s.defaultLohnnebenkostenPercent,
+    lohnnebenkostenPercent:
+      s.defaultLohnnebenkostenPercent || DEFAULT_LOHNNEBENKOSTEN_PERCENT,
     zusatzAgPercent: s.defaultZusatzAgPercent,
     benefitsMonthly: s.defaultBenefitsMonthly,
     annualIncreasePercent: s.defaultAnnualIncreasePercent,

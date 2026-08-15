@@ -1,14 +1,24 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import Link from "next/link";
 import { useStore } from "@/context/StoreContext";
 import type {
+  CompanySettings,
   OverheadCostBehavior,
   OverheadItem,
+  PersonnelHireFrequency,
   PersonnelRole,
+  PersonnelRoleType,
   PersonnelTeam,
 } from "@/lib/types";
-import { OVERHEAD_COST_BEHAVIORS } from "@/lib/types";
+import {
+  EMPTY_COMPANY_SETTINGS,
+  OVERHEAD_COST_BEHAVIORS,
+  PERSONNEL_HIRE_FREQUENCIES,
+  PERSONNEL_ROLE_TYPES,
+} from "@/lib/types";
 import type { DateRange } from "@/lib/overview";
 import {
   buildOverheadReport,
@@ -18,12 +28,19 @@ import {
 import {
   annualSalary,
   emptyPersonnelRole,
-  employerBurdenPerFte,
-  employerCostPerFte,
+  employerCostBreakdown,
+  withCompanyPersonnelDefaults,
 } from "@/lib/personnel";
-import { personnelDefaultsFromCompany } from "@/lib/companySettings";
-import { EMPTY_COMPANY_SETTINGS } from "@/lib/types";
-import { formatEuro } from "@/lib/format";
+import {
+  normalizeCompanySettings,
+  personnelDefaultsFromCompany,
+  monthKeyToStartDate,
+  monthKeyToEndDate,
+  clampIsoDate,
+  earlierIsoDate,
+  laterIsoDate,
+} from "@/lib/companySettings";
+import { formatEuro, formatNumber } from "@/lib/format";
 import type { MessageKey } from "@/lib/i18n";
 import { useI18n } from "@/hooks/useI18n";
 import { OverheadFormModal } from "@/components/OverheadFormModal";
@@ -39,6 +56,7 @@ import {
   ConfirmDialog,
   Select,
   TableRowActions,
+  TextInput,
 } from "@/components/ui";
 import { FEATURES } from "@/lib/features";
 
@@ -134,10 +152,13 @@ export function OverviewOverheadPanel({
       (data.personnelRoles ?? []).some((r) => r.id === personnelDraft.id),
   );
 
-  const companySettings = data.companySettings ?? EMPTY_COMPANY_SETTINGS;
+  const companySettings = normalizeCompanySettings(
+    data.companySettings ?? EMPTY_COMPANY_SETTINGS,
+  );
   const personnelDefaults = useMemo(
     () => personnelDefaultsFromCompany(companySettings),
     [
+      companySettings.personnelDefaultLines,
       companySettings.defaultLohnnebenkostenPercent,
       companySettings.defaultZusatzAgPercent,
       companySettings.defaultBenefitsMonthly,
@@ -286,20 +307,30 @@ export function OverviewOverheadPanel({
         isEdit={isPersonnelEdit}
         defaultCurrency={defaultCurrency}
         personnelDefaults={personnelDefaults}
+        modelDateMin={monthKeyToStartDate(companySettings.modelStartMonth)}
+        modelDateMax={monthKeyToEndDate(companySettings.lastActualMonth)}
         onClose={() => setPersonnelDraft(null)}
-        onSave={(role) => upsertPersonnelRole(role)}
+        onSave={(role) =>
+          upsertPersonnelRole(
+            withCompanyPersonnelDefaults(role, personnelDefaults),
+          )
+        }
       />
 
       {section === "personnel" ? (
         <PersonnelRolesSection
           roles={roles}
           teams={data.personnelTeams ?? []}
+          companySettings={companySettings}
           personnelAmount={report.personnelAmount}
           locale={locale}
           onEdit={(role) => setPersonnelDraft(structuredClone(role))}
           onDelete={(role) => setDeletePersonnelTarget(role)}
-          onCreate={() =>
-            setPersonnelDraft(newPersonnelRole())
+          onCreate={() => setPersonnelDraft(newPersonnelRole())}
+          onUpdate={(role) =>
+            upsertPersonnelRole(
+              withCompanyPersonnelDefaults(role, personnelDefaults),
+            )
           }
         />
       ) : null}
@@ -755,24 +786,277 @@ export function OverviewOverheadPanel({
   );
 }
 
+function parseLocaleNumber(raw: string, locale: string): number | null {
+  const trimmed = raw.trim().replace(/\s/g, "");
+  if (!trimmed) return null;
+  const normalized =
+    locale.startsWith("de") || locale.startsWith("fr")
+      ? trimmed.replace(/\./g, "").replace(",", ".")
+      : trimmed.replace(/,/g, "");
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : null;
+}
+
+const sheetQuiet =
+  "!border-transparent !bg-transparent !shadow-none hover:!border-transparent hover:!bg-surface-faint focus:!border-line focus:!bg-white focus:!shadow-[0_0_0_2px_rgba(38,109,240,0.12)]";
+
+function SheetNum({
+  value,
+  locale,
+  onCommit,
+  suffix,
+  className = "",
+  widthClass = "!w-[5.5rem]",
+}: {
+  value: number;
+  locale: string;
+  onCommit: (next: number) => void;
+  suffix?: string;
+  className?: string;
+  widthClass?: string;
+}) {
+  return (
+    <div className={`flex items-center justify-end gap-0.5 ${className}`}>
+      <TextInput
+        inputMode="decimal"
+        className={`h-8 ${widthClass} ${sheetQuiet} shrink-0 rounded-[6px] px-2 py-0 text-right text-[12px] tabular-nums`}
+        defaultValue={
+          value === 0 ? "" : formatNumber(value, locale)
+        }
+        key={`${value}-${locale}`}
+        onBlur={(e) => {
+          const parsed = parseLocaleNumber(e.target.value, locale);
+          onCommit(parsed === null ? 0 : Math.max(0, parsed));
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        }}
+      />
+      {suffix ? (
+        <span className="shrink-0 text-[11px] text-muted">{suffix}</span>
+      ) : null}
+    </div>
+  );
+}
+
+function SheetText({
+  value,
+  onCommit,
+  placeholder,
+  className = "",
+}: {
+  value: string;
+  onCommit: (next: string) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  return (
+    <TextInput
+      className={`h-9 min-h-9 ${sheetQuiet} rounded-[6px] px-2 py-0 text-[13px] font-medium ${className}`}
+      defaultValue={value}
+      key={value}
+      placeholder={placeholder}
+      onBlur={(e) => {
+        const next = e.target.value.trim();
+        if (next !== value.trim()) onCommit(next);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+      }}
+    />
+  );
+}
+
+function SheetDate({
+  value,
+  onCommit,
+  min,
+  max,
+}: {
+  value: string | null;
+  onCommit: (next: string | null) => void;
+  min?: string | null;
+  max?: string | null;
+}) {
+  return (
+    <TextInput
+      type="date"
+      className={`h-8 w-[8.25rem] min-w-0 ${sheetQuiet} rounded-[6px] px-1.5 py-0 text-[12px]`}
+      value={value ?? ""}
+      min={min || undefined}
+      max={max || undefined}
+      onChange={(e) =>
+        onCommit(clampIsoDate(e.target.value || null, min, max))
+      }
+    />
+  );
+}
+
+const sheetSelectClass = `h-8 w-full rounded-[6px] border border-transparent bg-transparent px-2 py-0 text-[12px] leading-none text-foreground outline-none transition-[border-color,background-color,box-shadow] hover:bg-surface-faint focus:border-line focus:bg-white focus:shadow-[0_0_0_2px_rgba(38,109,240,0.12)]`;
+
+function SheetSelect({
+  value,
+  onChange,
+  children,
+  className = "",
+  title,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  children: ReactNode;
+  className?: string;
+  title?: string;
+}) {
+  return (
+    <select
+      value={value}
+      title={title}
+      onChange={(e) => onChange(e.target.value)}
+      className={`${sheetSelectClass} ${className}`}
+    >
+      {children}
+    </select>
+  );
+}
+
+function CtcBreakdownCell({
+  role,
+  locale,
+}: {
+  role: PersonnelRole;
+  locale: string;
+}) {
+  const { t } = useI18n();
+  const cellRef = useRef<HTMLTableCellElement>(null);
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const breakdown = employerCostBreakdown(role);
+  const hc = Math.max(0, role.headcount || 0);
+  const roleTotal = breakdown.total * hc;
+
+  function show() {
+    const rect = cellRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setPos({ top: rect.top - 8, left: rect.right });
+    setOpen(true);
+  }
+
+  const rows: { label: string; value: string; strong?: boolean }[] = [
+    {
+      label: t("personnel.ctcBreakdown.brutto"),
+      value: formatEuro(breakdown.brutto, locale),
+    },
+    {
+      label: t("personnel.ctcBreakdown.nk", {
+        pct: formatNumber(breakdown.nkPercent, locale),
+      }),
+      value: formatEuro(breakdown.nkAmount, locale),
+    },
+    {
+      label: t("personnel.ctcBreakdown.zusatz", {
+        pct: formatNumber(breakdown.zusatzPercent, locale),
+      }),
+      value: formatEuro(breakdown.zusatzAmount, locale),
+    },
+    {
+      label: t("personnel.ctcBreakdown.benefits"),
+      value: formatEuro(breakdown.benefits, locale),
+    },
+    {
+      label: t("personnel.ctcBreakdown.total"),
+      value: formatEuro(breakdown.total, locale),
+      strong: true,
+    },
+  ];
+
+  if (hc !== 1) {
+    rows.push({
+      label: t("personnel.ctcBreakdown.roleTotal", {
+        hc: formatNumber(hc, locale),
+      }),
+      value: formatEuro(roleTotal, locale),
+      strong: true,
+    });
+  }
+
+  return (
+    <td
+      ref={cellRef}
+      className="px-2 py-2 text-right font-medium tabular-nums"
+      onMouseEnter={show}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <span className="cursor-default border-b border-dotted border-muted-soft/80">
+        {formatEuro(breakdown.total, locale)}
+      </span>
+      {open
+        ? createPortal(
+            <div
+              role="tooltip"
+              className="pointer-events-none fixed z-[80] w-[240px] -translate-x-full -translate-y-full rounded-[10px] border border-line bg-white px-3 py-2.5 text-left shadow-[0_12px_40px_rgba(28,29,31,0.16)]"
+              style={{ top: pos.top, left: pos.left }}
+            >
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.04em] text-muted-soft">
+                {t("personnel.ctcBreakdown.title")}
+              </p>
+              <dl className="space-y-1.5">
+                {rows.map((row) => (
+                  <div
+                    key={row.label}
+                    className={`flex items-baseline justify-between gap-3 ${
+                      row.strong ? "border-t border-line pt-1.5" : ""
+                    }`}
+                  >
+                    <dt
+                      className={`text-[11px] leading-snug ${
+                        row.strong ? "font-medium text-foreground" : "text-muted"
+                      }`}
+                    >
+                      {row.label}
+                    </dt>
+                    <dd
+                      className={`shrink-0 text-[12px] tabular-nums ${
+                        row.strong ? "font-semibold text-foreground" : "text-foreground"
+                      }`}
+                    >
+                      {row.value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>,
+            document.body,
+          )
+        : null}
+    </td>
+  );
+}
+
 function PersonnelRolesSection({
   roles,
   teams,
+  companySettings,
   personnelAmount,
   locale,
   onEdit,
   onDelete,
   onCreate,
+  onUpdate,
 }: {
   roles: PersonnelRole[];
   teams: PersonnelTeam[];
+  companySettings: CompanySettings;
   personnelAmount: number;
   locale: string;
   onEdit: (role: PersonnelRole) => void;
   onDelete: (role: PersonnelRole) => void;
   onCreate: () => void;
+  onUpdate: (role: PersonnelRole) => void;
 }) {
   const { t } = useI18n();
+
+  const modelDateMin = monthKeyToStartDate(companySettings.modelStartMonth);
+  const modelDateMax = monthKeyToEndDate(companySettings.lastActualMonth);
 
   const teamById = useMemo(() => {
     const map = new Map<string, PersonnelTeam>();
@@ -830,18 +1114,28 @@ function PersonnelRolesSection({
     );
   }
 
-  const colCount = 16;
+  const costDefaults = personnelDefaultsFromCompany(companySettings);
+  const anyScaling = roles.some((r) => r.roleType === "scaling");
+  const colCount = anyScaling ? 12 : 9;
+  const sortedTeams = [...teams].sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
 
-  function formatDate(iso: string | null) {
-    if (!iso) return t("personnel.col.noEnd");
-    const d = new Date(`${iso}T00:00:00`);
-    if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleDateString(locale, {
-      day: "2-digit",
-      month: "2-digit",
-      year: "2-digit",
+  const patch = (role: PersonnelRole, partial: Partial<PersonnelRole>) => {
+    onUpdate({
+      ...role,
+      ...partial,
+      updatedAt: new Date().toISOString(),
     });
-  }
+  };
+
+  const fmtPct = (n: number) =>
+    new Intl.NumberFormat(locale, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(n);
+
+  const benefitsAnnualDefault = Math.max(0, costDefaults.benefitsMonthly) * 12;
 
   return (
     <div className="space-y-4">
@@ -857,16 +1151,43 @@ function PersonnelRolesSection({
         />
       </div>
 
-      <div className="overflow-hidden rounded-[12px] border border-line bg-white shadow-[var(--shadow-sm)]">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px] border-collapse text-left text-[12px]">
+      <div className="rounded-[10px] border border-line bg-surface-faint/50 px-3 py-2.5 text-[12px]">
+        <p className="font-medium text-foreground">
+          {t("personnel.defaultsSummaryTitle")}
+        </p>
+        <p className="mt-1 text-muted">
+          {t("personnel.defaultsSummaryLine", {
+            nk: fmtPct(costDefaults.lohnnebenkostenPercent),
+            benefits: formatEuro(benefitsAnnualDefault, locale),
+            zusatz: fmtPct(costDefaults.zusatzAgPercent),
+            increase: fmtPct(costDefaults.annualIncreasePercent),
+          })}
+        </p>
+        <p className="mt-1 text-muted">
+          {t("personnel.sheetHint")}{" "}
+          <Link
+            href="/company?tab=personnel"
+            className="font-medium text-accent hover:underline"
+          >
+            {t("company.section.personnel")}
+          </Link>
+          .
+        </p>
+      </div>
+
+      <div className="rounded-[12px] border border-line bg-white shadow-[var(--shadow-sm)]">
+        <div className="overflow-x-auto overflow-y-visible">
+          <table className="w-full min-w-[960px] border-collapse text-left text-[12px]">
             <thead>
               <tr className="border-b border-line bg-surface-faint text-[10px] font-semibold uppercase tracking-[0.03em] text-muted-soft">
                 <th className="sticky left-0 z-10 bg-surface-faint px-3 py-2.5 text-left font-semibold">
                   {t("personnel.col.name")}
                 </th>
+                <th className="px-2 py-2.5 text-right font-semibold">
+                  {t("personnel.col.headcount")}
+                </th>
                 <th className="px-2 py-2.5 font-semibold">
-                  {t("personnel.col.currency")}
+                  {t("personnel.field.team")}
                 </th>
                 <th className="px-2 py-2.5 font-semibold">
                   {t("personnel.col.roleType")}
@@ -881,61 +1202,42 @@ function PersonnelRolesSection({
                   {t("personnel.col.annualSalary")}
                 </th>
                 <th className="px-2 py-2.5 text-right font-semibold">
-                  {t("personnel.col.nebenkosten")}
-                </th>
-                <th className="px-2 py-2.5 text-right font-semibold">
-                  {t("personnel.col.benefits")}
-                </th>
-                <th className="px-2 py-2.5 text-right font-semibold">
-                  {t("personnel.col.zusatzAg")}
-                </th>
-                <th className="px-2 py-2.5 text-right font-semibold">
-                  {t("personnel.col.burden")}
-                </th>
-                <th className="px-2 py-2.5 text-right font-semibold">
-                  {t("personnel.col.increase")}
-                </th>
-                <th className="px-2 py-2.5 text-right font-semibold">
-                  {t("personnel.col.monthlySalary")}
-                </th>
-                <th className="px-2 py-2.5 text-right font-semibold">
                   {t("personnel.col.monthlyCtc")}
                 </th>
-                <th
-                  colSpan={3}
-                  className="border-l border-line px-2 py-2.5 text-center font-semibold"
-                >
-                  {t("personnel.col.teamScaling")}
-                </th>
+                {anyScaling ? (
+                  <th
+                    colSpan={3}
+                    className="border-l border-line px-2 py-2.5 text-center font-semibold"
+                  >
+                    {t("personnel.col.teamScaling")}
+                  </th>
+                ) : null}
                 <th className="px-2 py-2.5 text-right font-semibold">
                   <span className="sr-only">{t("common.edit")}</span>
                 </th>
               </tr>
-              <tr className="border-b border-line bg-surface-faint text-[10px] font-medium text-muted">
-                <th className="sticky left-0 z-10 bg-surface-faint px-3 py-1.5" />
-                <th className="px-2 py-1.5" />
-                <th className="px-2 py-1.5" />
-                <th className="px-2 py-1.5" />
-                <th className="px-2 py-1.5" />
-                <th className="px-2 py-1.5" />
-                <th className="px-2 py-1.5" />
-                <th className="px-2 py-1.5" />
-                <th className="px-2 py-1.5" />
-                <th className="px-2 py-1.5" />
-                <th className="px-2 py-1.5" />
-                <th className="px-2 py-1.5" />
-                <th className="px-2 py-1.5" />
-                <th className="border-l border-line px-2 py-1.5 text-center font-medium">
-                  {t("personnel.col.hiresPerPeriod")}
-                </th>
-                <th className="px-2 py-1.5 text-center font-medium">
-                  {t("personnel.col.hireFrequency")}
-                </th>
-                <th className="px-2 py-1.5 text-center font-medium">
-                  {t("personnel.col.maxHeadcount")}
-                </th>
-                <th className="px-2 py-1.5" />
-              </tr>
+              {anyScaling ? (
+                <tr className="border-b border-line bg-surface-faint text-[10px] font-medium text-muted">
+                  <th className="sticky left-0 z-10 bg-surface-faint px-3 py-1.5" />
+                  <th className="px-2 py-1.5" />
+                  <th className="px-2 py-1.5" />
+                  <th className="px-2 py-1.5" />
+                  <th className="px-2 py-1.5" />
+                  <th className="px-2 py-1.5" />
+                  <th className="px-2 py-1.5" />
+                  <th className="px-2 py-1.5" />
+                  <th className="border-l border-line px-2 py-1.5 text-center font-medium">
+                    {t("personnel.col.hiresPerPeriod")}
+                  </th>
+                  <th className="px-2 py-1.5 text-center font-medium">
+                    {t("personnel.col.hireFrequency")}
+                  </th>
+                  <th className="px-2 py-1.5 text-center font-medium">
+                    {t("personnel.col.maxHeadcount")}
+                  </th>
+                  <th className="px-2 py-1.5" />
+                </tr>
+              ) : null}
             </thead>
             <tbody>
               {grouped.map((group) => (
@@ -949,83 +1251,178 @@ function PersonnelRolesSection({
                     </td>
                   </tr>
                   {group.roles.map((role) => {
-                    const ctc = employerCostPerFte(role);
-                    const burden = employerBurdenPerFte(role);
-                    const annual = annualSalary(role);
+                    const priced = withCompanyPersonnelDefaults(
+                      role,
+                      costDefaults,
+                    );
+                    const annual = annualSalary(priced);
+                    const isScaling = role.roleType === "scaling";
                     return (
                       <tr
                         key={role.id}
                         className="border-b border-line last:border-0 hover:bg-surface-faint"
                       >
-                        <td className="sticky left-0 z-[1] bg-white px-3 py-2 hover:bg-surface-faint">
-                          <button
-                            type="button"
-                            onClick={() => onEdit(role)}
-                            className="text-left font-medium text-accent hover:underline"
-                          >
-                            {role.name}
-                          </button>
-                          <p className="mt-0.5 text-[10px] text-muted">
-                            {t("personnel.col.headcount")}: {role.headcount}
-                          </p>
+                        <td className="sticky left-0 z-[1] min-w-[12rem] bg-white px-3 py-2 hover:bg-surface-faint">
+                          <SheetText
+                            value={role.name}
+                            placeholder={t("personnel.field.namePlaceholder")}
+                            className="!w-full min-w-[11rem]"
+                            onCommit={(name) => {
+                              if (!name) return;
+                              patch(role, { name });
+                            }}
+                          />
                         </td>
-                        <td className="px-2 py-2 text-muted">{role.waehrung}</td>
                         <td className="px-2 py-2">
-                          {t(
-                            `personnel.roleType.${role.roleType}` as MessageKey,
-                          )}
+                          <SheetNum
+                            value={role.headcount}
+                            locale={locale}
+                            widthClass="!w-[5.5rem]"
+                            className="justify-end"
+                            onCommit={(n) =>
+                              patch(role, {
+                                headcount: Math.max(0, Math.round(n * 2) / 2),
+                              })
+                            }
+                          />
                         </td>
-                        <td className="px-2 py-2 tabular-nums text-muted">
-                          {role.gueltigVon
-                            ? formatDate(role.gueltigVon)
-                            : t("common.emDash")}
+                        <td className="px-2 py-2">
+                          <SheetSelect
+                            value={role.teamId}
+                            className="w-[7.25rem] min-w-0"
+                            title={t("personnel.field.team")}
+                            onChange={(teamId) => patch(role, { teamId })}
+                          >
+                            <option value="">
+                              {t("personnel.team.unassigned")}
+                            </option>
+                            {sortedTeams.map((team) => (
+                              <option key={team.id} value={team.id}>
+                                {team.name}
+                              </option>
+                            ))}
+                          </SheetSelect>
                         </td>
-                        <td className="px-2 py-2 tabular-nums text-muted">
-                          {role.gueltigBis
-                            ? formatDate(role.gueltigBis)
-                            : t("personnel.col.noEnd")}
+                        <td className="px-2 py-2">
+                          <SheetSelect
+                            value={role.roleType}
+                            className="w-[9.5rem] min-w-0"
+                            title={t("personnel.col.roleType")}
+                            onChange={(roleType) =>
+                              patch(role, {
+                                roleType: roleType as PersonnelRoleType,
+                              })
+                            }
+                          >
+                            {PERSONNEL_ROLE_TYPES.map((rt) => (
+                              <option key={rt} value={rt}>
+                                {t(`personnel.roleType.${rt}` as MessageKey)}
+                              </option>
+                            ))}
+                          </SheetSelect>
                         </td>
-                        <td className="px-2 py-2 text-right tabular-nums">
-                          {formatEuro(annual, locale)}
+                        <td className="px-2 py-2">
+                          <SheetDate
+                            value={role.gueltigVon}
+                            min={modelDateMin}
+                            max={earlierIsoDate(role.gueltigBis, modelDateMax)}
+                            onCommit={(gueltigVon) =>
+                              patch(role, { gueltigVon })
+                            }
+                          />
                         </td>
-                        <td className="px-2 py-2 text-right tabular-nums">
-                          {role.lohnnebenkostenPercent.toFixed(2)}%
+                        <td className="px-2 py-2">
+                          <SheetDate
+                            value={role.gueltigBis}
+                            min={laterIsoDate(role.gueltigVon, modelDateMin)}
+                            max={modelDateMax}
+                            onCommit={(gueltigBis) =>
+                              patch(role, { gueltigBis })
+                            }
+                          />
                         </td>
-                        <td className="px-2 py-2 text-right tabular-nums">
-                          {formatEuro(role.benefitsMonthly, locale)}
+                        <td className="px-2 py-2">
+                          <SheetNum
+                            value={annual}
+                            locale={locale}
+                            widthClass="!w-[6.5rem]"
+                            onCommit={(n) =>
+                              patch(role, { bruttoGehalt: n / 12 })
+                            }
+                          />
                         </td>
-                        <td className="px-2 py-2 text-right tabular-nums">
-                          {role.zusatzAgPercent.toFixed(2)}%
-                        </td>
-                        <td className="px-2 py-2 text-right tabular-nums">
-                          {formatEuro(burden, locale)}
-                        </td>
-                        <td className="px-2 py-2 text-right tabular-nums">
-                          {role.annualIncreasePercent.toFixed(2)}%
-                        </td>
-                        <td className="px-2 py-2 text-right tabular-nums">
-                          {formatEuro(role.bruttoGehalt, locale)}
-                        </td>
-                        <td className="px-2 py-2 text-right font-medium tabular-nums">
-                          {formatEuro(ctc, locale)}
-                        </td>
-                        <td className="border-l border-line px-2 py-2 text-center tabular-nums">
-                          {role.roleType === "scaling"
-                            ? role.hiresPerPeriod
-                            : t("common.emDash")}
-                        </td>
-                        <td className="px-2 py-2 text-center text-muted">
-                          {role.roleType === "scaling"
-                            ? t(
-                                `personnel.hireFrequency.${role.hireFrequency}` as MessageKey,
-                              )
-                            : t("common.emDash")}
-                        </td>
-                        <td className="px-2 py-2 text-center tabular-nums">
-                          {role.roleType === "scaling"
-                            ? (role.maxHeadcount ?? t("personnel.col.unlimited"))
-                            : t("common.emDash")}
-                        </td>
+                        <CtcBreakdownCell role={priced} locale={locale} />
+                        {anyScaling ? (
+                          <>
+                            <td className="border-l border-line px-2 py-2 text-center">
+                              {isScaling ? (
+                                <SheetNum
+                                  value={role.hiresPerPeriod}
+                                  locale={locale}
+                                  className="justify-center"
+                                  onCommit={(n) =>
+                                    patch(role, {
+                                      hiresPerPeriod: Math.max(
+                                        1,
+                                        Math.round(n),
+                                      ),
+                                    })
+                                  }
+                                />
+                              ) : (
+                                <span className="text-muted">
+                                  {t("common.emDash")}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-2 py-2 text-center">
+                              {isScaling ? (
+                                <SheetSelect
+                                  value={role.hireFrequency}
+                                  className="w-[8rem] min-w-0"
+                                  title={t("personnel.col.hireFrequency")}
+                                  onChange={(hireFrequency) =>
+                                    patch(role, {
+                                      hireFrequency:
+                                        hireFrequency as PersonnelHireFrequency,
+                                    })
+                                  }
+                                >
+                                  {PERSONNEL_HIRE_FREQUENCIES.map((f) => (
+                                    <option key={f} value={f}>
+                                      {t(
+                                        `personnel.hireFrequency.${f}` as MessageKey,
+                                      )}
+                                    </option>
+                                  ))}
+                                </SheetSelect>
+                              ) : (
+                                <span className="text-muted">
+                                  {t("common.emDash")}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-2 py-2 text-center">
+                              {isScaling ? (
+                                <SheetNum
+                                  value={role.maxHeadcount ?? 0}
+                                  locale={locale}
+                                  className="justify-center"
+                                  onCommit={(n) =>
+                                    patch(role, {
+                                      maxHeadcount:
+                                        n <= 0 ? null : Math.round(n),
+                                    })
+                                  }
+                                />
+                              ) : (
+                                <span className="text-muted">
+                                  {t("common.emDash")}
+                                </span>
+                              )}
+                            </td>
+                          </>
+                        ) : null}
                         <td className="px-2 py-2">
                           <TableRowActions
                             onEdit={() => onEdit(role)}

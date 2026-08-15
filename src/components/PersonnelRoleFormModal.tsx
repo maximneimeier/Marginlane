@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type {
   CatalogProduct,
   OverheadAllocation,
@@ -9,7 +9,6 @@ import type {
   PersonnelTeam,
 } from "@/lib/types";
 import {
-  CURRENCIES,
   OVERHEAD_ALLOCATIONS,
   OVERHEAD_CATEGORIES,
   PERSONNEL_HIRE_FREQUENCIES,
@@ -21,18 +20,32 @@ import {
   employerCostPerFte,
   hireExtraPersonCost,
   recurringMonthlyTotal,
+  withCompanyPersonnelDefaults,
 } from "@/lib/personnel";
 import type { PersonnelCostDefaults } from "@/lib/companySettings";
+import {
+  clampIsoDate,
+  earlierIsoDate,
+  laterIsoDate,
+} from "@/lib/companySettings";
 import {
   isManualAllocationValid,
   sumManualPercents,
 } from "@/lib/overhead";
-import { formatEuro } from "@/lib/format";
+import { formatEuro, formatNumber } from "@/lib/format";
 import { useI18n } from "@/hooks/useI18n";
 import type { MessageKey } from "@/lib/i18n";
 import { usePrefs } from "@/context/PreferencesContext";
 import Link from "next/link";
 import { Button, Field, Modal, Select, TextInput } from "@/components/ui";
+
+function LockedValue({ children }: { children: ReactNode }) {
+  return (
+    <p className="flex min-h-[38px] items-center text-[13px] tabular-nums text-foreground">
+      {children}
+    </p>
+  );
+}
 
 type Props = {
   open: boolean;
@@ -42,6 +55,10 @@ type Props = {
   isEdit: boolean;
   defaultCurrency?: string;
   personnelDefaults?: Partial<PersonnelCostDefaults>;
+  /** Erster erlaubter Tag (Modellstart) */
+  modelDateMin?: string | null;
+  /** Letzter erlaubter Tag (Modellende) */
+  modelDateMax?: string | null;
   onClose: () => void;
   onSave: (role: PersonnelRole) => void;
 };
@@ -54,6 +71,8 @@ export function PersonnelRoleFormModal({
   isEdit,
   defaultCurrency = "EUR",
   personnelDefaults,
+  modelDateMin = null,
+  modelDateMax = null,
   onClose,
   onSave,
 }: Props) {
@@ -76,8 +95,19 @@ export function PersonnelRoleFormModal({
 
   useEffect(() => {
     if (!open) return;
+    const defaults: PersonnelCostDefaults = {
+      lohnnebenkostenPercent: personnelDefaults?.lohnnebenkostenPercent ?? 0,
+      zusatzAgPercent: personnelDefaults?.zusatzAgPercent ?? 0,
+      benefitsMonthly: personnelDefaults?.benefitsMonthly ?? 0,
+      annualIncreasePercent: personnelDefaults?.annualIncreasePercent ?? 3,
+    };
     if (initial) {
-      setDraft(structuredClone(initial));
+      setDraft(
+        withCompanyPersonnelDefaults(
+          { ...structuredClone(initial), waehrung: defaultCurrency },
+          defaults,
+        ),
+      );
       const inputs: Record<string, string> = {};
       for (const row of initial.manuelleAufteilung ?? []) {
         inputs[row.productId] = String(row.percent);
@@ -85,15 +115,22 @@ export function PersonnelRoleFormModal({
       setPercentInputs(inputs);
       return;
     }
-    setDraft(emptyPersonnelRole(defaultCurrency, personnelDefaults));
+    setDraft(emptyPersonnelRole(defaultCurrency, defaults));
     setPercentInputs({});
   }, [open, initial, defaultCurrency, personnelDefaults]);
 
   if (!draft) return null;
 
-  const employer = employerCostPerFte(draft);
-  const recurring = recurringMonthlyTotal(draft);
-  const hire = hireExtraPersonCost(draft);
+  const costDefaults: PersonnelCostDefaults = {
+    lohnnebenkostenPercent: personnelDefaults?.lohnnebenkostenPercent ?? 0,
+    zusatzAgPercent: personnelDefaults?.zusatzAgPercent ?? 0,
+    benefitsMonthly: personnelDefaults?.benefitsMonthly ?? 0,
+    annualIncreasePercent: personnelDefaults?.annualIncreasePercent ?? 3,
+  };
+  const priced = withCompanyPersonnelDefaults(draft, costDefaults);
+  const employer = employerCostPerFte(priced);
+  const recurring = recurringMonthlyTotal(priced);
+  const hire = hireExtraPersonCost(priced);
   const manualOk =
     draft.verteilschluessel !== "manuell" ||
     isManualAllocationValid(draft.manuelleAufteilung ?? []);
@@ -177,8 +214,11 @@ export function PersonnelRoleFormModal({
             {sortedTeams.length === 0 ? (
               <p className="mt-1 text-[12px] text-muted">
                 {t("personnel.field.teamEmpty")}{" "}
-                <Link href="/teams" className="text-accent hover:underline">
-                  {t("nav.teams")}
+                <Link
+                  href="/company?tab=personnel"
+                  className="text-accent hover:underline"
+                >
+                  {t("company.section.personnel")}
                 </Link>
               </p>
             ) : null}
@@ -225,10 +265,18 @@ export function PersonnelRoleFormModal({
             <TextInput
               type="date"
               value={draft.gueltigVon ?? ""}
+              min={modelDateMin || undefined}
+              max={
+                earlierIsoDate(draft.gueltigBis, modelDateMax) || undefined
+              }
               onChange={(e) =>
                 setDraft({
                   ...draft,
-                  gueltigVon: e.target.value || null,
+                  gueltigVon: clampIsoDate(
+                    e.target.value || null,
+                    modelDateMin,
+                    earlierIsoDate(draft.gueltigBis, modelDateMax),
+                  ),
                 })
               }
             />
@@ -237,10 +285,18 @@ export function PersonnelRoleFormModal({
             <TextInput
               type="date"
               value={draft.gueltigBis ?? ""}
+              min={
+                laterIsoDate(draft.gueltigVon, modelDateMin) || undefined
+              }
+              max={modelDateMax || undefined}
               onChange={(e) =>
                 setDraft({
                   ...draft,
-                  gueltigBis: e.target.value || null,
+                  gueltigBis: clampIsoDate(
+                    e.target.value || null,
+                    laterIsoDate(draft.gueltigVon, modelDateMin),
+                    modelDateMax,
+                  ),
                 })
               }
             />
@@ -264,85 +320,44 @@ export function PersonnelRoleFormModal({
           </Field>
           <Field
             label={t("personnel.field.nebenkosten")}
-            hint={t("personnel.field.nebenkostenHint")}
+            hint={t("personnel.field.fromDefaultsHint")}
           >
-            <TextInput
-              type="number"
-              min={0}
-              step={0.25}
-              value={draft.lohnnebenkostenPercent}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  lohnnebenkostenPercent: Number(e.target.value) || 0,
-                })
-              }
-            />
+            <LockedValue>
+              {formatNumber(priced.lohnnebenkostenPercent, locale)} %
+            </LockedValue>
           </Field>
-          <Field label={t("overhead.field.waehrung")} required>
-            <Select
-              value={draft.waehrung}
-              onChange={(e) =>
-                setDraft({ ...draft, waehrung: e.target.value })
-              }
-            >
-              {CURRENCIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </Select>
+          <Field
+            label={t("overhead.field.waehrung")}
+            hint={t("personnel.field.fromCompanyCurrencyHint")}
+          >
+            <LockedValue>{defaultCurrency}</LockedValue>
           </Field>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
           <Field
             label={t("personnel.field.benefits")}
-            hint={t("personnel.field.benefitsHint")}
+            hint={t("personnel.field.fromDefaultsHint")}
           >
-            <TextInput
-              type="number"
-              min={0}
-              step={10}
-              value={draft.benefitsMonthly}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  benefitsMonthly: Number(e.target.value) || 0,
-                })
-              }
-            />
+            <LockedValue>
+              {formatNumber(priced.benefitsMonthly, locale)}
+            </LockedValue>
           </Field>
           <Field
             label={t("personnel.field.zusatzAg")}
-            hint={t("personnel.field.zusatzAgHint")}
+            hint={t("personnel.field.fromDefaultsHint")}
           >
-            <TextInput
-              type="number"
-              min={0}
-              step={0.25}
-              value={draft.zusatzAgPercent}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  zusatzAgPercent: Number(e.target.value) || 0,
-                })
-              }
-            />
+            <LockedValue>
+              {formatNumber(priced.zusatzAgPercent, locale)} %
+            </LockedValue>
           </Field>
-          <Field label={t("personnel.field.increase")}>
-            <TextInput
-              type="number"
-              min={0}
-              step={0.5}
-              value={draft.annualIncreasePercent}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  annualIncreasePercent: Number(e.target.value) || 0,
-                })
-              }
-            />
+          <Field
+            label={t("personnel.field.increase")}
+            hint={t("personnel.field.fromDefaultsHint")}
+          >
+            <LockedValue>
+              {formatNumber(priced.annualIncreasePercent, locale)} %
+            </LockedValue>
           </Field>
         </div>
 
@@ -667,11 +682,29 @@ export function PersonnelRoleFormModal({
             disabled={!canSave}
             onClick={() => {
               if (!canSave) return;
-              onSave({
-                ...draft,
-                name: draft.name.trim(),
-                updatedBy: prefs.displayName || null,
-              });
+              const gueltigVon = clampIsoDate(
+                draft.gueltigVon,
+                modelDateMin,
+                earlierIsoDate(draft.gueltigBis, modelDateMax),
+              );
+              const gueltigBis = clampIsoDate(
+                draft.gueltigBis,
+                laterIsoDate(gueltigVon, modelDateMin),
+                modelDateMax,
+              );
+              onSave(
+                withCompanyPersonnelDefaults(
+                  {
+                    ...draft,
+                    name: draft.name.trim(),
+                    waehrung: defaultCurrency,
+                    gueltigVon,
+                    gueltigBis,
+                    updatedBy: prefs.displayName || null,
+                  },
+                  costDefaults,
+                ),
+              );
               onClose();
             }}
           >

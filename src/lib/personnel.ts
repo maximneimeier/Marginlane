@@ -43,16 +43,58 @@ export function annualSalary(role: PersonnelRole): number {
   return Math.max(0, role.bruttoGehalt || 0) * 12;
 }
 
+/** Firmen-Personal-Defaults auf eine Rolle anwenden (NK, Benefits, Steigerung). */
+export function withCompanyPersonnelDefaults(
+  role: PersonnelRole,
+  defaults: {
+    lohnnebenkostenPercent: number;
+    zusatzAgPercent: number;
+    benefitsMonthly: number;
+    annualIncreasePercent: number;
+  },
+): PersonnelRole {
+  return {
+    ...role,
+    lohnnebenkostenPercent: Math.max(0, defaults.lohnnebenkostenPercent || 0),
+    zusatzAgPercent: Math.max(0, defaults.zusatzAgPercent || 0),
+    benefitsMonthly: Math.max(0, defaults.benefitsMonthly || 0),
+    annualIncreasePercent: Math.max(0, defaults.annualIncreasePercent || 0),
+  };
+}
+
 /**
  * AG-Kosten je FTE / Monat:
  * Brutto × (1 + NK% + Zusatz%) + Benefits/Monat.
  */
 export function employerCostPerFte(role: PersonnelRole): number {
+  return employerCostBreakdown(role).total;
+}
+
+/** Aufschlüsselung der AG-Kosten je FTE / Monat. */
+export function employerCostBreakdown(role: PersonnelRole): {
+  brutto: number;
+  nkPercent: number;
+  zusatzPercent: number;
+  nkAmount: number;
+  zusatzAmount: number;
+  benefits: number;
+  total: number;
+} {
   const brutto = Math.max(0, role.bruttoGehalt || 0);
-  const nk = Math.max(0, role.lohnnebenkostenPercent || 0);
-  const zusatz = Math.max(0, role.zusatzAgPercent || 0);
+  const nkPercent = Math.max(0, role.lohnnebenkostenPercent || 0);
+  const zusatzPercent = Math.max(0, role.zusatzAgPercent || 0);
   const benefits = Math.max(0, role.benefitsMonthly || 0);
-  return brutto * (1 + (nk + zusatz) / 100) + benefits;
+  const nkAmount = brutto * (nkPercent / 100);
+  const zusatzAmount = brutto * (zusatzPercent / 100);
+  return {
+    brutto,
+    nkPercent,
+    zusatzPercent,
+    nkAmount,
+    zusatzAmount,
+    benefits,
+    total: brutto + nkAmount + zusatzAmount + benefits,
+  };
 }
 
 /** Nur Lohnnebenkosten + Zusatz + Benefits je FTE / Monat (ohne Brutto). */
