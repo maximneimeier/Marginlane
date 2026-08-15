@@ -7,6 +7,7 @@ import type { DateRange } from "@/lib/overview";
 import {
   buildPlanVsActual,
   buildPlanVsActualPositions,
+  effectivePlanOverheadItems,
   emptyOverheadActual,
   type PlanVsActualPositionRow,
 } from "@/lib/overhead";
@@ -27,7 +28,7 @@ export function OverheadPlanVsActualPanel({ range }: Props) {
   const report = useMemo(
     () =>
       buildPlanVsActual(
-        data.overheadItems ?? [],
+        effectivePlanOverheadItems(data),
         data.overheadActuals ?? [],
         range,
         data,
@@ -53,7 +54,7 @@ export function OverheadPlanVsActualPanel({ range }: Props) {
   const positions = useMemo(
     () =>
       buildPlanVsActualPositions(
-        data.overheadItems ?? [],
+        effectivePlanOverheadItems(data),
         data.overheadActuals ?? [],
         activeMonth,
         data,

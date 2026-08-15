@@ -11,11 +11,13 @@ import {
   type DatePreset,
   type DateRange,
 } from "@/lib/overview";
+import { buildOverheadReport } from "@/lib/overhead";
 import { formatEuro, formatPercent } from "@/lib/format";
 import { FEATURES } from "@/lib/features";
 import { useI18n } from "@/hooks/useI18n";
 import { OverviewWaterfallChart } from "@/components/OverviewWaterfallChart";
 import { OverviewSankeyChart } from "@/components/OverviewSankeyChart";
+import { OverheadResultWaterfallChart } from "@/components/OverheadResultWaterfallChart";
 import { SalesPlanOverviewStrip } from "@/components/SalesPlanOverviewStrip";
 import { ProductFilterDropdown } from "@/components/ProductFilterDropdown";
 import { Card, Field, PageHeader, Select, TextInput } from "@/components/ui";
@@ -86,6 +88,10 @@ export default function OverviewPage() {
         ? buildOverview(data, range, { productIds: cashflowProducts })
         : null,
     [data, range, cashflowProducts, showCashflow],
+  );
+  const overheadReport = useMemo(
+    () => (showConsolidation ? buildOverheadReport(data, range) : null),
+    [data, range, showConsolidation],
   );
 
   if (!ready) {
@@ -201,7 +207,6 @@ export default function OverviewPage() {
               label={t("overviewPage.kpi.db3")}
               value={formatEuro(kpiReport.kpis.db3, locale)}
               hint={t("overviewPage.kpi.db3Hint")}
-              emphasize
               positive={kpiReport.kpis.db3 >= 0}
             />
             <Kpi
@@ -211,10 +216,49 @@ export default function OverviewPage() {
               positive={kpiReport.kpis.marginPercent >= 0}
             />
           </div>
+
+          {overheadReport ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <Kpi
+                label={t("overviewPage.kpi.overhead")}
+                value={formatEuro(overheadReport.totalOverhead, locale)}
+                hint={t("overviewPage.kpi.overheadHint")}
+              />
+              <Kpi
+                label={t("overviewPage.kpi.personnel")}
+                value={formatEuro(overheadReport.personnelAmount, locale)}
+                hint={t("overviewPage.kpi.personnelHint")}
+              />
+              <Kpi
+                label={t("overviewPage.kpi.result")}
+                value={formatEuro(overheadReport.operatingResult, locale)}
+                hint={t("overviewPage.kpi.resultHint")}
+                emphasize
+                positive={overheadReport.operatingResult >= 0}
+              />
+            </div>
+          ) : null}
         </>
       ) : null}
 
       {showSalesPlan ? <SalesPlanOverviewStrip range={range} /> : null}
+
+      {showConsolidation ? (
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-[12px] text-muted">
+              {t("overviewPage.resultChartHint")}
+            </p>
+            <Link
+              href="/overhead"
+              className="text-[12px] font-medium text-accent hover:underline"
+            >
+              {t("overviewPage.resultChartLink")}
+            </Link>
+          </div>
+          <OverheadResultWaterfallChart data={data} range={range} />
+        </div>
+      ) : null}
 
       {showConsolidation && waterfallReport ? (
         <Card>
@@ -319,7 +363,7 @@ export default function OverviewPage() {
       ) : null}
 
       {showCashflow && cashflowReport ? (
-        <Card className="border-dashed">
+        <Card>
           <ChartHeader
             title={t("overviewPage.cashTitle")}
             hint={t("overviewPage.cashDisclaimer")}

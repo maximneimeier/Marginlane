@@ -21,7 +21,12 @@ type NavLink = {
   feature?: keyof typeof FEATURES;
 };
 
-type NavGroupId = "analyse" | "planung" | "stammdaten" | "abwicklung";
+type NavGroupId =
+  | "analyse"
+  | "planung"
+  | "stammdaten"
+  | "abwicklung"
+  | "gemeinkosten";
 
 type NavGroup = {
   id: NavGroupId;
@@ -74,12 +79,24 @@ const NAV_GROUPS: NavGroup[] = [
     labelKey: "nav.group.abwicklung",
     collapsible: false,
     defaultOpen: true,
+    links: [{ href: "/batches", key: "nav.batches", icon: BatchesIcon }],
+  },
+  {
+    id: "gemeinkosten",
+    labelKey: "nav.group.gemeinkosten",
+    collapsible: true,
+    defaultOpen: true,
     links: [
-      { href: "/batches", key: "nav.batches", icon: BatchesIcon },
       {
         href: "/overhead",
-        key: "nav.overhead",
+        key: "nav.overheadPositions",
         icon: OverheadIcon,
+        feature: "overheadTopLevelNav",
+      },
+      {
+        href: "/overhead/personnel",
+        key: "nav.overheadPersonnel",
+        icon: PersonnelIcon,
         feature: "overheadTopLevelNav",
       },
     ],
@@ -104,7 +121,10 @@ const FLAT_LINKS = visibleGroups().flatMap((g) => g.links);
 const NAV_OPEN_STORAGE_KEY = "marginlane-nav-open";
 
 function isActive(pathname: string, href: string) {
-  return pathname === href || pathname.startsWith(`${href}/`);
+  if (pathname === href) return true;
+  // /overhead must not highlight when on /overhead/personnel
+  if (href === "/overhead") return false;
+  return pathname.startsWith(`${href}/`);
 }
 
 function groupHasActive(pathname: string, group: NavGroup) {
@@ -413,6 +433,20 @@ function OverheadIcon({ active }: { active: boolean }) {
     <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={active ? "text-accent" : "text-muted-soft"}>
       <rect x="2.25" y="2.25" width="10.5" height="10.5" rx="2" stroke="currentColor" strokeWidth="1.3" />
       <path d="M4.5 7.5h6M7.5 4.5v6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function PersonnelIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={active ? "text-accent" : "text-muted-soft"}>
+      <circle cx="7.5" cy="4.5" r="2.25" stroke="currentColor" strokeWidth="1.3" />
+      <path
+        d="M2.75 12.25c0-2.2 2-3.75 4.75-3.75s4.75 1.55 4.75 3.75"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }

@@ -11,7 +11,7 @@ export const FEATURES = {
   overviewConsolidation: true,
 
   /** Aggregated payment-timing cashflow chart on Overview. */
-  overviewCashflow: false,
+  overviewCashflow: true,
 
   /** Sales volume planning (/sales-volume) and overview strip. */
   salesVolumePlanning: false,
@@ -23,7 +23,7 @@ export const FEATURES = {
   overheadTopLevelNav: true,
 
   /** Overhead Plan vs. Ist tab. */
-  overheadPlanVsActual: false,
+  overheadPlanVsActual: true,
 
   /** Overhead charts tab (timeline, sankey, waterfall). */
   overheadCharts: false,

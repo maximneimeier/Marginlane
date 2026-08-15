@@ -29,6 +29,7 @@ const de = {
   "nav.group.planung": "Planung",
   "nav.group.stammdaten": "Stammdaten",
   "nav.group.abwicklung": "Abwicklung",
+  "nav.group.gemeinkosten": "Gemeinkosten",
   "nav.suppliers": "Lieferanten",
   "nav.products": "Produkte",
   "nav.salesVolume": "Absatzmenge",
@@ -39,6 +40,8 @@ const de = {
   "nav.settings": "Einstellungen",
   "nav.overview": "Übersicht",
   "nav.overhead": "Gemeinkosten",
+  "nav.overheadPositions": "Positionen",
+  "nav.overheadPersonnel": "Gehälter",
 
   "unit.pcs": "Stk.",
   "unit.g": "g",
@@ -561,7 +564,7 @@ const de = {
 
   "overviewPage.title": "Übersicht",
   "overviewPage.description":
-    "Konsolidierte KPIs und Grafiken zu Umsatz, Deckungsbeitrag und Marge im gewählten Zeitraum.",
+    "Konsolidierte KPIs und Grafiken zu Umsatz, Deckungsbeitrag, Gemeinkosten und Betriebsergebnis im gewählten Zeitraum.",
   "overviewPage.descriptionMvp":
     "Konsolidierte Übersicht folgt, sobald die Aggregation freigeschaltet ist.",
   "overviewPage.rangeForOverhead": "Zeitraum gilt für Gemeinkosten",
@@ -594,6 +597,15 @@ const de = {
   "overviewPage.kpi.db3Hint": "nach Marketing + Vertrieb",
   "overviewPage.kpi.margin": "Margin %",
   "overviewPage.kpi.marginHint": "DB3 / Revenue",
+  "overviewPage.kpi.overhead": "Gemeinkosten",
+  "overviewPage.kpi.overheadHint": "Positionen + Personal (Periode)",
+  "overviewPage.kpi.personnel": "davon Personal",
+  "overviewPage.kpi.personnelHint": "Gehalt + Nebenkosten + monatl. Pakete",
+  "overviewPage.kpi.result": "Betriebsergebnis",
+  "overviewPage.kpi.resultHint": "DB3 − Gemeinkosten",
+  "overviewPage.resultChartHint":
+    "DB3 abzüglich Gemeinkosten nach Kategorie — Hebel zum Betriebsergebnis.",
+  "overviewPage.resultChartLink": "Gemeinkosten bearbeiten →",
   "overviewPage.salesPlan.title": "Absatzplan",
   "overviewPage.salesPlan.hint": "Szenario {scenario} · Zeitraum wie oben",
   "overviewPage.salesPlan.link": "Absatzmenge öffnen",
@@ -682,6 +694,13 @@ const de = {
   "overhead.tab.charts": "Charts",
   "overhead.tab.planVsActual": "Plan vs. Ist",
 
+  "overhead.positionsPage.title": "Gemeinkosten-Positionen",
+  "overhead.positionsPage.description":
+    "Fixe Overhead-Kosten der Periode erfassen und auf Produkte umlegen.",
+  "personnel.page.title": "Gehälter",
+  "personnel.page.description":
+    "Rollen mit Gehalt, Lohnnebenkosten und Abhängigkeiten — fließen in die Gemeinkosten-Umlegung.",
+  "personnel.itemCount": "{count} Rollen",
   "personnel.add": "+ Neue Rolle",
   "personnel.emptyTitle": "Noch keine Personalkosten",
   "personnel.emptyDescription":
@@ -1173,6 +1192,7 @@ const en: Record<MessageKey, string> = {
   "nav.group.planung": "Planning",
   "nav.group.stammdaten": "Master data",
   "nav.group.abwicklung": "Operations",
+  "nav.group.gemeinkosten": "Overhead",
   "nav.suppliers": "Suppliers",
   "nav.products": "Products",
   "nav.salesVolume": "Sales volume",
@@ -1183,6 +1203,8 @@ const en: Record<MessageKey, string> = {
   "nav.settings": "Settings",
   "nav.overview": "Overview",
   "nav.overhead": "Overhead",
+  "nav.overheadPositions": "Positions",
+  "nav.overheadPersonnel": "Salaries",
 
   "unit.pcs": "pcs",
   "unit.g": "g",
@@ -1704,7 +1726,7 @@ const en: Record<MessageKey, string> = {
 
   "overviewPage.title": "Overview",
   "overviewPage.description":
-    "Consolidated KPIs and charts for revenue, contribution margin and margin in the selected period.",
+    "Consolidated KPIs and charts for revenue, contribution, overhead and operating result in the selected period.",
   "overviewPage.descriptionMvp":
     "Consolidated overview appears once aggregation is enabled.",
   "overviewPage.rangeForOverhead": "Date range applies to overhead",
@@ -1738,6 +1760,15 @@ const en: Record<MessageKey, string> = {
   "overviewPage.kpi.db3Hint": "after marketing + sales",
   "overviewPage.kpi.margin": "Margin %",
   "overviewPage.kpi.marginHint": "DB3 / Revenue",
+  "overviewPage.kpi.overhead": "Overhead",
+  "overviewPage.kpi.overheadHint": "Positions + personnel (period)",
+  "overviewPage.kpi.personnel": "of which personnel",
+  "overviewPage.kpi.personnelHint": "Salary + on-costs + monthly packages",
+  "overviewPage.kpi.result": "Operating result",
+  "overviewPage.kpi.resultHint": "DB3 − overhead",
+  "overviewPage.resultChartHint":
+    "DB3 minus overhead by category — the lever to operating result.",
+  "overviewPage.resultChartLink": "Edit overhead →",
   "overviewPage.salesPlan.title": "Sales plan",
   "overviewPage.salesPlan.hint": "Scenario {scenario} · same date range as above",
   "overviewPage.salesPlan.link": "Open sales volume",
@@ -1825,6 +1856,13 @@ const en: Record<MessageKey, string> = {
   "overhead.tab.charts": "Charts",
   "overhead.tab.planVsActual": "Plan vs. actual",
 
+  "overhead.positionsPage.title": "Overhead positions",
+  "overhead.positionsPage.description":
+    "Capture fixed overhead for the period and allocate it to products.",
+  "personnel.page.title": "Salaries",
+  "personnel.page.description":
+    "Roles with salary, employer on-costs and dependencies — feed into overhead allocation.",
+  "personnel.itemCount": "{count} roles",
   "personnel.add": "+ New role",
   "personnel.emptyTitle": "No personnel costs yet",
   "personnel.emptyDescription":

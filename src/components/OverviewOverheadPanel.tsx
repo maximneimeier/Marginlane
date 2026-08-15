@@ -42,13 +42,16 @@ type Props = {
   range: DateRange;
   /** When true, omit the section title (page already has PageHeader). */
   hidePageHeader?: boolean;
+  /** Which section to show — nav routes map to separate pages. */
+  section?: "positions" | "personnel";
 };
 
-type OverheadTab = "tables" | "personnel" | "charts" | "planVsActual";
+type OverheadTab = "tables" | "charts" | "planVsActual";
 
 export function OverviewOverheadPanel({
   range,
   hidePageHeader = false,
+  section = "positions",
 }: Props) {
   const {
     data,
@@ -73,12 +76,16 @@ export function OverviewOverheadPanel({
 
   const showPlanVsActual = FEATURES.overheadPlanVsActual;
   const showCharts = FEATURES.overheadCharts;
+  const showTabSwitch =
+    section === "positions" && (showPlanVsActual || showCharts);
   const activeTab: OverheadTab =
-    tab === "planVsActual" && !showPlanVsActual
+    section === "personnel"
       ? "tables"
-      : tab === "charts" && !showCharts
+      : tab === "planVsActual" && !showPlanVsActual
         ? "tables"
-        : tab;
+        : tab === "charts" && !showCharts
+          ? "tables"
+          : tab;
 
   const report = useMemo(
     () => buildOverheadReport(data, range),
@@ -126,7 +133,7 @@ export function OverviewOverheadPanel({
   const defaultCurrency =
     data.suppliers.find((s) => s.currency)?.currency ?? "EUR";
 
-  const tabSwitch = (
+  const tabSwitch = showTabSwitch ? (
     <div className="flex flex-wrap rounded-[8px] border border-line bg-white p-0.5">
       <button
         type="button"
@@ -138,17 +145,6 @@ export function OverviewOverheadPanel({
         }`}
       >
         {t("overhead.tab.tables")}
-      </button>
-      <button
-        type="button"
-        onClick={() => setTab("personnel")}
-        className={`rounded-[6px] px-2.5 py-1 text-[12px] font-medium ${
-          activeTab === "personnel"
-            ? "bg-surface-soft text-foreground"
-            : "text-muted hover:text-foreground"
-        }`}
-      >
-        {t("overhead.tab.personnel")}
       </button>
       {showPlanVsActual ? (
         <button
@@ -177,22 +173,22 @@ export function OverviewOverheadPanel({
         </button>
       ) : null}
     </div>
-  );
+  ) : null;
 
   const addButton =
-    activeTab === "tables" ? (
-      <Button
-        onClick={() => setDraft(emptyOverheadItem(defaultCurrency))}
-        className="shrink-0"
-      >
-        {t("overhead.add")}
-      </Button>
-    ) : activeTab === "personnel" ? (
+    section === "personnel" ? (
       <Button
         onClick={() => setPersonnelDraft(emptyPersonnelRole(defaultCurrency))}
         className="shrink-0"
       >
         {t("personnel.add")}
+      </Button>
+    ) : activeTab === "tables" ? (
+      <Button
+        onClick={() => setDraft(emptyOverheadItem(defaultCurrency))}
+        className="shrink-0"
+      >
+        {t("overhead.add")}
       </Button>
     ) : null;
 
@@ -273,7 +269,7 @@ export function OverviewOverheadPanel({
         onSave={(role) => upsertPersonnelRole(role)}
       />
 
-      {activeTab === "personnel" ? (
+      {section === "personnel" ? (
         <PersonnelRolesSection
           roles={roles}
           personnelAmount={report.personnelAmount}
@@ -286,7 +282,7 @@ export function OverviewOverheadPanel({
         />
       ) : null}
 
-      {activeTab === "tables" ? (
+      {section === "positions" && activeTab === "tables" ? (
         <div className="space-y-6">
           {report.items.length > 0 || report.personnelAmount > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -718,7 +714,7 @@ export function OverviewOverheadPanel({
             </div>
           ) : null}
         </div>
-      ) : activeTab === "charts" && showCharts ? (
+      ) : section === "positions" && activeTab === "charts" && showCharts ? (
         <div className="space-y-6">
           <OverheadResultWaterfallChart data={data} range={range} />
           <OverheadStackedBarChart
@@ -728,7 +724,9 @@ export function OverviewOverheadPanel({
           />
           <OverheadAllocationSankeyChart data={data} range={range} />
         </div>
-      ) : activeTab === "planVsActual" && showPlanVsActual ? (
+      ) : section === "positions" &&
+        activeTab === "planVsActual" &&
+        showPlanVsActual ? (
         <OverheadPlanVsActualPanel range={range} />
       ) : null}
     </div>

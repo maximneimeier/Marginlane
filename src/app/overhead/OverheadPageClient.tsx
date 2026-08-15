@@ -26,7 +26,11 @@ import {
   TextInput,
 } from "@/components/ui";
 
-export default function OverheadPageClient() {
+type Props = {
+  section: "positions" | "personnel";
+};
+
+export default function OverheadPageClient({ section }: Props) {
   const { ready, data } = useStore();
   const { t } = useI18n();
   const [preset, setPreset] = useState<DatePreset>("this_year");
@@ -91,13 +95,23 @@ export default function OverheadPageClient() {
     );
   }
 
+  const isPersonnel = section === "personnel";
+
   return (
     <div className="space-y-6">
       <PageHeader
-        title={t("overhead.title")}
-        description={t("overhead.description")}
+        title={
+          isPersonnel
+            ? t("personnel.page.title")
+            : t("overhead.positionsPage.title")
+        }
+        description={
+          isPersonnel
+            ? t("personnel.page.description")
+            : t("overhead.positionsPage.description")
+        }
         action={
-          FEATURES.overheadCsvExport ? (
+          !isPersonnel && FEATURES.overheadCsvExport ? (
             <Button variant="secondary" onClick={exportCsv}>
               {t("overhead.export.csv")}
             </Button>
@@ -141,12 +155,14 @@ export default function OverheadPageClient() {
             </Field>
           </div>
           <p className="shrink-0 text-[12px] text-muted lg:pb-2">
-            {t("overhead.itemCount", { count: data.overheadItems.length })}
-            {" · "}
-            {t("personnel.kpi.roles")}: {(data.personnelRoles ?? []).length}
+            {isPersonnel
+              ? t("personnel.itemCount", {
+                  count: (data.personnelRoles ?? []).length,
+                })
+              : t("overhead.itemCount", { count: data.overheadItems.length })}
           </p>
         </div>
-        {FEATURES.overheadRunRate ? (
+        {!isPersonnel && FEATURES.overheadRunRate ? (
           <OverheadRunRateStrip
             items={data.overheadItems}
             range={range}
@@ -155,7 +171,11 @@ export default function OverheadPageClient() {
         ) : null}
       </Card>
 
-      <OverviewOverheadPanel range={range} hidePageHeader />
+      <OverviewOverheadPanel
+        range={range}
+        hidePageHeader
+        section={section}
+      />
     </div>
   );
 }
