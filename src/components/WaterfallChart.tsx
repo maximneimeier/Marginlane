@@ -47,7 +47,7 @@ export function WaterfallChart({
                     : "text-foreground"
                 }`}
               >
-                {step.kind === "cost" ? "+" : ""}
+                {step.kind === "cost" && !step.id.startsWith("wf_") ? "+" : ""}
                 {formatEuro(step.amountPerUnit, locale)}
               </span>
             </div>

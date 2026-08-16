@@ -33,6 +33,12 @@ import {
 } from "@/components/CommercialOverridesEditor";
 import { WaterfallChart } from "@/components/WaterfallChart";
 import {
+  batchOverheadShare,
+  buildBatchContributionWaterfall,
+  getBatchContribution,
+} from "@/lib/batchContribution";
+import { defaultOverviewRange } from "@/lib/overview";
+import {
   Button,
   Card,
   Field,
@@ -94,6 +100,15 @@ export default function ChargeDetailPage({ id }: { id: string }) {
     ? pricingUnitLabel(catalogProduct.pricingUnit)
     : pricingUnitLabel("pcs");
   const econ = calculateResolvedEconomics(data, batch);
+  const contribution = getBatchContribution(data, batch);
+  const ohShare = batchOverheadShare(data, batch, defaultOverviewRange());
+  const contributionWaterfall = buildBatchContributionWaterfall(
+    contribution,
+    batch.quantity,
+    ohShare,
+  );
+  const qty = Math.max(batch.quantity, 0);
+  const perUnit = (n: number) => (qty > 0 ? n / qty : 0);
   const { baseCurrency, rates } = resolveFxContext(data.companySettings);
   const displayPurchase = resolveUnitPurchasePrice(
     batch.productId,
@@ -227,7 +242,7 @@ export default function ChargeDetailPage({ id }: { id: string }) {
         </Card>
       ) : null}
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
         <Card>
           <p className="text-xs uppercase tracking-wide text-muted">
             {t("batchDetail.purchase")}
@@ -253,41 +268,78 @@ export default function ChargeDetailPage({ id }: { id: string }) {
         </Card>
         <Card>
           <p className="text-xs uppercase tracking-wide text-muted">
-            {t("batchDetail.sellPriceShort")}
-          </p>
-          <p className="mt-1 text-xl tabular-nums">{money(econ.sellPrice)}</p>
-        </Card>
-        <Card>
-          <p className="text-xs uppercase tracking-wide text-muted">
-            {t("batchDetail.contribution")}
+            {t("batchDetail.kpi.db1")}
           </p>
           <p
             className={`mt-1 text-xl tabular-nums ${
-              econ.contributionPerUnit >= 0 ? "text-accent" : "text-red-700"
+              contribution.db1 >= 0 ? "text-foreground" : "text-red-700"
             }`}
           >
-            {money(econ.contributionPerUnit)}
+            {money(perUnit(contribution.db1))}
+          </p>
+        </Card>
+        <Card>
+          <p className="text-xs uppercase tracking-wide text-muted">
+            {t("batchDetail.kpi.db2")}
+          </p>
+          <p
+            className={`mt-1 text-xl tabular-nums ${
+              contribution.db2 >= 0 ? "text-foreground" : "text-red-700"
+            }`}
+          >
+            {money(perUnit(contribution.db2))}
+          </p>
+        </Card>
+        <Card>
+          <p className="text-xs uppercase tracking-wide text-muted">
+            {t("batchDetail.kpi.db3")}
+          </p>
+          <p
+            className={`mt-1 text-xl tabular-nums ${
+              contribution.db3 >= 0 ? "text-accent" : "text-red-700"
+            }`}
+          >
+            {money(perUnit(contribution.db3))}
           </p>
           <p className="text-xs text-muted">
-            {formatPercent(econ.contributionPercent)}
+            {formatPercent(
+              contribution.revenue > 0
+                ? (contribution.db3 / contribution.revenue) * 100
+                : 0,
+            )}
             {econ.targetMarginPercent != null
               ? ` · ${t("batchDetail.targetMargin", {
                   value: formatPercent(econ.targetMarginPercent),
                 })}`
               : ""}
           </p>
-          {econ.marginGapPercent != null ? (
+        </Card>
+        {ohShare > 0 ? (
+          <Card>
+            <p className="text-xs uppercase tracking-wide text-muted">
+              {t("batchDetail.kpi.afterOverhead")}
+            </p>
             <p
-              className={`text-xs ${
-                econ.marginGapPercent >= 0 ? "text-accent" : "text-red-700"
+              className={`mt-1 text-xl tabular-nums ${
+                contribution.db3 - ohShare >= 0 ? "text-accent" : "text-red-700"
               }`}
             >
-              {t("batchDetail.marginGap", {
-                value: formatPercent(econ.marginGapPercent),
+              {money(perUnit(contribution.db3 - ohShare))}
+            </p>
+            <p className="text-xs text-muted">
+              {t("batchDetail.kpi.overheadShare", {
+                value: money(perUnit(ohShare)),
               })}
             </p>
-          ) : null}
-        </Card>
+          </Card>
+        ) : (
+          <Card>
+            <p className="text-xs uppercase tracking-wide text-muted">
+              {t("batchDetail.sellPriceShort")}
+            </p>
+            <p className="mt-1 text-xl tabular-nums">{money(econ.sellPrice)}</p>
+          </Card>
+        )}
         <Card>
           <p className="text-xs uppercase tracking-wide text-muted">
             {t("batchDetail.remaining")}
@@ -952,8 +1004,10 @@ export default function ChargeDetailPage({ id }: { id: string }) {
         <aside>
           <Card>
             <h2 className="mb-1 font-medium">{t("batchDetail.unitEconomics")}</h2>
-            <p className="mb-5 text-xs text-muted">{t("waterfall.hint")}</p>
-            <WaterfallChart steps={econ.waterfall} unitLabel={unit} />
+            <p className="mb-5 text-xs text-muted">
+              {t("batchDetail.contributionWaterfallHint")}
+            </p>
+            <WaterfallChart steps={contributionWaterfall} unitLabel={unit} />
           </Card>
         </aside>
       </div>

@@ -69,6 +69,8 @@ type Props = {
   hidePageHeader?: boolean;
   /** Which section to show — nav routes map to separate pages. */
   section?: "positions" | "personnel";
+  /** Costerra: nur Erfassung + Umlage, ohne Plan/Ist und Charts */
+  simpleMode?: boolean;
 };
 
 type OverheadTab = "tables" | "charts" | "planVsActual";
@@ -77,6 +79,7 @@ export function OverviewOverheadPanel({
   range,
   hidePageHeader = false,
   section = "positions",
+  simpleMode = false,
 }: Props) {
   const {
     data,
@@ -102,10 +105,10 @@ export function OverviewOverheadPanel({
     "all" | OverheadCostBehavior
   >("all");
 
-  const showPlanVsActual = FEATURES.overheadPlanVsActual;
-  const showCharts = FEATURES.overheadCharts;
+  const showPlanVsActual = FEATURES.overheadPlanVsActual && !simpleMode;
+  const showCharts = FEATURES.overheadCharts && !simpleMode;
   const showTabSwitch =
-    section === "personnel" ||
+    (!simpleMode && section === "personnel") ||
     (section === "positions" && (showPlanVsActual || showCharts));
   const activeTab: OverheadTab =
     section === "personnel"

@@ -15,6 +15,7 @@ import {
 import { FEATURES } from "@/lib/features";
 import { useI18n } from "@/hooks/useI18n";
 import type { MessageKey } from "@/lib/i18n";
+import { usePrefs } from "@/context/PreferencesContext";
 import { OverviewOverheadPanel } from "@/components/OverviewOverheadPanel";
 import { OverheadRunRateStrip } from "@/components/OverheadRunRateStrip";
 import {
@@ -32,9 +33,11 @@ type Props = {
 
 export default function OverheadPageClient({ section }: Props) {
   const { ready, data } = useStore();
+  const { prefs } = usePrefs();
   const { t } = useI18n();
   const [preset, setPreset] = useState<DatePreset>("this_year");
   const [range, setRange] = useState<DateRange>(() => defaultOverviewRange());
+  const costerraSimple = prefs.activeModule === "batches";
 
   if (!ready) {
     return <p className="text-[13px] text-muted">{t("common.loading")}</p>;
@@ -102,16 +105,24 @@ export default function OverheadPageClient({ section }: Props) {
       <PageHeader
         title={
           isPersonnel
-            ? t("personnel.page.title")
-            : t("overhead.positionsPage.title")
+            ? costerraSimple
+              ? t("personnel.page.titleSimple")
+              : t("personnel.page.title")
+            : costerraSimple
+              ? t("overhead.positionsPage.titleSimple")
+              : t("overhead.positionsPage.title")
         }
         description={
           isPersonnel
-            ? t("personnel.page.description")
-            : t("overhead.positionsPage.description")
+            ? costerraSimple
+              ? t("personnel.page.descriptionSimple")
+              : t("personnel.page.description")
+            : costerraSimple
+              ? t("overhead.positionsPage.descriptionSimple")
+              : t("overhead.positionsPage.description")
         }
         action={
-          !isPersonnel && FEATURES.overheadCsvExport ? (
+          !isPersonnel && FEATURES.overheadCsvExport && !costerraSimple ? (
             <Button variant="secondary" onClick={exportCsv}>
               {t("overhead.export.csv")}
             </Button>
@@ -175,6 +186,7 @@ export default function OverheadPageClient({ section }: Props) {
         range={range}
         hidePageHeader
         section={section}
+        simpleMode={costerraSimple}
       />
     </div>
   );

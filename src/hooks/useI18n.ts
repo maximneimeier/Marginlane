@@ -153,6 +153,20 @@ export function useI18n() {
           unit: unit || translate(lang, "unit.pcs"),
         });
       }
+      const contribKeys: Record<string, MessageKey> = {
+        wf_revenue: "overviewPage.wf.revenue",
+        wf_material: "overviewPage.wf.material",
+        wf_db1: "overviewPage.wf.db1",
+        wf_logistics: "overviewPage.wf.logistics",
+        wf_db2: "overviewPage.wf.db2",
+        wf_marketing: "overviewPage.wf.marketing",
+        wf_sales: "overviewPage.wf.sales",
+        wf_db3: "overviewPage.wf.db3",
+        wf_overhead: "batchDetail.wf.overhead",
+        wf_result: "batchDetail.wf.result",
+      };
+      const key = contribKeys[stepId];
+      if (key) return translate(lang, key);
       return costTypeLabel(fallback) !== fallback
         ? costTypeLabel(fallback)
         : fallback;

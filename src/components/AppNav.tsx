@@ -105,7 +105,7 @@ const NAV_GROUPS: NavGroup[] = [
     labelKey: "nav.group.gemeinkosten",
     collapsible: true,
     defaultOpen: true,
-    modules: ["invest"],
+    modules: ["invest", "batches"],
     links: [
       {
         href: "/cogs",
@@ -118,12 +118,20 @@ const NAV_GROUPS: NavGroup[] = [
         key: "nav.overheadPositions",
         icon: Receipt,
         feature: "overheadTopLevelNav",
+        modules: ["invest"],
       },
       {
         href: "/overhead/personnel",
         key: "nav.overheadPersonnel",
         icon: UserRound,
         feature: "overheadTopLevelNav",
+      },
+      {
+        href: "/overhead",
+        key: "nav.overheadSimple",
+        icon: Receipt,
+        feature: "overheadTopLevelNav",
+        modules: ["batches"],
       },
     ],
   },

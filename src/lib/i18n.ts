@@ -46,6 +46,7 @@ const de = {
   "nav.overhead": "Gemeinkosten",
   "nav.overheadPositions": "SG&A",
   "nav.overheadPersonnel": "Personalkosten",
+  "nav.overheadSimple": "Gemeinkosten",
   "nav.cogs": "Wareneinsatz",
 
   "moduleChooser.title": "Deine Produkte",
@@ -1041,9 +1042,15 @@ const de = {
   "overhead.positionsPage.title": "SG&A",
   "overhead.positionsPage.description":
     "Selling, General & Administrative — Vertriebs- und Verwaltungskosten ohne Personalkosten. Personal planst du separat unter Personalkosten.",
+  "overhead.positionsPage.titleSimple": "Gemeinkosten",
+  "overhead.positionsPage.descriptionSimple":
+    "Büro, Tools und sonstige Fixkosten — vereinfacht für Costerra. Umlegung auf Produkte nach Umsatz, Stück oder manuell.",
   "personnel.page.title": "Personalkosten",
   "personnel.page.description":
     "Rollen mit Gehalt, Lohnnebenkosten und Abhängigkeiten — getrennt von SG&A.",
+  "personnel.page.titleSimple": "Gehälter",
+  "personnel.page.descriptionSimple":
+    "Personalkosten für die Marge nach DB3 — Rollen anlegen und auf Produkte umlegen.",
   "personnel.itemCount": "{count} Rollen",
   "personnel.add": "+ Neue Rolle",
   "personnel.emptyTitle": "Noch keine Personalkosten",
@@ -1659,6 +1666,15 @@ const de = {
   "batchDetail.landedCost": "Landed Cost",
   "batchDetail.sellPriceShort": "VK",
   "batchDetail.contribution": "Deckungsbeitrag",
+  "batchDetail.kpi.db1": "DB1 / Einheit",
+  "batchDetail.kpi.db2": "DB2 / Einheit",
+  "batchDetail.kpi.db3": "DB3 / Einheit",
+  "batchDetail.kpi.afterOverhead": "Nach Gemeinkosten",
+  "batchDetail.kpi.overheadShare": "davon OH {value}",
+  "batchDetail.contributionWaterfallHint":
+    "Umsatz → Material → DB1 → Logistik → DB2 → Marketing/Vertrieb → DB3 (optional Gemeinkosten).",
+  "batchDetail.wf.overhead": "− Gemeinkosten",
+  "batchDetail.wf.result": "Betriebsergebnis",
   "batchDetail.basicData": "Basisdaten",
   "batchDetail.label": "Bezeichnung",
   "batchDetail.quantity": "Menge",
@@ -1768,6 +1784,7 @@ const en: Record<MessageKey, string> = {
   "nav.overhead": "Overhead",
   "nav.overheadPositions": "SG&A",
   "nav.overheadPersonnel": "Personnel costs",
+  "nav.overheadSimple": "Overhead",
   "nav.cogs": "COGS",
 
   "moduleChooser.title": "Your products",
@@ -2761,9 +2778,15 @@ const en: Record<MessageKey, string> = {
   "overhead.positionsPage.title": "SG&A",
   "overhead.positionsPage.description":
     "Selling, General & Administrative expenses — excluding personnel costs. Plan headcount under Personnel costs.",
+  "overhead.positionsPage.titleSimple": "Overhead",
+  "overhead.positionsPage.descriptionSimple":
+    "Office, tools and other fixed costs — simplified for Costerra. Allocate to products by revenue, units or manually.",
   "personnel.page.title": "Personnel costs",
   "personnel.page.description":
     "Roles with salary, employer on-costs and dependencies — separate from SG&A.",
+  "personnel.page.titleSimple": "Salaries",
+  "personnel.page.descriptionSimple":
+    "Personnel costs after DB3 — create roles and allocate them to products.",
   "personnel.itemCount": "{count} roles",
   "personnel.add": "+ New role",
   "personnel.emptyTitle": "No personnel costs yet",
@@ -3377,6 +3400,15 @@ const en: Record<MessageKey, string> = {
   "batchDetail.landedCost": "Landed cost",
   "batchDetail.sellPriceShort": "Sell price",
   "batchDetail.contribution": "Contribution margin",
+  "batchDetail.kpi.db1": "CM1 / unit",
+  "batchDetail.kpi.db2": "CM2 / unit",
+  "batchDetail.kpi.db3": "CM3 / unit",
+  "batchDetail.kpi.afterOverhead": "After overhead",
+  "batchDetail.kpi.overheadShare": "OH share {value}",
+  "batchDetail.contributionWaterfallHint":
+    "Revenue → material → CM1 → logistics → CM2 → marketing/sales → CM3 (optional overhead).",
+  "batchDetail.wf.overhead": "− Overhead",
+  "batchDetail.wf.result": "Operating result",
   "batchDetail.basicData": "Basic data",
   "batchDetail.label": "Label",
   "batchDetail.quantity": "Quantity",

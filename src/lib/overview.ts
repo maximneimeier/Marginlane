@@ -131,7 +131,18 @@ export function isUncategorizedCost(item: CostItem): boolean {
 }
 
 export function isMarketingCost(item: CostItem): boolean {
+  // Explizite Typen zuerst (saubere Trennung Marketing vs. Provision)
+  if (item.type === "Marketing / CAC") return true;
+  if (item.type === "Provision") return false;
   const hay = `${item.type} ${item.label}`.toLowerCase();
+  if (
+    hay.includes("provision") ||
+    hay.includes("plattform") ||
+    hay.includes("zahlungsgebühr") ||
+    hay.includes("zahlungsgebuehr")
+  ) {
+    return false;
+  }
   return (
     hay.includes("marketing") ||
     hay.includes("cac") ||
@@ -174,6 +185,8 @@ type BatchSlice = {
   soldAt: Date;
 };
 
+export type BatchContributionSlice = BatchSlice;
+
 function sliceBatch(data: AppData, batch: Batch): BatchSlice {
   const resolved = calculateResolvedEconomics(data, batch);
   const qty = resolved.quantity;
@@ -200,18 +213,21 @@ function sliceBatch(data: AppData, batch: Batch): BatchSlice {
 
   let marketing = 0;
   let sales = 0;
-  for (const item of resolved.salesItems) {
-    const total = costItemTotal(item, qty, salesValue);
-    if (isUncategorizedCost(item)) {
-      uncategorized += total;
-      continue;
+  // Detailzeilen je Sale — nicht die aggregierte Pauschale in salesItems
+  for (const row of resolved.salesAggregate.rows) {
+    for (const item of row.salesItems) {
+      const total = costItemTotal(item, row.sale.quantity, row.revenue);
+      if (isUncategorizedCost(item)) {
+        uncategorized += total;
+        continue;
+      }
+      if (item.phase !== "vertrieb") {
+        uncategorized += total;
+        continue;
+      }
+      if (isMarketingCost(item)) marketing += total;
+      else sales += total;
     }
-    if (item.phase !== "vertrieb") {
-      uncategorized += total;
-      continue;
-    }
-    if (isMarketingCost(item)) marketing += total;
-    else sales += total;
   }
 
   const material = goodsValue + materialExtra;
@@ -248,6 +264,14 @@ function sliceBatch(data: AppData, batch: Batch): BatchSlice {
     payableAt: addDays(timeline.orderDate, delay),
     soldAt: new Date(timeline.soldDate),
   };
+}
+
+/** Öffentliche Batch-Contribution (gleiche Buckets wie Overview DB1–DB3). */
+export function buildBatchContributionSlice(
+  data: AppData,
+  batch: Batch,
+): BatchContributionSlice {
+  return sliceBatch(data, batch);
 }
 
 export type OverviewFilters = {
