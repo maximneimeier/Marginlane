@@ -252,6 +252,11 @@ export function migrateAppData(raw: unknown): AppData {
           sku: legacy.sku || "",
           currency: legacy.currency ?? null,
           purchasePricePerUnit: legacy.unitPrice ?? 0,
+          moq: legacy.moq ?? 0,
+          discountTiers: Array.isArray(legacy.discountTiers)
+            ? legacy.discountTiers
+            : [],
+          priceHistory: [],
           notes: "",
         });
         productComponents.push({
@@ -315,6 +320,26 @@ export function migrateAppData(raw: unknown): AppData {
           costItems: Array.isArray(b.costItems) ? b.costItems : [],
           sales,
           createdAt: b.createdAt || new Date().toISOString(),
+          orderDate:
+            typeof (b as Batch).orderDate === "string"
+              ? (b as Batch).orderDate
+              : null,
+          arrivalDate:
+            typeof (b as Batch).arrivalDate === "string"
+              ? (b as Batch).arrivalDate
+              : null,
+          soldDate:
+            typeof (b as Batch).soldDate === "string"
+              ? (b as Batch).soldDate
+              : null,
+          applySkonto:
+            typeof (b as Batch).applySkonto === "boolean"
+              ? (b as Batch).applySkonto
+              : null,
+          fxRateOverride:
+            typeof (b as Batch).fxRateOverride === "number"
+              ? (b as Batch).fxRateOverride
+              : null,
         };
       })
     : [];
@@ -637,8 +662,35 @@ function normalizeComponentStamm(
     sku?: string;
     currency?: string | null;
     notes?: string;
+    moq?: number;
+    discountTiers?: Component["discountTiers"];
+    priceHistory?: Component["priceHistory"];
   },
 ): Component {
+  const tiers = Array.isArray(c.discountTiers)
+    ? c.discountTiers
+        .filter(
+          (t) =>
+            t &&
+            typeof t.minQty === "number" &&
+            typeof t.discountPercent === "number",
+        )
+        .map((t) => ({
+          minQty: Math.max(t.minQty, 0),
+          discountPercent: Math.max(t.discountPercent, 0),
+        }))
+    : [];
+  const history = Array.isArray(c.priceHistory)
+    ? c.priceHistory
+        .filter((h) => h && typeof h.price === "number")
+        .map((h) => ({
+          id: typeof h.id === "string" ? h.id : createId("cph"),
+          date: typeof h.date === "string" ? h.date : new Date().toISOString(),
+          price: h.price,
+          currency: typeof h.currency === "string" ? h.currency : "EUR",
+          note: typeof h.note === "string" ? h.note : "",
+        }))
+    : [];
   return {
     id: c.id || createId("cmp"),
     supplierId: c.supplierId || "",
@@ -649,6 +701,9 @@ function normalizeComponentStamm(
         ? null
         : String(c.currency) || null,
     purchasePricePerUnit: c.purchasePricePerUnit ?? 0,
+    moq: typeof c.moq === "number" && Number.isFinite(c.moq) ? Math.max(c.moq, 0) : 0,
+    discountTiers: tiers,
+    priceHistory: history,
     notes: typeof c.notes === "string" ? c.notes : "",
   };
 }
@@ -692,6 +747,9 @@ export function emptyComponent(supplierId = ""): Component {
     sku: "",
     currency: supplierId ? null : "EUR",
     purchasePricePerUnit: 0,
+    moq: 0,
+    discountTiers: [],
+    priceHistory: [],
     notes: "",
   };
 }
@@ -734,25 +792,32 @@ export function normalizeProductDocuments(raw: unknown): ProductDocument[] {
   return out;
 }
 
-/** Effektiver EK/Einheit für eine BOM-Zeile */
+import { resolvePurchasePrice } from "./calc";
+
+/** Effektiver EK/Einheit für eine BOM-Zeile (inkl. Staffeln bei orderQty) */
 export function effectiveComponentUnitPrice(
   component: Component,
   link: ProductComponent,
+  /** Bestellmenge in Komponenten-Einheiten (Batch-Menge × qtyPerProduct) */
+  orderQty?: number,
 ): number {
-  if (
+  const list =
     link.purchasePriceOverride !== null &&
     link.purchasePriceOverride !== undefined
-  ) {
-    return link.purchasePriceOverride;
-  }
-  return component.purchasePricePerUnit;
+      ? link.purchasePriceOverride
+      : component.purchasePricePerUnit;
+  const tiers = component.discountTiers ?? [];
+  if (!tiers.length || orderQty == null) return list;
+  return resolvePurchasePrice(list, orderQty, tiers).unitPrice;
 }
 
-/** Summe EK pro Verkaufseinheit aus BOM (ProductComponent Join) */
+/** Summe EK pro Verkaufseinheit aus BOM (native Währungen — ohne FX) */
 export function catalogProductUnitPurchaseCost(
   productId: string,
   components: Component[],
   productComponents: ProductComponent[],
+  /** Produktmenge der Charge für Staffeln */
+  productQuantity = 1,
 ): number {
   const byId = new Map(components.map((c) => [c.id, c]));
   return productComponents
@@ -760,10 +825,10 @@ export function catalogProductUnitPurchaseCost(
     .reduce((sum, pc) => {
       const component = byId.get(pc.componentId);
       if (!component) return sum;
+      const qtyPer = Math.max(pc.quantityPerProductUnit, 0);
+      const orderQty = Math.max(productQuantity, 0) * qtyPer;
       return (
-        sum +
-        effectiveComponentUnitPrice(component, pc) *
-          Math.max(pc.quantityPerProductUnit, 0)
+        sum + effectiveComponentUnitPrice(component, pc, orderQty) * qtyPer
       );
     }, 0);
 }

@@ -98,9 +98,14 @@ const NAV_GROUPS: NavGroup[] = [
     labelKey: "nav.group.gemeinkosten",
     collapsible: true,
     defaultOpen: true,
-    modules: ["invest"],
+    modules: ["invest", "batches"],
     links: [
-      { href: "/cogs", key: "nav.cogs", icon: PackageOpen },
+      {
+        href: "/cogs",
+        key: "nav.cogs",
+        icon: PackageOpen,
+        modules: ["invest"],
+      },
       {
         href: "/overhead",
         key: "nav.overheadPositions",
@@ -156,14 +161,18 @@ function NavItemIcon({
   );
 }
 
-function visibleLinks(links: NavLink[]): NavLink[] {
-  return links.filter((link) => !link.feature || FEATURES[link.feature]);
+function visibleLinks(links: NavLink[], module: AppModule): NavLink[] {
+  return links.filter((link) => {
+    if (link.feature && !FEATURES[link.feature]) return false;
+    if (link.modules && !link.modules.includes(module)) return false;
+    return true;
+  });
 }
 
 function visibleGroups(module: AppModule | null): NavGroup[] {
   const active = module ?? "batches";
   return NAV_GROUPS.filter((g) => g.modules.includes(active))
-    .map((g) => ({ ...g, links: visibleLinks(g.links) }))
+    .map((g) => ({ ...g, links: visibleLinks(g.links, active) }))
     .filter((g) => g.links.length > 0);
 }
 

@@ -41,7 +41,11 @@ export type WaterfallStep = {
 
 export type UnitEconomics = {
   goodsValue: number;
+  /** Listen-EK vor Skonto (Base Currency) */
+  listPurchasePerUnit: number;
   purchasePerUnit: number;
+  skontoPercentApplied: number;
+  skontoPerUnit: number;
   procurementCostsPerUnit: number;
   landedCostPerUnit: number;
   sellPrice: number;
@@ -56,6 +60,7 @@ export type UnitEconomics = {
 /**
  * quantity und unitPurchasePrice/sellPrice sind in der Preisenheit des Produkts
  * (Stück, Gramm, …) — siehe Product.pricingUnit.
+ * Preise werden in Workspace-Basiswährung erwartet.
  */
 export function calculateUnitEconomics(input: {
   quantity: number;
@@ -63,9 +68,15 @@ export function calculateUnitEconomics(input: {
   procurementItems: CostItem[];
   sellPrice: number;
   salesItems: CostItem[];
+  /** Skonto % auf Listen-EK; 0 = keins */
+  skontoPercent?: number;
 }): UnitEconomics {
   const quantity = Math.max(input.quantity, 0);
-  const purchasePerUnit = input.unitPurchasePrice;
+  const listPurchasePerUnit = input.unitPurchasePrice;
+  const skontoPercent = Math.max(input.skontoPercent ?? 0, 0);
+  const skontoPerUnit =
+    skontoPercent > 0 ? listPurchasePerUnit * (skontoPercent / 100) : 0;
+  const purchasePerUnit = listPurchasePerUnit - skontoPerUnit;
   const goodsValue = purchasePerUnit * quantity;
 
   const procurementBreakdown = input.procurementItems.map((item) => ({
@@ -96,15 +107,26 @@ export function calculateUnitEconomics(input: {
     sellPrice > 0 ? (contributionPerUnit / sellPrice) * 100 : 0;
 
   const waterfall: WaterfallStep[] = [];
-  let running = purchasePerUnit;
+  let running = listPurchasePerUnit;
 
   waterfall.push({
     id: "purchase",
     label: "Einkaufspreis",
-    amountPerUnit: purchasePerUnit,
+    amountPerUnit: listPurchasePerUnit,
     runningTotal: running,
     kind: "base",
   });
+
+  if (skontoPerUnit > 0) {
+    running -= skontoPerUnit;
+    waterfall.push({
+      id: "skonto",
+      label: `Skonto (${skontoPercent} %)`,
+      amountPerUnit: -skontoPerUnit,
+      runningTotal: running,
+      kind: "cost",
+    });
+  }
 
   for (const row of procurementBreakdown) {
     running += row.perUnit;
@@ -157,7 +179,10 @@ export function calculateUnitEconomics(input: {
 
   return {
     goodsValue,
+    listPurchasePerUnit,
     purchasePerUnit,
+    skontoPercentApplied: skontoPercent,
+    skontoPerUnit,
     procurementCostsPerUnit,
     landedCostPerUnit,
     sellPrice,

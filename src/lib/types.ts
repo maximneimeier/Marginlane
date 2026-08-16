@@ -39,6 +39,16 @@ export type DiscountTier = {
   discountPercent: number;
 };
 
+/** Historischer Einkaufspreis einer Komponente */
+export type ComponentPriceHistoryEntry = {
+  id: string;
+  /** ISO-Datum */
+  date: string;
+  price: number;
+  currency: string;
+  note: string;
+};
+
 /** Kommerzielle Defaults auf Supplier-Ebene */
 export type CommercialTerms = {
   currency: string;
@@ -388,6 +398,11 @@ export type CompanySettings = {
   /** Optional Bewertung */
   waccPercent: number | null;
   terminalGrowthPercent: number | null;
+  /**
+   * FX: Einheiten baseCurrency pro 1 Einheit Fremdwährung.
+   * baseCurrency selbst ist immer 1.
+   */
+  fxRates: Record<string, number>;
 };
 
 export const EMPTY_COMPANY_SETTINGS: CompanySettings = {
@@ -441,6 +456,15 @@ export const EMPTY_COMPANY_SETTINGS: CompanySettings = {
   equityBeta: 0.6,
   waccPercent: null,
   terminalGrowthPercent: null,
+  fxRates: {
+    EUR: 1,
+    USD: 0.92,
+    CNY: 0.127,
+    GBP: 1.17,
+    CHF: 1.04,
+    JPY: 0.0062,
+    HKD: 0.118,
+  },
 };
 
 /**
@@ -461,6 +485,12 @@ export type Component = {
    */
   currency: string | null;
   purchasePricePerUnit: number;
+  /** Mindestbestellmenge in Komponenten-Einheiten */
+  moq: number;
+  /** Mengenstaffeln auf Listen-EK */
+  discountTiers: DiscountTier[];
+  /** EK-Historie (neueste zuerst empfohlen) */
+  priceHistory: ComponentPriceHistoryEntry[];
   /** Freitext, z. B. Verpackungseinheiten beim Lieferanten */
   notes: string;
 };
@@ -557,6 +587,22 @@ export type Batch = {
   /** Mehrere Verkäufe an unterschiedliche Dealer/Preise */
   sales: Sale[];
   createdAt: string;
+  /** Bestellung / PO (ISO). Fallback: createdAt */
+  orderDate: string | null;
+  /** Wareneingang / Ankunft (ISO). Fallback: orderDate */
+  arrivalDate: string | null;
+  /** Verkaufsdatum für Umsatz-Zuordnung (ISO). Fallback: createdAt */
+  soldDate: string | null;
+  /**
+   * Skonto in Unit Economics anwenden.
+   * `null` = automatisch wenn skontoPercent > 0.
+   */
+  applySkonto: boolean | null;
+  /**
+   * Override: Einheiten baseCurrency pro 1 Einheit Einkaufswährung.
+   * `null` = Company-FX-Tabelle.
+   */
+  fxRateOverride: number | null;
 };
 
 /** Wiederkehrende Gemeinkosten-Position (Unternehmensoverhead) */

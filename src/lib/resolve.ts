@@ -16,11 +16,12 @@ import { formatPaymentTerms } from "./types";
 import { calculateUnitEconomics, costItemTotal } from "./calc";
 import type { UnitEconomics } from "./calc";
 import {
-  catalogProductUnitPurchaseCost,
   primarySale,
   saleAsSalesData,
+  effectiveComponentUnitPrice,
 } from "./migrateAppData";
 import { createId } from "./format";
+import { convertToBase, resolveFxContext } from "./fx";
 
 export type TermSource =
   | "batch"
@@ -141,30 +142,76 @@ export function resolveComponentCurrency(
   return { value: WORKSPACE_DEFAULT_CURRENCY, source: "none" };
 }
 
-/** EK pro Einheit: Batch-Override oder BOM-Summe */
+/** EK pro Einheit in Basiswährung: Batch-Override oder BOM-Summe (FX + Staffeln) */
 export function resolveUnitPurchasePrice(
   productId: string | undefined,
   components: Component[],
   productComponents: ProductComponent[],
   batch: Batch | null | undefined,
+  suppliers: Supplier[] = [],
+  baseCurrency = WORKSPACE_DEFAULT_CURRENCY,
+  companyRates?: Record<string, number>,
 ): ResolvedField<number> {
+  const fxOverride = batch?.fxRateOverride ?? null;
+  const productQty = Math.max(batch?.quantity ?? 1, 0) || 1;
+
   if (
     batch?.unitPurchasePrice !== null &&
     batch?.unitPurchasePrice !== undefined
   ) {
-    return { value: batch.unitPurchasePrice, source: "batch" };
+    const supplier = suppliers.find((s) => s.id === batch.supplierId);
+    const commercial = resolveCommercial(supplier, null, batch);
+    const inBase = convertToBase(
+      batch.unitPurchasePrice,
+      commercial.currency,
+      baseCurrency,
+      companyRates,
+      fxOverride,
+    );
+    return { value: inBase, source: "batch" };
   }
   if (!productId) {
     return { value: 0, source: "none" };
   }
-  return {
-    value: catalogProductUnitPurchaseCost(
-      productId,
-      components,
-      productComponents,
-    ),
-    source: "product",
-  };
+
+  const byId = new Map(components.map((c) => [c.id, c]));
+  let sum = 0;
+  for (const pc of productComponents.filter((p) => p.productId === productId)) {
+    const component = byId.get(pc.componentId);
+    if (!component) continue;
+    const qtyPer = Math.max(pc.quantityPerProductUnit, 0);
+    const orderQty = productQty * qtyPer;
+    const native = effectiveComponentUnitPrice(component, pc, orderQty);
+    const supplier = suppliers.find((s) => s.id === component.supplierId);
+    const currency = resolveComponentCurrency(component, supplier).value;
+    sum +=
+      convertToBase(native, currency, baseCurrency, companyRates, fxOverride) *
+      qtyPer;
+  }
+  return { value: sum, source: "product" };
+}
+
+/** Beschaffungskostenpositionen in Basiswährung (Currency = Commercial der Charge) */
+export function convertProcurementItemsToBase(
+  items: CostItem[],
+  purchaseCurrency: string,
+  baseCurrency: string,
+  companyRates?: Record<string, number>,
+  batchOverride?: number | null,
+): CostItem[] {
+  return items.map((item) => {
+    if (item.allocation === "percent_of_goods") return item;
+    return {
+      ...item,
+      amount: convertToBase(
+        item.amount,
+        purchaseCurrency,
+        baseCurrency,
+        companyRates,
+        batchOverride,
+      ),
+    };
+  });
 }
 
 export function resolveSalePrice(
@@ -299,7 +346,14 @@ export function resolveBatchEconomicsInput(
   supplier?: Supplier;
   dealer?: Dealer;
   salesAggregate: ReturnType<typeof resolveBatchSales>;
+  baseCurrency: string;
+  applySkonto: boolean;
+  skontoPercent: number;
+  remainingQuantity: number;
+  targetMarginPercent: number | null;
+  marginGapPercent: number | null;
 } {
+  const { baseCurrency, rates } = resolveFxContext(data.companySettings);
   const catalogProduct = data.catalogProducts.find(
     (p) => p.id === batch.productId,
   );
@@ -326,6 +380,17 @@ export function resolveBatchEconomicsInput(
     data.components,
     data.productComponents ?? [],
     batch,
+    data.suppliers,
+    baseCurrency,
+    rates,
+  );
+
+  const procurementItems = convertProcurementItemsToBase(
+    batch.costItems,
+    commercial.currency,
+    baseCurrency,
+    rates,
+    batch.fxRateOverride,
   );
 
   // Vertriebskosten als eine Pauschale, damit % vom Warenwert pro Sale korrekt bleiben
@@ -343,10 +408,21 @@ export function resolveBatchEconomicsInput(
         ]
       : [];
 
+  const skontoPercent = commercial.skontoPercent ?? 0;
+  const applySkonto =
+    batch.applySkonto === true ||
+    (batch.applySkonto !== false && skontoPercent > 0);
+
+  const remainingQuantity = Math.max(
+    batch.quantity - salesAggregate.soldQuantity,
+    0,
+  );
+  const targetMarginPercent = catalogProduct?.targetMarginPercent ?? null;
+
   return {
     quantity: batch.quantity,
     unitPurchasePrice: purchase.value,
-    procurementItems: batch.costItems,
+    procurementItems,
     sellPrice: salesAggregate.effectiveSellPrice,
     salesItems: aggregatedSalesItems,
     commercial,
@@ -355,6 +431,12 @@ export function resolveBatchEconomicsInput(
     supplier,
     dealer,
     salesAggregate,
+    baseCurrency,
+    applySkonto,
+    skontoPercent: applySkonto ? skontoPercent : 0,
+    remainingQuantity,
+    targetMarginPercent,
+    marginGapPercent: null,
   };
 }
 
@@ -379,6 +461,7 @@ export function calculateResolvedEconomics(
     procurementItems: resolved.procurementItems,
     sellPrice: resolved.sellPrice,
     salesItems: resolved.salesItems,
+    skontoPercent: resolved.skontoPercent,
   });
 
   // Detaillierte Sales-Breakdown aus den einzelnen Sales ersetzen
@@ -394,21 +477,40 @@ export function calculateResolvedEconomics(
     })),
   );
 
+  const salesCostsPerUnit =
+    resolved.quantity > 0
+      ? resolved.salesAggregate.totalSalesCost / resolved.quantity
+      : 0;
+  const contributionPerUnit =
+    econ.sellPrice - econ.landedCostPerUnit - salesCostsPerUnit;
+  const contributionPercent =
+    econ.sellPrice > 0 ? (contributionPerUnit / econ.sellPrice) * 100 : 0;
+  const marginGapPercent =
+    resolved.targetMarginPercent != null
+      ? contributionPercent - resolved.targetMarginPercent
+      : null;
+
   return {
     ...resolved,
     ...econ,
     salesBreakdown,
-    salesCostsPerUnit:
-      resolved.quantity > 0
-        ? resolved.salesAggregate.totalSalesCost / resolved.quantity
-        : 0,
-    contributionPerUnit:
-      econ.sellPrice -
-      econ.landedCostPerUnit -
-      (resolved.quantity > 0
-        ? resolved.salesAggregate.totalSalesCost / resolved.quantity
-        : 0),
+    salesCostsPerUnit,
+    contributionPerUnit,
+    contributionPercent,
+    marginGapPercent,
   };
 }
 
 export { saleAsSalesData, primarySale };
+
+/** Batch-Zeitachsen mit Fallbacks */
+export function batchTimeline(batch: Batch): {
+  orderDate: string;
+  arrivalDate: string;
+  soldDate: string;
+} {
+  const orderDate = batch.orderDate || batch.createdAt;
+  const arrivalDate = batch.arrivalDate || orderDate;
+  const soldDate = batch.soldDate || batch.createdAt;
+  return { orderDate, arrivalDate, soldDate };
+}

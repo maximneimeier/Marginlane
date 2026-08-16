@@ -329,6 +329,131 @@ export function ComponentFormModal({
               />
             </Field>
 
+            <Field
+              label={t("componentModal.moq")}
+              hint={t("componentModal.moqPlaceholder")}
+            >
+              <TextInput
+                type="number"
+                min="0"
+                value={draft?.moq || ""}
+                onChange={(e) =>
+                  draft &&
+                  setDraft({
+                    ...draft,
+                    moq: Number(e.target.value) || 0,
+                  })
+                }
+                placeholder={t("componentModal.moqPlaceholder")}
+              />
+            </Field>
+
+            <Field label={t("componentModal.discountTiers")}>
+              <div className="space-y-2">
+                {(draft?.discountTiers ?? []).map((tier, idx) => (
+                  <div key={idx} className="flex gap-2">
+                    <TextInput
+                      type="number"
+                      min="0"
+                      placeholder="Min qty"
+                      value={tier.minQty || ""}
+                      onChange={(e) => {
+                        if (!draft) return;
+                        const discountTiers = [...draft.discountTiers];
+                        discountTiers[idx] = {
+                          ...tier,
+                          minQty: Number(e.target.value) || 0,
+                        };
+                        setDraft({ ...draft, discountTiers });
+                      }}
+                    />
+                    <TextInput
+                      type="number"
+                      min="0"
+                      max="100"
+                      placeholder="%"
+                      value={tier.discountPercent || ""}
+                      onChange={(e) => {
+                        if (!draft) return;
+                        const discountTiers = [...draft.discountTiers];
+                        discountTiers[idx] = {
+                          ...tier,
+                          discountPercent: Number(e.target.value) || 0,
+                        };
+                        setDraft({ ...draft, discountTiers });
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => {
+                        if (!draft) return;
+                        setDraft({
+                          ...draft,
+                          discountTiers: draft.discountTiers.filter(
+                            (_, i) => i !== idx,
+                          ),
+                        });
+                      }}
+                    >
+                      ×
+                    </Button>
+                  </div>
+                ))}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() =>
+                    draft &&
+                    setDraft({
+                      ...draft,
+                      discountTiers: [
+                        ...draft.discountTiers,
+                        { minQty: 100, discountPercent: 5 },
+                      ],
+                    })
+                  }
+                >
+                  {t("componentModal.addTier")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    if (!draft || draft.purchasePricePerUnit <= 0) return;
+                    const currency =
+                      draft.currency ||
+                      linkedSupplier?.currency ||
+                      WORKSPACE_DEFAULT_CURRENCY;
+                    setDraft({
+                      ...draft,
+                      priceHistory: [
+                        {
+                          id: `cph_${Date.now()}`,
+                          date: new Date().toISOString().slice(0, 10),
+                          price: draft.purchasePricePerUnit,
+                          currency,
+                          note: "",
+                        },
+                        ...draft.priceHistory,
+                      ],
+                    });
+                  }}
+                >
+                  {t("componentModal.snapshotPrice")}
+                </Button>
+                {(draft?.priceHistory ?? []).length > 0 ? (
+                  <ul className="text-[12px] text-muted">
+                    {draft!.priceHistory.slice(0, 5).map((h) => (
+                      <li key={h.id}>
+                        {h.date}: {h.price} {h.currency}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            </Field>
+
             {showManualCurrency ? (
               <Field
                 label={t("componentModal.currency")}

@@ -1,6 +1,6 @@
 import type { AppData, Batch, CostItem, CostPhase, PaymentUnit } from "./types";
 import { costItemTotal } from "./calc";
-import { calculateResolvedEconomics } from "./resolve";
+import { calculateResolvedEconomics, batchTimeline } from "./resolve";
 
 const KNOWN_PHASES: CostPhase[] = ["einkauf", "transport", "lager", "vertrieb"];
 
@@ -220,8 +220,13 @@ function sliceBatch(data: AppData, batch: Batch): BatchSlice {
   const db2 = db1 - logistics;
   const db3 = db2 - marketing - sales;
 
+  const timeline = batchTimeline(batch);
+  const skontoApplied =
+    resolved.applySkonto && resolved.skontoPercent > 0;
   const delay = paymentDelayDays(
-    resolved.commercial.paymentDays,
+    skontoApplied
+      ? resolved.commercial.skontoDays || resolved.commercial.paymentDays
+      : resolved.commercial.paymentDays,
     resolved.commercial.paymentUnit,
   );
 
@@ -240,8 +245,8 @@ function sliceBatch(data: AppData, batch: Batch): BatchSlice {
     db1,
     db2,
     db3,
-    payableAt: addDays(batch.createdAt, delay),
-    soldAt: new Date(batch.createdAt),
+    payableAt: addDays(timeline.orderDate, delay),
+    soldAt: new Date(timeline.soldDate),
   };
 }
 
@@ -272,7 +277,7 @@ export function buildOverview(
       : new Set(productIds);
 
   const slices = data.batches
-    .filter((b) => inRange(b.createdAt, range))
+    .filter((b) => inRange(batchTimeline(b).soldDate, range))
     .filter((b) => (productFilter ? productFilter.has(b.productId) : true))
     .map((b) => sliceBatch(data, b));
 

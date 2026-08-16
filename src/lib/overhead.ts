@@ -593,7 +593,7 @@ export function buildProductActivity(
 
   const qtyMap = new Map<string, { quantity: number; revenue: number }>();
   for (const batch of data.batches) {
-    if (!inRange(batch.createdAt, range)) continue;
+    if (!inRange(batch.soldDate || batch.createdAt, range)) continue;
     const resolved = calculateResolvedEconomics(data, batch);
     const existing = qtyMap.get(batch.productId) ?? {
       quantity: 0,

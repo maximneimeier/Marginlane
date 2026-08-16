@@ -483,6 +483,24 @@ function normalizeBatch(
     costItems: Array.isArray(raw.costItems) ? raw.costItems : [],
     sales: normalizeSalesList(raw.sales, dealers, quantity, legacySnapshot),
     createdAt: raw.createdAt || new Date().toISOString(),
+    orderDate:
+      typeof raw.orderDate === "string" && raw.orderDate
+        ? raw.orderDate
+        : null,
+    arrivalDate:
+      typeof raw.arrivalDate === "string" && raw.arrivalDate
+        ? raw.arrivalDate
+        : null,
+    soldDate:
+      typeof raw.soldDate === "string" && raw.soldDate ? raw.soldDate : null,
+    applySkonto:
+      typeof raw.applySkonto === "boolean" ? raw.applySkonto : null,
+    fxRateOverride:
+      typeof raw.fxRateOverride === "number" &&
+      Number.isFinite(raw.fxRateOverride) &&
+      raw.fxRateOverride > 0
+        ? raw.fxRateOverride
+        : null,
   };
 }
 

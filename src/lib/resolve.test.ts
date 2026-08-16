@@ -95,6 +95,9 @@ describe("resolveUnitPurchasePrice", () => {
       sku: "",
       currency: null,
       purchasePricePerUnit: 3,
+      moq: 0,
+      discountTiers: [],
+      priceHistory: [],
       notes: "",
     },
   ];
@@ -108,27 +111,50 @@ describe("resolveUnitPurchasePrice", () => {
     },
   ];
 
-  it("sums BOM when batch has no override", () => {
-    const batch = { unitPurchasePrice: null } as Batch;
+  it("sums BOM in base currency when batch has no override", () => {
+    const batch = {
+      unitPurchasePrice: null,
+      quantity: 1,
+      supplierId: "s1",
+      fxRateOverride: null,
+    } as Batch;
     const r = resolveUnitPurchasePrice(
       "p1",
       components,
       productComponents,
       batch,
+      [supplier],
+      "EUR",
+      { EUR: 1, USD: 0.92 },
     );
-    expect(r.value).toBe(6);
+    // 3 USD × 2 units → 6 USD → 5.52 EUR
+    expect(r.value).toBeCloseTo(5.52, 5);
     expect(r.source).toBe("product");
   });
 
-  it("uses batch override", () => {
-    const batch = { unitPurchasePrice: 9.5 } as Batch;
+  it("uses batch override converted to base", () => {
+    const batch = {
+      unitPurchasePrice: 9.5,
+      quantity: 1,
+      supplierId: "s1",
+      currency: null,
+      paymentDays: null,
+      paymentUnit: null,
+      skontoPercent: null,
+      skontoDays: null,
+      incoterm: null,
+      fxRateOverride: null,
+    } as Batch;
     const r = resolveUnitPurchasePrice(
       "p1",
       components,
       productComponents,
       batch,
+      [supplier],
+      "EUR",
+      { EUR: 1, USD: 0.92 },
     );
-    expect(r.value).toBe(9.5);
+    expect(r.value).toBeCloseTo(9.5 * 0.92, 5);
     expect(r.source).toBe("batch");
   });
 });

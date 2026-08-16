@@ -7,7 +7,7 @@ import { useStore } from "@/context/StoreContext";
 import type { Batch, Sale } from "@/lib/types";
 import { PROCUREMENT_PHASES, SALES_PHASES } from "@/lib/types";
 import { costItemTotal } from "@/lib/calc";
-import { createId, formatEuro, formatPercent } from "@/lib/format";
+import { createId, formatEuro, formatMoney, formatPercent } from "@/lib/format";
 import { emptySale } from "@/lib/migrateAppData";
 import { useI18n } from "@/hooks/useI18n";
 import { detachDealerFromSale, saleFromDealer } from "@/lib/storage";
@@ -18,6 +18,7 @@ import {
   resolveSalePrice,
   resolveUnitPurchasePrice,
 } from "@/lib/resolve";
+import { resolveFxContext } from "@/lib/fx";
 import {
   logisticsTemplateToCostItems,
   rankLogisticsTemplates,
@@ -91,12 +92,17 @@ export default function ChargeDetailPage({ id }: { id: string }) {
     ? pricingUnitLabel(catalogProduct.pricingUnit)
     : pricingUnitLabel("pcs");
   const econ = calculateResolvedEconomics(data, batch);
+  const { baseCurrency, rates } = resolveFxContext(data.companySettings);
   const displayPurchase = resolveUnitPurchasePrice(
     batch.productId,
     data.components,
     data.productComponents ?? [],
     batch,
+    data.suppliers,
+    baseCurrency,
+    rates,
   );
+  const money = (v: number) => formatMoney(v, econ.baseCurrency, locale);
 
   function startEdit() {
     setDraft(structuredClone(stored!));
@@ -152,6 +158,21 @@ export default function ChargeDetailPage({ id }: { id: string }) {
               </>
             ) : (
               <>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    const clone: Batch = {
+                      ...structuredClone(stored!),
+                      id: createId("bat"),
+                      label: `${stored!.label} (Szenario)`,
+                      createdAt: new Date().toISOString(),
+                    };
+                    upsertBatch(clone);
+                    router.push(`/batches/${clone.id}`);
+                  }}
+                >
+                  {t("batchDetail.saveScenario")}
+                </Button>
                 <Button variant="ghost" onClick={startEdit}>
                   {t("common.edit")}
                 </Button>
@@ -172,30 +193,35 @@ export default function ChargeDetailPage({ id }: { id: string }) {
         }
       />
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-4">
+      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Card>
           <p className="text-xs uppercase tracking-wide text-muted">
             {t("batchDetail.purchase")}
           </p>
           <p className="mt-1 text-xl tabular-nums">
-            {formatEuro(econ.purchasePerUnit, locale)}
+            {money(econ.purchasePerUnit)}
           </p>
+          {econ.skontoPerUnit > 0 ? (
+            <p className="text-xs text-muted">
+              {t("batchDetail.afterSkonto", {
+                list: money(econ.listPurchasePerUnit),
+              })}
+            </p>
+          ) : null}
         </Card>
         <Card>
           <p className="text-xs uppercase tracking-wide text-muted">
             {t("batchDetail.landedCost")}
           </p>
           <p className="mt-1 text-xl tabular-nums font-medium text-accent">
-            {formatEuro(econ.landedCostPerUnit, locale)}
+            {money(econ.landedCostPerUnit)}
           </p>
         </Card>
         <Card>
           <p className="text-xs uppercase tracking-wide text-muted">
             {t("batchDetail.sellPriceShort")}
           </p>
-          <p className="mt-1 text-xl tabular-nums">
-            {formatEuro(econ.sellPrice, locale)}
-          </p>
+          <p className="mt-1 text-xl tabular-nums">{money(econ.sellPrice)}</p>
         </Card>
         <Card>
           <p className="text-xs uppercase tracking-wide text-muted">
@@ -206,10 +232,40 @@ export default function ChargeDetailPage({ id }: { id: string }) {
               econ.contributionPerUnit >= 0 ? "text-accent" : "text-red-700"
             }`}
           >
-            {formatEuro(econ.contributionPerUnit, locale)}
+            {money(econ.contributionPerUnit)}
           </p>
           <p className="text-xs text-muted">
             {formatPercent(econ.contributionPercent)}
+            {econ.targetMarginPercent != null
+              ? ` · ${t("batchDetail.targetMargin", {
+                  value: formatPercent(econ.targetMarginPercent),
+                })}`
+              : ""}
+          </p>
+          {econ.marginGapPercent != null ? (
+            <p
+              className={`text-xs ${
+                econ.marginGapPercent >= 0 ? "text-accent" : "text-red-700"
+              }`}
+            >
+              {t("batchDetail.marginGap", {
+                value: formatPercent(econ.marginGapPercent),
+              })}
+            </p>
+          ) : null}
+        </Card>
+        <Card>
+          <p className="text-xs uppercase tracking-wide text-muted">
+            {t("batchDetail.remaining")}
+          </p>
+          <p className="mt-1 text-xl tabular-nums">
+            {econ.remainingQuantity.toLocaleString(locale)}
+          </p>
+          <p className="text-xs text-muted">
+            {t("batchDetail.soldOf", {
+              sold: econ.salesAggregate.soldQuantity.toLocaleString(locale),
+              total: batch.quantity.toLocaleString(locale),
+            })}
           </p>
         </Card>
       </div>
@@ -244,6 +300,95 @@ export default function ChargeDetailPage({ id }: { id: string }) {
                       }}
                     />
                   </Field>
+                  <Field label={t("batchDetail.orderDate")}>
+                    <TextInput
+                      type="date"
+                      value={(draft.orderDate || "").slice(0, 10)}
+                      onChange={(e) =>
+                        setDraft((prev) =>
+                          prev
+                            ? { ...prev, orderDate: e.target.value || null }
+                            : prev,
+                        )
+                      }
+                    />
+                  </Field>
+                  <Field label={t("batchDetail.arrivalDate")}>
+                    <TextInput
+                      type="date"
+                      value={(draft.arrivalDate || "").slice(0, 10)}
+                      onChange={(e) =>
+                        setDraft((prev) =>
+                          prev
+                            ? { ...prev, arrivalDate: e.target.value || null }
+                            : prev,
+                        )
+                      }
+                    />
+                  </Field>
+                  <Field label={t("batchDetail.soldDate")}>
+                    <TextInput
+                      type="date"
+                      value={(draft.soldDate || "").slice(0, 10)}
+                      onChange={(e) =>
+                        setDraft((prev) =>
+                          prev
+                            ? { ...prev, soldDate: e.target.value || null }
+                            : prev,
+                        )
+                      }
+                    />
+                  </Field>
+                  <Field label={t("batchDetail.fxRateOverride")}>
+                    <TextInput
+                      type="number"
+                      min="0"
+                      step="0.0001"
+                      placeholder={t("batchDetail.fxRateInherited")}
+                      value={draft.fxRateOverride ?? ""}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        setDraft((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                fxRateOverride:
+                                  raw === ""
+                                    ? null
+                                    : Number(raw) || null,
+                              }
+                            : prev,
+                        );
+                      }}
+                    />
+                  </Field>
+                  <Field label={t("batchDetail.applySkonto")}>
+                    <Select
+                      value={
+                        draft.applySkonto === null
+                          ? "auto"
+                          : draft.applySkonto
+                            ? "yes"
+                            : "no"
+                      }
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setDraft((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                applySkonto:
+                                  v === "auto" ? null : v === "yes",
+                              }
+                            : prev,
+                        );
+                      }}
+                    >
+                      <option value="auto">{t("batchDetail.skontoAuto")}</option>
+                      <option value="yes">{t("common.yes")}</option>
+                      <option value="no">{t("common.no")}</option>
+                    </Select>
+                  </Field>
                   <Field
                     label={t("batchDetail.unitPurchase", { unit })}
                     hint={
@@ -253,13 +398,18 @@ export default function ChargeDetailPage({ id }: { id: string }) {
                     }
                   >
                     <div className="flex h-[34px] items-center rounded-[8px] border border-line bg-surface-faint px-3 text-[13px] tabular-nums text-foreground">
-                      {formatEuro(
+                      {formatMoney(
                         resolveUnitPurchasePrice(
                           draft.productId,
                           data.components,
                           data.productComponents ?? [],
                           draft,
+                          data.suppliers,
+                          baseCurrency,
+                          rates,
                         ).value,
+                        baseCurrency,
+                        locale,
                       )}
                     </div>
                   </Field>

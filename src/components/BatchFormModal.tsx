@@ -226,6 +226,7 @@ export function BatchFormModal({
       sale.costItems = salesItems ?? [];
     }
 
+    const now = new Date().toISOString();
     const batch: Batch = {
       id: createId("bat"),
       productId: product.id,
@@ -236,7 +237,12 @@ export function BatchFormModal({
       ...commercialOverrides,
       costItems,
       sales: [sale],
-      createdAt: new Date().toISOString(),
+      createdAt: now,
+      orderDate: now.slice(0, 10),
+      arrivalDate: null,
+      soldDate: now.slice(0, 10),
+      applySkonto: null,
+      fxRateOverride: null,
     };
     onSave(batch);
     onClose();

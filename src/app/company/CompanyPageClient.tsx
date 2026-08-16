@@ -940,6 +940,46 @@ function CompanyPageInner() {
                 ))}
               </Select>
             </Field>
+            <div className="sm:col-span-2">
+              <Field
+                label={t("company.field.fxRates")}
+                hint={t("company.field.fxRatesHint")}
+              >
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {CURRENCIES.filter((c) => c !== settings.baseCurrency).map(
+                    (code) => (
+                      <label
+                        key={code}
+                        className="flex items-center gap-2 text-[13px] text-muted"
+                      >
+                        <span className="w-10 shrink-0 font-medium text-foreground">
+                          {code}
+                        </span>
+                        <TextInput
+                          type="number"
+                          min="0"
+                          step="0.0001"
+                          value={settings.fxRates?.[code] ?? ""}
+                          onChange={(e) => {
+                            const n = Number(e.target.value);
+                            patch({
+                              fxRates: {
+                                ...settings.fxRates,
+                                [settings.baseCurrency]: 1,
+                                [code]:
+                                  Number.isFinite(n) && n > 0
+                                    ? n
+                                    : settings.fxRates?.[code] ?? 1,
+                              },
+                            });
+                          }}
+                        />
+                      </label>
+                    ),
+                  )}
+                </div>
+              </Field>
+            </div>
             <Field
               label={t("company.field.modelStartMonth")}
               hint={t("company.field.monthHint")}
