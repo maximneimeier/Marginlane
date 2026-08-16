@@ -28,6 +28,7 @@ const de = {
   "nav.group.analyse": "Analyse",
   "nav.group.planung": "Planung",
   "nav.group.umsatz": "Umsatz",
+  "nav.group.firma": "Firma",
   "nav.group.stammdaten": "Stammdaten",
   "nav.group.abwicklung": "Abwicklung",
   "nav.group.gemeinkosten": "Kosten",
@@ -563,7 +564,7 @@ const de = {
 
   "company.title": "Unternehmensdaten",
   "company.description":
-    "Firmenprofil und Modellannahmen für Steuern, USt und Personal-Defaults.",
+    "Gemeinsame Firmendaten für Investa und Costerra — Profil, Horizont, Steuern und Personal-Defaults.",
   "company.savedHint": "Änderungen werden automatisch im Workspace gespeichert.",
   "company.section.general": "Allgemein",
   "company.section.generalHint":
@@ -1642,6 +1643,7 @@ const en: Record<MessageKey, string> = {
   "nav.group.analyse": "Analysis",
   "nav.group.planung": "Planning",
   "nav.group.umsatz": "Revenue",
+  "nav.group.firma": "Company",
   "nav.group.stammdaten": "Master data",
   "nav.group.abwicklung": "Operations",
   "nav.group.gemeinkosten": "Costs",
@@ -2176,7 +2178,7 @@ const en: Record<MessageKey, string> = {
 
   "company.title": "Company data",
   "company.description":
-    "Company profile and model assumptions for taxes, VAT and personnel defaults.",
+    "Shared company data for Investa and Costerra — profile, horizon, taxes and personnel defaults.",
   "company.savedHint": "Changes are saved automatically to the workspace.",
   "company.section.general": "General",
   "company.section.generalHint":

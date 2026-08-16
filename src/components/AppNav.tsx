@@ -37,6 +37,7 @@ type NavGroupId =
   | "analyse"
   | "planung"
   | "umsatz"
+  | "firma"
   | "stammdaten"
   | "abwicklung"
   | "gemeinkosten";
@@ -60,6 +61,14 @@ const NAV_GROUPS: NavGroup[] = [
     links: [
       { href: "/overview", key: "nav.overview", icon: LayoutDashboard },
     ],
+  },
+  {
+    id: "firma",
+    labelKey: "nav.group.firma",
+    collapsible: false,
+    defaultOpen: true,
+    modules: ["invest", "batches"],
+    links: [{ href: "/company", key: "nav.company", icon: Building2 }],
   },
   {
     id: "umsatz",
@@ -104,7 +113,6 @@ const NAV_GROUPS: NavGroup[] = [
         icon: UserRound,
         feature: "overheadTopLevelNav",
       },
-      { href: "/company", key: "nav.company", icon: Building2 },
     ],
   },
   {
@@ -114,7 +122,6 @@ const NAV_GROUPS: NavGroup[] = [
     defaultOpen: true,
     modules: ["batches"],
     links: [
-      { href: "/company", key: "nav.company", icon: Building2 },
       { href: "/products", key: "nav.products", icon: Package },
       { href: "/components", key: "nav.components", icon: Grid2x2 },
       { href: "/suppliers", key: "nav.suppliers", icon: Users },
