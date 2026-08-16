@@ -20,7 +20,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { usePrefs, type AppModule } from "@/context/PreferencesContext";
+import { MODULE_PROJECTS, usePrefs, type AppModule } from "@/context/PreferencesContext";
 import { useI18n } from "@/hooks/useI18n";
 import type { MessageKey } from "@/lib/i18n";
 import { FEATURES } from "@/lib/features";
@@ -90,6 +90,7 @@ const NAV_GROUPS: NavGroup[] = [
         key: "nav.salesVolume",
         icon: BarChart3,
         feature: "salesVolumePlanning",
+        modules: ["invest"],
       },
       {
         href: "/compare",
@@ -104,7 +105,7 @@ const NAV_GROUPS: NavGroup[] = [
     labelKey: "nav.group.gemeinkosten",
     collapsible: true,
     defaultOpen: true,
-    modules: ["invest", "batches"],
+    modules: ["invest"],
     links: [
       {
         href: "/cogs",
@@ -269,12 +270,24 @@ export function AppNav() {
         ? t("moduleChooser.batches.title")
         : t("moduleChooser.navHint");
 
+  const projectsHref =
+    prefs.activeModule != null ? MODULE_PROJECTS[prefs.activeModule] : "/";
+
   return (
     <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-[220px] shrink-0 flex-col border-r border-line bg-sidebar md:flex">
       <div className="px-4 pb-1 pt-4">
         <p className="truncate text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
           {moduleLabel}
         </p>
+        {prefs.activeProjectName ? (
+          <Link
+            href={projectsHref}
+            className="mt-0.5 block truncate text-[12px] font-medium text-foreground hover:text-accent"
+            title={prefs.activeProjectName}
+          >
+            {prefs.activeProjectName}
+          </Link>
+        ) : null}
       </div>
 
       <nav className="flex flex-1 flex-col gap-3 overflow-y-auto px-2 pb-3 pt-1">

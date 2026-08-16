@@ -48,9 +48,11 @@ import {
 import { mergeRevenuePlan } from "@/lib/revenuePlan";
 import { mergeCogsPlan } from "@/lib/cogsPlan";
 import { detachDealerFromSale } from "@/lib/storage";
+import { usePrefs } from "@/context/PreferencesContext";
 
 type StoreContextValue = {
   ready: boolean;
+  projectId: string | null;
   data: AppData;
   upsertSupplier: (supplier: Supplier) => void;
   deleteSupplier: (id: string) => void;
@@ -162,8 +164,8 @@ function clearLegacyLocalStorage() {
   }
 }
 
-async function persistWorkspace(data: AppData) {
-  const res = await fetch("/api/workspace", {
+async function persistWorkspace(projectId: string, data: AppData) {
+  const res = await fetch(`/api/workspaces/${projectId}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -192,14 +194,20 @@ async function persistWorkspace(data: AppData) {
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
+  const { ready: prefsReady, prefs } = usePrefs();
+  const projectId = prefs.activeProjectId;
   const [data, setData] = useState<AppData>(EMPTY_DATA);
   const [ready, setReady] = useState(false);
   const saveChain = useRef(Promise.resolve());
+  const projectIdRef = useRef(projectId);
+  projectIdRef.current = projectId;
 
   const queueSave = useCallback((next: AppData) => {
+    const id = projectIdRef.current;
+    if (!id) return;
     saveChain.current = saveChain.current
       .then(async () => {
-        await persistWorkspace(next);
+        await persistWorkspace(id, next);
       })
       .catch((error) => {
         console.error(error);
@@ -207,30 +215,53 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!prefsReady) return;
+
     let cancelled = false;
     clearLegacyLocalStorage();
+    setReady(false);
+    // Neue Save-Kette beim Projektwechsel — keine Cross-Writes zwischen Projekten
+    saveChain.current = Promise.resolve();
+
+    if (!projectId) {
+      setData({ ...EMPTY_DATA });
+      setReady(true);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const loadingId = projectId;
 
     (async () => {
       try {
-        const res = await fetch("/api/workspace");
+        const res = await fetch(`/api/workspaces/${loadingId}`);
         if (!res.ok) throw new Error(`Failed to load workspace (${res.status})`);
-        const payload = migrateAppData(await res.json());
-        if (!cancelled) setData(payload);
+        const payload = (await res.json()) as { data?: unknown };
+        const migrated = migrateAppData(payload.data ?? payload);
+        if (!cancelled && projectIdRef.current === loadingId) {
+          setData(migrated);
+        }
       } catch (error) {
         console.error(error);
-        if (!cancelled) setData({ ...EMPTY_DATA });
+        if (!cancelled && projectIdRef.current === loadingId) {
+          setData({ ...EMPTY_DATA });
+        }
       } finally {
-        if (!cancelled) setReady(true);
+        if (!cancelled && projectIdRef.current === loadingId) {
+          setReady(true);
+        }
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [prefsReady, projectId]);
 
   const commit = useCallback(
     (updater: (prev: AppData) => AppData) => {
+      if (!projectIdRef.current) return;
       setData((prev) => {
         const next = updater(prev);
         queueSave(next);
@@ -851,8 +882,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   const clearData = useCallback(async () => {
+    const id = projectIdRef.current;
+    if (!id) return;
     clearLegacyLocalStorage();
-    const res = await fetch("/api/workspace", { method: "DELETE" });
+    const res = await fetch(`/api/workspaces/${id}?mode=clear`, {
+      method: "DELETE",
+    });
     if (!res.ok) throw new Error(`Failed to clear workspace (${res.status})`);
     setData(migrateAppData(await res.json()));
   }, []);
@@ -860,6 +895,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       ready,
+      projectId,
       data,
       upsertSupplier,
       deleteSupplier,
@@ -906,6 +942,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }),
     [
       ready,
+      projectId,
       data,
       upsertSupplier,
       deleteSupplier,

@@ -9,9 +9,16 @@ datasource db {
   provider = "postgresql"
 }
 
-/// Single-tenant workspace snapshot — mirrors the previous localStorage AppData.
+/// Isoliertes Projekt: Investa oder Costerra — jede Zeile = eigene AppData-Datenbank (kein Shared State).
 model Workspace {
-  id        String   @id @default("default")
+  id        String   @id @default(cuid())
+  name      String
+  /// "invest" | "batches" — Produkt-/Modul-Zugehörigkeit
+  module    String
+  /// Kompletter App-Stand nur für dieses Projekt
   data      Json
+  createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([module])
 }

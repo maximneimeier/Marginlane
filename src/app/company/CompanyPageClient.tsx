@@ -33,11 +33,6 @@ import {
   resolveVatRatePercent,
 } from "@/lib/companySettings";
 import {
-  fxRatesCsvTemplate,
-  parseFxRatesCsv,
-} from "@/lib/fx";
-import { createId } from "@/lib/format";
-import {
   computeGermanTaxBreakdown,
   computeSwissTax,
   computeUsTaxBreakdown,
@@ -51,14 +46,8 @@ import { formatNumber } from "@/lib/format";
 import { Button, Card, ConfirmDialog, Field, PageHeader, Select, TextInput } from "@/components/ui";
 import { PersonnelTeamsManager } from "@/components/PersonnelTeamsManager";
 import { PersonnelDefaultsEditor } from "@/components/PersonnelDefaultsEditor";
+import { usePrefs } from "@/context/PreferencesContext";
 import { useSearchParams } from "next/navigation";
-
-function formatTaxRate(value: number, locale: string): string {
-  return new Intl.NumberFormat(locale, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
-}
 
 type CompanyTab =
   | "general"
@@ -76,6 +65,21 @@ const COMPANY_TABS: { id: CompanyTab; labelKey: MessageKey }[] = [
   { id: "personnel", labelKey: "company.section.personnel" },
   { id: "valuation", labelKey: "company.section.valuation" },
 ];
+
+/** Costerra: nur Allgemein. Investa: alle Tabs inkl. Bewertung. */
+function tabsForModule(module: "invest" | "batches" | null) {
+  if (module === "batches") {
+    return COMPANY_TABS.filter((t) => t.id === "general");
+  }
+  return COMPANY_TABS;
+}
+
+function formatTaxRate(value: number, locale: string): string {
+  return new Intl.NumberFormat(locale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
 
 const NumberInputCtx = createContext<{
   numberFormat: NumberFormatStyle;
@@ -769,8 +773,10 @@ export default function CompanyPageClient() {
 
 function CompanyPageInner() {
   const { ready, data, patchCompanySettings } = useStore();
+  const { prefs } = usePrefs();
   const { t, locale, numberFormat } = useI18n();
   const searchParams = useSearchParams();
+  const visibleTabs = tabsForModule(prefs.activeModule);
   const initialTab = (() => {
     const raw = searchParams.get("tab");
     if (
@@ -792,6 +798,16 @@ function CompanyPageInner() {
     () => ({ numberFormat, locale }),
     [numberFormat, locale],
   );
+
+  useEffect(() => {
+    const allowed = tabsForModule(prefs.activeModule);
+    if (!allowed.some((item) => item.id === tab)) {
+      setTab("general");
+      if (typeof window !== "undefined") {
+        window.history.replaceState(window.history.state, "", "/company");
+      }
+    }
+  }, [tab, prefs.activeModule]);
 
   if (!ready) {
     return <p className="text-[13px] text-muted">{t("common.loading")}</p>;
@@ -892,31 +908,33 @@ function CompanyPageInner() {
         description={t("company.description")}
       />
 
-      <div className="mb-4 flex flex-wrap rounded-[8px] border border-line bg-white p-0.5">
-        {COMPANY_TABS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => {
-              setTab(item.id);
-              if (typeof window !== "undefined") {
-                const url =
-                  item.id === "general"
-                    ? "/company"
-                    : `/company?tab=${item.id}`;
-                window.history.replaceState(window.history.state, "", url);
-              }
-            }}
-            className={`rounded-[6px] px-2.5 py-1 text-[12px] font-medium ${
-              tab === item.id
-                ? "bg-surface-soft text-foreground"
-                : "text-muted hover:text-foreground"
-            }`}
-          >
-            {t(item.labelKey)}
-          </button>
-        ))}
-      </div>
+      {visibleTabs.length > 1 ? (
+        <div className="mb-4 flex flex-wrap rounded-[8px] border border-line bg-white p-0.5">
+          {visibleTabs.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => {
+                setTab(item.id);
+                if (typeof window !== "undefined") {
+                  const url =
+                    item.id === "general"
+                      ? "/company"
+                      : `/company?tab=${item.id}`;
+                  window.history.replaceState(window.history.state, "", url);
+                }
+              }}
+              className={`rounded-[6px] px-2.5 py-1 text-[12px] font-medium ${
+                tab === item.id
+                  ? "bg-surface-soft text-foreground"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              {t(item.labelKey)}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <Card>
         <h2 className="mb-1 text-[15px] font-semibold tracking-tight">
@@ -945,148 +963,6 @@ function CompanyPageInner() {
                 ))}
               </Select>
             </Field>
-            <div className="sm:col-span-2">
-              <Field
-                label={t("company.field.fxRates")}
-                hint={t("company.field.fxRatesHint")}
-              >
-                <div className="grid gap-2 sm:grid-cols-3">
-                  {CURRENCIES.filter((c) => c !== settings.baseCurrency).map(
-                    (code) => (
-                      <label
-                        key={code}
-                        className="flex items-center gap-2 text-[13px] text-muted"
-                      >
-                        <span className="w-10 shrink-0 font-medium text-foreground">
-                          {code}
-                        </span>
-                        <TextInput
-                          type="number"
-                          min="0"
-                          step="0.0001"
-                          value={settings.fxRates?.[code] ?? ""}
-                          onChange={(e) => {
-                            const n = Number(e.target.value);
-                            patch({
-                              fxRates: {
-                                ...settings.fxRates,
-                                [settings.baseCurrency]: 1,
-                                [code]:
-                                  Number.isFinite(n) && n > 0
-                                    ? n
-                                    : settings.fxRates?.[code] ?? 1,
-                              },
-                            });
-                          }}
-                        />
-                      </label>
-                    ),
-                  )}
-                </div>
-              </Field>
-            </div>
-            <div className="sm:col-span-2 space-y-3">
-              <Field
-                label={t("company.field.fxHistory")}
-                hint={t("company.field.fxHistoryHint")}
-              >
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => {
-                      const date = new Date().toISOString().slice(0, 10);
-                      patch({
-                        fxRateHistory: [
-                          {
-                            id: createId("fxh"),
-                            date,
-                            rates: { ...settings.fxRates },
-                            note: "",
-                          },
-                          ...(settings.fxRateHistory ?? []),
-                        ],
-                      });
-                    }}
-                  >
-                    {t("company.field.fxHistorySnapshot")}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => {
-                      const blob = new Blob(
-                        [fxRatesCsvTemplate(settings.baseCurrency)],
-                        { type: "text/csv;charset=utf-8" },
-                      );
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement("a");
-                      a.href = url;
-                      a.download = "fx-rates-template.csv";
-                      a.click();
-                      URL.revokeObjectURL(url);
-                    }}
-                  >
-                    {t("company.field.fxCsvTemplate")}
-                  </Button>
-                  <label className="inline-flex h-8 cursor-pointer items-center rounded-[8px] border border-line px-3 text-[13px] font-medium text-foreground hover:bg-surface-faint">
-                    {t("company.field.fxCsvImport")}
-                    <input
-                      type="file"
-                      accept=".csv,text/csv"
-                      className="hidden"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        e.target.value = "";
-                        if (!file) return;
-                        const text = await file.text();
-                        const imported = parseFxRatesCsv(
-                          text,
-                          settings.baseCurrency,
-                        );
-                        if (!imported.length) return;
-                        const latest = imported[0];
-                        patch({
-                          fxRateHistory: [
-                            ...imported,
-                            ...(settings.fxRateHistory ?? []),
-                          ],
-                          fxRates: latest.rates,
-                        });
-                      }}
-                    />
-                  </label>
-                </div>
-              </Field>
-              {(settings.fxRateHistory ?? []).length > 0 ? (
-                <ul className="max-h-40 space-y-1 overflow-y-auto text-[12px] text-muted">
-                  {(settings.fxRateHistory ?? []).slice(0, 12).map((entry) => (
-                    <li
-                      key={entry.id}
-                      className="flex items-center justify-between gap-2 rounded-[8px] border border-line px-2 py-1.5"
-                    >
-                      <span>
-                        {entry.date}
-                        {entry.note ? ` · ${entry.note}` : ""}
-                      </span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() =>
-                          patch({
-                            fxRateHistory: (settings.fxRateHistory ?? []).filter(
-                              (x) => x.id !== entry.id,
-                            ),
-                          })
-                        }
-                      >
-                        ×
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
             <Field
               label={t("company.field.modelStartMonth")}
               hint={t("company.field.monthHint")}

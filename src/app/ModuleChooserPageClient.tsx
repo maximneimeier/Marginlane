@@ -4,28 +4,17 @@ import { useRouter } from "next/navigation";
 import { type ReactNode } from "react";
 import { ArrowRight, Layers, LineChart } from "lucide-react";
 import {
-  MODULE_HOME,
-  usePrefs,
+  MODULE_PROJECTS,
   type AppModule,
 } from "@/context/PreferencesContext";
 import { useI18n } from "@/hooks/useI18n";
 
 export default function ModuleChooserPageClient() {
-  const { ready, setActiveModule } = usePrefs();
   const { t } = useI18n();
   const router = useRouter();
 
   function choose(module: AppModule) {
-    setActiveModule(module);
-    router.push(MODULE_HOME[module]);
-  }
-
-  if (!ready) {
-    return (
-      <p className="py-16 text-center text-[13px] text-muted">
-        {t("common.loading")}
-      </p>
-    );
+    router.push(MODULE_PROJECTS[module]);
   }
 
   return (

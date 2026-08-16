@@ -4,13 +4,15 @@
  */
 import "dotenv/config";
 import {
-  getWorkspaceData,
+  getWorkspace,
   saveWorkspaceData,
 } from "../src/lib/db/workspace";
 import type { CatalogProduct } from "../src/lib/types";
 
 async function main() {
-  const data = await getWorkspaceData();
+  const workspace = await getWorkspace("default");
+  if (!workspace) throw new Error("Workspace default not found");
+  const data = workspace.data;
   console.log("Products before:");
   for (const p of data.catalogProducts) {
     console.log(`  ${p.id} | ${p.sku} | ${p.name}`);
@@ -38,7 +40,7 @@ async function main() {
   const nextProducts = data.catalogProducts.filter((p) => !drop.has(p.id));
 
   console.log("\nRemoving:", [...drop]);
-  await saveWorkspaceData({
+  await saveWorkspaceData("default", {
     ...data,
     catalogProducts: nextProducts,
     productComponents: (data.productComponents ?? []).filter(
@@ -51,9 +53,9 @@ async function main() {
     ),
   });
 
-  const after = await getWorkspaceData();
+  const after = await getWorkspace("default");
   console.log("\nProducts after:");
-  for (const p of after.catalogProducts) {
+  for (const p of after?.data.catalogProducts ?? []) {
     console.log(`  ${p.id} | ${p.sku} | ${p.name}`);
   }
 }

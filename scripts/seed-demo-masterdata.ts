@@ -1,12 +1,12 @@
 /**
- * Demo-Stammdaten in den default-Workspace schreiben (idempotent per fester IDs).
+ * Demo-Stammdaten in die Demo-Projekte schreiben (Investa + Costerra).
  *
  * Usage: npx tsx scripts/seed-demo-masterdata.ts
  */
 import "dotenv/config";
 import { createId } from "../src/lib/format";
 import {
-  getWorkspaceData,
+  getWorkspace,
   saveWorkspaceData,
 } from "../src/lib/db/workspace";
 import type {
@@ -1429,8 +1429,10 @@ function upsertProductsBySku(
   return { products: [...byId.values()], removedIds };
 }
 
-async function main() {
-  const current = await getWorkspaceData();
+async function buildDemoData(current: AppData): Promise<{
+  next: AppData;
+  removedIds: string[];
+}> {
   const { products, removedIds } = upsertProductsBySku(
     current.catalogProducts,
     PRODUCTS,
@@ -1466,8 +1468,7 @@ async function main() {
     companySettings: {
       ...(current.companySettings ?? {}),
       companyName:
-        current.companySettings?.companyName?.trim() ||
-        "Marginlane Demo GmbH",
+        current.companySettings?.companyName?.trim() || "Athenik",
       baseCurrency: current.companySettings?.baseCurrency || "EUR",
       modelStartMonth:
         current.companySettings?.modelStartMonth || "2025-01",
@@ -1482,29 +1483,48 @@ async function main() {
     ),
   };
 
-  const saved = await saveWorkspaceData(next);
+  return { next, removedIds };
+}
 
-  if (removedIds.length) {
-    console.log("SKU-Duplikate entfernt:", removedIds.join(", "));
+async function main() {
+  const targets = ["default", "default-batches"] as const;
+
+  for (const id of targets) {
+    const workspace = await getWorkspace(id);
+    if (!workspace) {
+      console.warn(`Workspace ${id} fehlt — überspringe`);
+      continue;
+    }
+    const { next, removedIds } = await buildDemoData(workspace.data);
+    const saved = await saveWorkspaceData(id, next);
+    if (removedIds.length) {
+      console.log(`[${id}] SKU-Duplikate entfernt:`, removedIds.join(", "));
+    }
+    console.log(`[${id}] Demo-Stammdaten geschrieben:`);
+    console.log(
+      `  Lieferanten: ${SUPPLIERS.length} (gesamt ${saved.suppliers.length})`,
+    );
+    console.log(
+      `  Produkte:    ${PRODUCTS.length} (gesamt ${saved.catalogProducts.length})`,
+    );
+    console.log(
+      `  Komponenten: ${COMPONENTS.length} (gesamt ${saved.components.length})`,
+    );
+    console.log(
+      `  BOM-Links:   ${LINKS.length} (gesamt ${saved.productComponents.length})`,
+    );
+    console.log(`  Händler:     ${DEALERS.length} (gesamt ${saved.dealers.length})`);
+    console.log(
+      `  Logistik:    ${LOGISTICS_BLOCKS.length} Bausteine, ${LOGISTICS_TEMPLATES.length} Vorlagen`,
+    );
+    console.log(`  Chargen:     ${BATCHES.length} (gesamt ${saved.batches.length})`);
+    console.log(
+      `  Overhead:    ${OVERHEAD.length} (gesamt ${saved.overheadItems.length})`,
+    );
+    console.log(
+      `  Personal:    ${PERSONNEL.length} Rollen, ${PERSONNEL_TEAMS.length} Teams (gesamt ${(saved.personnelRoles ?? []).length} / ${(saved.personnelTeams ?? []).length})`,
+    );
   }
-  console.log("Demo-Stammdaten geschrieben:");
-  console.log(`  Lieferanten: ${SUPPLIERS.length} (gesamt ${saved.suppliers.length})`);
-  console.log(`  Produkte:    ${PRODUCTS.length} (gesamt ${saved.catalogProducts.length})`);
-  console.log(`  Komponenten: ${COMPONENTS.length} (gesamt ${saved.components.length})`);
-  console.log(
-    `  BOM-Links:   ${LINKS.length} (gesamt ${saved.productComponents.length})`,
-  );
-  console.log(`  Händler:     ${DEALERS.length} (gesamt ${saved.dealers.length})`);
-  console.log(
-    `  Logistik:    ${LOGISTICS_BLOCKS.length} Bausteine, ${LOGISTICS_TEMPLATES.length} Vorlagen`,
-  );
-  console.log(`  Chargen:     ${BATCHES.length} (gesamt ${saved.batches.length})`);
-  console.log(
-    `  Overhead:    ${OVERHEAD.length} (gesamt ${saved.overheadItems.length})`,
-  );
-  console.log(
-    `  Personal:    ${PERSONNEL.length} Rollen, ${PERSONNEL_TEAMS.length} Teams (gesamt ${(saved.personnelRoles ?? []).length} / ${(saved.personnelTeams ?? []).length})`,
-  );
 }
 
 main().catch((err) => {

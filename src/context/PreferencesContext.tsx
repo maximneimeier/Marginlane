@@ -24,6 +24,10 @@ export type UserPrefs = {
   numberFormat: NumberFormatStyle;
   /** Aktives App-Modul; null = noch nicht gewählt */
   activeModule: AppModule | null;
+  /** Aktives Projekt (Workspace-ID); null = keines geöffnet */
+  activeProjectId: string | null;
+  /** Anzeigename des aktiven Projekts (Cache für Nav) */
+  activeProjectName: string | null;
 };
 
 const STORAGE_KEY = "marginlane-prefs-v1";
@@ -34,6 +38,8 @@ const DEFAULT_PREFS: UserPrefs = {
   language: "de",
   numberFormat: "de",
   activeModule: null,
+  activeProjectId: null,
+  activeProjectName: null,
 };
 
 type PrefsContextValue = {
@@ -41,6 +47,12 @@ type PrefsContextValue = {
   prefs: UserPrefs;
   setPrefs: (patch: Partial<UserPrefs>) => void;
   setActiveModule: (module: AppModule | null) => void;
+  openProject: (args: {
+    module: AppModule;
+    projectId: string;
+    projectName: string;
+  }) => void;
+  clearActiveProject: () => void;
 };
 
 const PrefsContext = createContext<PrefsContextValue | null>(null);
@@ -52,6 +64,12 @@ function normalizeNumberFormat(value: unknown): NumberFormatStyle {
 function normalizeActiveModule(value: unknown): AppModule | null {
   if (value === "invest" || value === "batches") return value;
   return null;
+}
+
+function normalizeOptionalString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 function loadPrefs(): UserPrefs {
@@ -66,6 +84,8 @@ function loadPrefs(): UserPrefs {
       language: parsed.language === "en" ? "en" : "de",
       numberFormat: normalizeNumberFormat(parsed.numberFormat),
       activeModule: normalizeActiveModule(parsed.activeModule),
+      activeProjectId: normalizeOptionalString(parsed.activeProjectId),
+      activeProjectName: normalizeOptionalString(parsed.activeProjectName),
     };
   } catch {
     return DEFAULT_PREFS;
@@ -108,19 +128,56 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
           patch.activeModule !== undefined
             ? normalizeActiveModule(patch.activeModule)
             : prev.activeModule,
+        activeProjectId:
+          patch.activeProjectId !== undefined
+            ? normalizeOptionalString(patch.activeProjectId)
+            : prev.activeProjectId,
+        activeProjectName:
+          patch.activeProjectName !== undefined
+            ? normalizeOptionalString(patch.activeProjectName)
+            : prev.activeProjectName,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
       return next;
     });
   }, []);
 
-  const setActiveModule = useCallback((module: AppModule | null) => {
-    setPrefs({ activeModule: module });
+  const setActiveModule = useCallback(
+    (module: AppModule | null) => {
+      setPrefs({ activeModule: module });
+    },
+    [setPrefs],
+  );
+
+  const openProject = useCallback(
+    (args: {
+      module: AppModule;
+      projectId: string;
+      projectName: string;
+    }) => {
+      setPrefs({
+        activeModule: args.module,
+        activeProjectId: args.projectId,
+        activeProjectName: args.projectName,
+      });
+    },
+    [setPrefs],
+  );
+
+  const clearActiveProject = useCallback(() => {
+    setPrefs({ activeProjectId: null, activeProjectName: null });
   }, [setPrefs]);
 
   const value = useMemo(
-    () => ({ ready, prefs, setPrefs, setActiveModule }),
-    [ready, prefs, setPrefs, setActiveModule],
+    () => ({
+      ready,
+      prefs,
+      setPrefs,
+      setActiveModule,
+      openProject,
+      clearActiveProject,
+    }),
+    [ready, prefs, setPrefs, setActiveModule, openProject, clearActiveProject],
   );
 
   return (
@@ -144,4 +201,9 @@ export function initialsFromName(name: string) {
 export const MODULE_HOME: Record<AppModule, string> = {
   invest: "/revenue",
   batches: "/batches",
+};
+
+export const MODULE_PROJECTS: Record<AppModule, string> = {
+  invest: "/projects/invest",
+  batches: "/projects/batches",
 };
