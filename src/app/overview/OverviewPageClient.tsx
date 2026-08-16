@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useStore } from "@/context/StoreContext";
 import {
   buildOverview,
+  buildMarginTrend,
   defaultOverviewRange,
   rangeForPreset,
   type BreakdownRow,
@@ -19,6 +20,7 @@ import { OverviewWaterfallChart } from "@/components/OverviewWaterfallChart";
 import { OverviewSankeyChart } from "@/components/OverviewSankeyChart";
 import { OverheadResultWaterfallChart } from "@/components/OverheadResultWaterfallChart";
 import { SalesPlanOverviewStrip } from "@/components/SalesPlanOverviewStrip";
+import { MarginTrendChart } from "@/components/MarginTrendChart";
 import { ProductFilterDropdown } from "@/components/ProductFilterDropdown";
 import { Card, Field, PageHeader, Select, TextInput } from "@/components/ui";
 
@@ -59,6 +61,13 @@ export default function OverviewPage() {
       showConsolidation
         ? buildOverview(data, range, { productIds: null })
         : null,
+    [data, range, showConsolidation],
+  );
+  const marginTrend = useMemo(
+    () =>
+      showConsolidation
+        ? buildMarginTrend(data, range, { productIds: null })
+        : [],
     [data, range, showConsolidation],
   );
   const waterfallReport = useMemo(
@@ -242,6 +251,12 @@ export default function OverviewPage() {
       ) : null}
 
       {showSalesPlan ? <SalesPlanOverviewStrip range={range} /> : null}
+
+      {showConsolidation ? (
+        <div className="mb-4">
+          <MarginTrendChart points={marginTrend} />
+        </div>
+      ) : null}
 
       {showConsolidation ? (
         <div className="space-y-2">

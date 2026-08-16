@@ -111,6 +111,8 @@ type StoreContextValue = {
     frozen: boolean,
   ) => void;
   importSalesPlan: (cells: SalesPlanCell[], rowMeta: SalesPlanRowMeta[]) => void;
+  /** Ersetzt den Workspace-Datensatz (z. B. nach CSV-Import). */
+  replaceAppData: (next: AppData) => void;
   /** Clears all workspace data in PostgreSQL (no mock reseed). */
   clearData: () => Promise<void>;
 };
@@ -841,6 +843,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [commit],
   );
 
+  const replaceAppData = useCallback(
+    (next: AppData) => {
+      commit(() => next);
+    },
+    [commit],
+  );
+
   const clearData = useCallback(async () => {
     clearLegacyLocalStorage();
     const res = await fetch("/api/workspace", { method: "DELETE" });
@@ -892,6 +901,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       patchCompanySettings,
       setSalesPlanFrozen,
       importSalesPlan,
+      replaceAppData,
       clearData,
     }),
     [
@@ -937,6 +947,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       patchCompanySettings,
       setSalesPlanFrozen,
       importSalesPlan,
+      replaceAppData,
       clearData,
     ],
   );

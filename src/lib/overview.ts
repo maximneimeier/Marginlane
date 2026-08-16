@@ -601,3 +601,57 @@ export function buildContributionSankey(
 
   return { nodes, links };
 }
+
+export type MarginTrendPoint = {
+  month: string;
+  revenue: number;
+  db3: number;
+  marginPercent: number;
+  batchCount: number;
+};
+
+/** Monatliche Marge aus Chargen (soldDate), ohne neues Datenmodell */
+export function buildMarginTrend(
+  data: AppData,
+  range: DateRange,
+  filters: OverviewFilters = {},
+): MarginTrendPoint[] {
+  const productIds = filters.productIds;
+  const productFilter =
+    productIds === undefined || productIds === null
+      ? null
+      : new Set(productIds);
+
+  const byMonth = new Map<
+    string,
+    { revenue: number; db3: number; batchCount: number }
+  >();
+
+  for (const batch of data.batches) {
+    const sold = batchTimeline(batch).soldDate;
+    if (!inRange(sold, range)) continue;
+    if (productFilter && !productFilter.has(batch.productId)) continue;
+    const month = sold.slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(month)) continue;
+    const slice = sliceBatch(data, batch);
+    const cur = byMonth.get(month) ?? {
+      revenue: 0,
+      db3: 0,
+      batchCount: 0,
+    };
+    cur.revenue += slice.revenue;
+    cur.db3 += slice.db3;
+    cur.batchCount += 1;
+    byMonth.set(month, cur);
+  }
+
+  return [...byMonth.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, v]) => ({
+      month,
+      revenue: v.revenue,
+      db3: v.db3,
+      marginPercent: v.revenue > 0 ? (v.db3 / v.revenue) * 100 : 0,
+      batchCount: v.batchCount,
+    }));
+}

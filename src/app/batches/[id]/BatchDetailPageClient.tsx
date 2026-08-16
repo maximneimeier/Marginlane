@@ -462,6 +462,9 @@ export default function ChargeDetailPage({ id }: { id: string }) {
               ) : null}
               <Card>
                 <h2 className="mb-4 font-medium">{t("batchDetail.dutyTitle")}</h2>
+                <p className="mb-3 text-[12px] text-muted">
+                  {t("batchDetail.dutyInheritHint")}
+                </p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label={t("batchDetail.dutyHs")}>
                     <TextInput

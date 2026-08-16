@@ -427,6 +427,44 @@ export default function ProductDetailPageClient({ id }: { id: string }) {
                     }
                   />
                 </Field>
+                <Field label={t("products.col.hsCode")}>
+                  <TextInput
+                    value={masterDraft.hsCode ?? ""}
+                    onChange={(e) =>
+                      setMasterDraft({
+                        ...masterDraft,
+                        hsCode: e.target.value,
+                      })
+                    }
+                    placeholder="9401.61"
+                  />
+                </Field>
+                <Field label={t("products.col.countryOfOrigin")}>
+                  <TextInput
+                    value={masterDraft.countryOfOrigin ?? ""}
+                    onChange={(e) =>
+                      setMasterDraft({
+                        ...masterDraft,
+                        countryOfOrigin: e.target.value,
+                      })
+                    }
+                    placeholder="CN"
+                  />
+                </Field>
+                <Field label={t("products.col.dutyRate")}>
+                  <TextInput
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={masterDraft.dutyRatePercent || ""}
+                    onChange={(e) =>
+                      setMasterDraft({
+                        ...masterDraft,
+                        dutyRatePercent: Number(e.target.value) || 0,
+                      })
+                    }
+                  />
+                </Field>
                 <Field label={t("productModal.status")}>
                   <Select
                     value={masterDraft.status}
@@ -492,6 +530,18 @@ export default function ProductDetailPageClient({ id }: { id: string }) {
                   value={
                     product.targetMarginPercent != null
                       ? formatPercent(product.targetMarginPercent, locale)
+                      : t("common.emDash")
+                  }
+                />
+                <DetailField
+                  label={t("products.col.hsCode")}
+                  value={product.hsCode || t("common.emDash")}
+                />
+                <DetailField
+                  label={t("products.col.dutyRate")}
+                  value={
+                    product.dutyRatePercent > 0
+                      ? formatPercent(product.dutyRatePercent, locale)
                       : t("common.emDash")
                   }
                 />

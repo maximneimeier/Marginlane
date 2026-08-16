@@ -156,6 +156,9 @@ const PRODUCTS: CatalogProduct[] = [
     status: "active",
     category: "Gartenmöbel",
     targetMarginPercent: null,
+    hsCode: "",
+    countryOfOrigin: "",
+    dutyRatePercent: 0,
     notes:
       "BOM: Sofa + Tisch + 2× Kissen. Richt-EK ca. 189 USD/Set. MOQ 20 Sets. Lieferant: Vinh Long Furniture.",
     documents: docs(
@@ -190,6 +193,9 @@ const PRODUCTS: CatalogProduct[] = [
     status: "active",
     category: "Saisondeko",
     targetMarginPercent: null,
+    hsCode: "",
+    countryOfOrigin: "",
+    dutyRatePercent: 0,
     notes:
       "EK aus BOM (8× Ornament + Band + Karte). MOQ 200 Sets. VPE 1 Set/Geschenkbox.",
     documents: docs(
@@ -224,6 +230,9 @@ const PRODUCTS: CatalogProduct[] = [
     status: "active",
     category: "Fahrradzubehör",
     targetMarginPercent: null,
+    hsCode: "",
+    countryOfOrigin: "",
+    dutyRatePercent: 0,
     notes:
       "EK aus BOM (LED + Klingel + Halter). MOQ 500 Sets. VPE 1 Set/Blister.",
     documents: docs(
@@ -261,6 +270,9 @@ const COMPONENTS: Component[] = [
     moq: 0,
     discountTiers: [],
     priceHistory: [],
+    hsCode: "",
+    countryOfOrigin: "",
+    dutyRatePercent: 0,
     notes: "Wasserdicht IPX4",
   },
   {
@@ -273,6 +285,9 @@ const COMPONENTS: Component[] = [
     moq: 0,
     discountTiers: [],
     priceHistory: [],
+    hsCode: "",
+    countryOfOrigin: "",
+    dutyRatePercent: 0,
     notes: "",
   },
   {
@@ -285,6 +300,9 @@ const COMPONENTS: Component[] = [
     moq: 0,
     discountTiers: [],
     priceHistory: [],
+    hsCode: "",
+    countryOfOrigin: "",
+    dutyRatePercent: 0,
     notes: "Passend zu LED und Klingel",
   },
   {
@@ -297,6 +315,9 @@ const COMPONENTS: Component[] = [
     moq: 0,
     discountTiers: [],
     priceHistory: [],
+    hsCode: "",
+    countryOfOrigin: "",
+    dutyRatePercent: 0,
     notes: "12er-Bündel beim Lieferanten, EK ist Einzelpreis",
   },
   {
@@ -309,6 +330,9 @@ const COMPONENTS: Component[] = [
     moq: 0,
     discountTiers: [],
     priceHistory: [],
+    hsCode: "",
+    countryOfOrigin: "",
+    dutyRatePercent: 0,
     notes: "Preis vorläufig geschätzt, Angebot ausstehend",
   },
   {
@@ -321,6 +345,9 @@ const COMPONENTS: Component[] = [
     moq: 0,
     discountTiers: [],
     priceHistory: [],
+    hsCode: "",
+    countryOfOrigin: "",
+    dutyRatePercent: 0,
     notes: "Zweisprachig DE/EN",
   },
   {
@@ -333,6 +360,9 @@ const COMPONENTS: Component[] = [
     moq: 0,
     discountTiers: [],
     priceHistory: [],
+    hsCode: "",
+    countryOfOrigin: "",
+    dutyRatePercent: 0,
     notes: "Hauptteil des Sets",
   },
   {
@@ -345,6 +375,9 @@ const COMPONENTS: Component[] = [
     moq: 0,
     discountTiers: [],
     priceHistory: [],
+    hsCode: "",
+    countryOfOrigin: "",
+    dutyRatePercent: 0,
     notes: "",
   },
   {
@@ -357,6 +390,9 @@ const COMPONENTS: Component[] = [
     moq: 0,
     discountTiers: [],
     priceHistory: [],
+    hsCode: "",
+    countryOfOrigin: "",
+    dutyRatePercent: 0,
     notes: "2 Stück pro Set",
   },
 ];

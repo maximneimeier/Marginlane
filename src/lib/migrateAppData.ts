@@ -131,6 +131,14 @@ export function migrateAppData(raw: unknown): AppData {
           status: p.status === "inactive" ? "inactive" : "active",
           category: p.category || "",
           targetMarginPercent: p.targetMarginPercent ?? null,
+          hsCode: typeof p.hsCode === "string" ? p.hsCode : "",
+          countryOfOrigin:
+            typeof p.countryOfOrigin === "string" ? p.countryOfOrigin : "",
+          dutyRatePercent:
+            typeof p.dutyRatePercent === "number" &&
+            Number.isFinite(p.dutyRatePercent)
+              ? Math.max(p.dutyRatePercent, 0)
+              : 0,
           notes: p.notes || "",
           documents: normalizeProductDocuments(
             (p as { documents?: unknown }).documents,
@@ -238,6 +246,9 @@ export function migrateAppData(raw: unknown): AppData {
             status: "active",
             category: "",
             targetMarginPercent: null,
+            hsCode: "",
+            countryOfOrigin: "",
+            dutyRatePercent: 0,
             notes: "",
             documents: [],
             createdAt: legacy.createdAt || new Date().toISOString(),
@@ -257,6 +268,9 @@ export function migrateAppData(raw: unknown): AppData {
             ? legacy.discountTiers
             : [],
           priceHistory: [],
+          hsCode: "",
+          countryOfOrigin: "",
+          dutyRatePercent: 0,
           notes: "",
         });
         productComponents.push({
@@ -707,6 +721,13 @@ function normalizeComponentStamm(
     moq: typeof c.moq === "number" && Number.isFinite(c.moq) ? Math.max(c.moq, 0) : 0,
     discountTiers: tiers,
     priceHistory: history,
+    hsCode: typeof c.hsCode === "string" ? c.hsCode : "",
+    countryOfOrigin:
+      typeof c.countryOfOrigin === "string" ? c.countryOfOrigin : "",
+    dutyRatePercent:
+      typeof c.dutyRatePercent === "number" && Number.isFinite(c.dutyRatePercent)
+        ? Math.max(c.dutyRatePercent, 0)
+        : 0,
     notes: typeof c.notes === "string" ? c.notes : "",
   };
 }
@@ -753,6 +774,9 @@ export function emptyComponent(supplierId = ""): Component {
     moq: 0,
     discountTiers: [],
     priceHistory: [],
+    hsCode: "",
+    countryOfOrigin: "",
+    dutyRatePercent: 0,
     notes: "",
   };
 }

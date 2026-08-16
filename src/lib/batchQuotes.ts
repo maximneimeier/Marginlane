@@ -2,11 +2,65 @@ import type {
   Batch,
   BatchDuty,
   BatchQuote,
+  CatalogProduct,
+  Component,
   CostItem,
   PaymentUnit,
 } from "./types";
 import { emptyBatchDuty } from "./types";
 import { createId } from "./format";
+
+export type DutySource = "batch" | "product" | "component" | "none";
+
+function dutyMeaningful(duty: BatchDuty): boolean {
+  return Boolean(
+    duty.hsCode.trim() ||
+      duty.countryOfOrigin.trim() ||
+      duty.ratePercent > 0 ||
+      duty.fixedAmount > 0,
+  );
+}
+
+/**
+ * Duty: Charge-Override > Produkt-Stamm > erste Komponente mit HS/Satz.
+ * Leere Charge-Duty = erben.
+ */
+export function resolveDuty(
+  batch: Batch,
+  product: CatalogProduct | undefined,
+  components: Component[],
+): { duty: BatchDuty; source: DutySource } {
+  const batchDuty = normalizeDuty(batch.duty);
+  if (dutyMeaningful(batchDuty)) {
+    return { duty: batchDuty, source: "batch" };
+  }
+
+  if (product) {
+    const fromProduct: BatchDuty = {
+      hsCode: product.hsCode ?? "",
+      countryOfOrigin: product.countryOfOrigin ?? "",
+      ratePercent: product.dutyRatePercent ?? 0,
+      fixedAmount: 0,
+    };
+    if (dutyMeaningful(fromProduct)) {
+      return { duty: fromProduct, source: "product" };
+    }
+  }
+
+  for (const c of components) {
+    const fromComp: BatchDuty = {
+      hsCode: c.hsCode ?? "",
+      countryOfOrigin: c.countryOfOrigin ?? "",
+      ratePercent: c.dutyRatePercent ?? 0,
+      fixedAmount: 0,
+    };
+    if (dutyMeaningful(fromComp)) {
+      return { duty: fromComp, source: "component" };
+    }
+  }
+
+  return { duty: emptyBatchDuty(), source: "none" };
+}
 
 export function dutyToCostItems(duty: BatchDuty | null | undefined): CostItem[] {
   if (!duty) return [];

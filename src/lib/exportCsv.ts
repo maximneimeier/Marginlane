@@ -76,6 +76,9 @@ export function buildProductsCsv(data: AppData): string {
       "status",
       "category",
       "targetMarginPercent",
+      "hsCode",
+      "countryOfOrigin",
+      "dutyRatePercent",
       "notes",
     ]),
   ];
@@ -91,6 +94,9 @@ export function buildProductsCsv(data: AppData): string {
         p.status,
         p.category,
         p.targetMarginPercent,
+        p.hsCode,
+        p.countryOfOrigin,
+        p.dutyRatePercent,
         p.notes,
       ]),
     );
@@ -115,6 +121,9 @@ export function buildComponentsCsv(data: AppData): string {
       "purchasePricePerUnit",
       "purchasePriceOverride",
       "quantityPerProductUnit",
+      "hsCode",
+      "countryOfOrigin",
+      "dutyRatePercent",
       "notes",
     ]),
   ];
@@ -139,6 +148,9 @@ export function buildComponentsCsv(data: AppData): string {
           c.purchasePricePerUnit,
           "",
           "",
+          c.hsCode,
+          c.countryOfOrigin,
+          c.dutyRatePercent,
           c.notes,
         ]),
       );
@@ -166,6 +178,9 @@ export function buildComponentsCsv(data: AppData): string {
           c.purchasePricePerUnit,
           pc.purchasePriceOverride,
           pc.quantityPerProductUnit,
+          c.hsCode,
+          c.countryOfOrigin,
+          c.dutyRatePercent,
           c.notes,
         ]),
       );

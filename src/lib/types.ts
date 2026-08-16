@@ -152,6 +152,12 @@ export type CatalogProduct = {
   category: string;
   /** Optional Zielmarge in Prozent (z. B. 35 = 35%) */
   targetMarginPercent: number | null;
+  /** HS- / Zolltarifnummer (Stamm) */
+  hsCode: string;
+  /** Ursprungsland für Zoll */
+  countryOfOrigin: string;
+  /** Default-Zollsatz % vom Warenwert */
+  dutyRatePercent: number;
   notes: string;
   /** Bis zu {@link MAX_PRODUCT_DOCUMENTS} Dokument-Referenzen */
   documents: ProductDocument[];
@@ -502,6 +508,10 @@ export type Component = {
   discountTiers: DiscountTier[];
   /** EK-Historie (neueste zuerst empfohlen) */
   priceHistory: ComponentPriceHistoryEntry[];
+  /** HS- / Zolltarifnummer */
+  hsCode: string;
+  countryOfOrigin: string;
+  dutyRatePercent: number;
   /** Freitext, z. B. Verpackungseinheiten beim Lieferanten */
   notes: string;
 };

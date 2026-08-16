@@ -98,6 +98,9 @@ describe("resolveUnitPurchasePrice", () => {
       moq: 0,
       discountTiers: [],
       priceHistory: [],
+      hsCode: "",
+      countryOfOrigin: "",
+      dutyRatePercent: 0,
       notes: "",
     },
   ];

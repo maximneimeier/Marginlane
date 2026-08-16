@@ -22,7 +22,11 @@ import {
 } from "./migrateAppData";
 import { createId } from "./format";
 import { convertToBase, resolveFxContext } from "./fx";
-import { batchWithActiveQuote, dutyToCostItems } from "./batchQuotes";
+import {
+  batchWithActiveQuote,
+  dutyToCostItems,
+  resolveDuty,
+} from "./batchQuotes";
 
 export type TermSource =
   | "batch"
@@ -354,6 +358,8 @@ export function resolveBatchEconomicsInput(
   targetMarginPercent: number | null;
   marginGapPercent: number | null;
   activeQuoteId: string | null;
+  dutySource: "batch" | "product" | "component" | "none";
+  resolvedDuty: import("./types").BatchDuty;
 } {
   const batch = batchWithActiveQuote(batchInput);
   const asOf =
@@ -393,10 +399,12 @@ export function resolveBatchEconomicsInput(
     rates,
   );
 
-  const withDuty = [
-    ...batch.costItems,
-    ...dutyToCostItems(batch.duty),
-  ];
+  const { duty: resolvedDuty, source: dutySource } = resolveDuty(
+    batch,
+    catalogProduct,
+    components,
+  );
+  const withDuty = [...batch.costItems, ...dutyToCostItems(resolvedDuty)];
   const procurementItems = convertProcurementItemsToBase(
     withDuty,
     commercial.currency,
@@ -450,6 +458,8 @@ export function resolveBatchEconomicsInput(
     targetMarginPercent,
     marginGapPercent: null,
     activeQuoteId: batchInput.activeQuoteId ?? null,
+    dutySource,
+    resolvedDuty,
   };
 }
 

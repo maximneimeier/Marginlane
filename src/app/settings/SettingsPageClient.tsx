@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { usePrefs, type AppLanguage } from "@/context/PreferencesContext";
 import { useStore } from "@/context/StoreContext";
 import { useI18n } from "@/hooks/useI18n";
@@ -10,19 +11,58 @@ import {
   buildSuppliersCsv,
   downloadCsv,
 } from "@/lib/exportCsv";
+import {
+  importComponentsCsv,
+  importProductsCsv,
+  importSuppliersCsv,
+} from "@/lib/importMasterData";
 import { NUMBER_FORMAT_STYLES, type NumberFormatStyle } from "@/lib/types";
 import { Button, Card, Field, PageHeader, Select, TextInput } from "@/components/ui";
 
 export default function EinstellungenPage() {
   const { ready, prefs, setPrefs } = usePrefs();
-  const { ready: storeReady, data } = useStore();
+  const { ready: storeReady, data, replaceAppData } = useStore();
   const { t } = useI18n();
+  const [importMsg, setImportMsg] = useState<string | null>(null);
 
   if (!ready || !storeReady) {
     return <p className="text-[13px] text-muted">{t("common.loading")}</p>;
   }
 
   const stamp = new Date().toISOString().slice(0, 10);
+
+  async function handleImport(
+    kind: "suppliers" | "products" | "components",
+    file: File,
+  ) {
+    const text = await file.text();
+    let next = data;
+    let upserted = 0;
+    let errors: string[] = [];
+    if (kind === "suppliers") {
+      const r = importSuppliersCsv(text, next);
+      next = r.data;
+      upserted = r.upserted;
+      errors = r.errors;
+    } else if (kind === "products") {
+      const r = importProductsCsv(text, next);
+      next = r.data;
+      upserted = r.upserted;
+      errors = r.errors;
+    } else {
+      const r = importComponentsCsv(text, next);
+      next = r.data;
+      upserted = r.upserted;
+      errors = r.errors;
+    }
+    if (upserted > 0) replaceAppData(next);
+    setImportMsg(
+      t("settings.import.result", {
+        count: String(upserted),
+        errors: String(errors.length),
+      }),
+    );
+  }
 
   return (
     <div>
@@ -153,6 +193,44 @@ export default function EinstellungenPage() {
               {t("settings.export.batches")}
             </Button>
           </div>
+        </Card>
+
+        <Card>
+          <h2 className="mb-1 text-[15px] font-semibold tracking-tight">
+            {t("settings.import.title")}
+          </h2>
+          <p className="mb-4 text-[13px] text-muted">
+            {t("settings.import.hint")}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                ["suppliers", "settings.import.suppliers"],
+                ["products", "settings.import.products"],
+                ["components", "settings.import.components"],
+              ] as const
+            ).map(([kind, labelKey]) => (
+              <label
+                key={kind}
+                className="inline-flex h-8 cursor-pointer items-center rounded-[8px] border border-line px-3 text-[13px] font-medium text-foreground hover:bg-surface-faint"
+              >
+                {t(labelKey)}
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (file) void handleImport(kind, file);
+                  }}
+                />
+              </label>
+            ))}
+          </div>
+          {importMsg ? (
+            <p className="mt-3 text-[12px] text-muted">{importMsg}</p>
+          ) : null}
         </Card>
 
         <div className="flex justify-end">

@@ -329,6 +329,40 @@ export function ComponentFormModal({
               />
             </Field>
 
+            <Field label={t("products.col.hsCode")}>
+              <TextInput
+                value={draft?.hsCode ?? ""}
+                onChange={(e) =>
+                  draft && setDraft({ ...draft, hsCode: e.target.value })
+                }
+                placeholder="9401.61"
+              />
+            </Field>
+            <Field label={t("products.col.countryOfOrigin")}>
+              <TextInput
+                value={draft?.countryOfOrigin ?? ""}
+                onChange={(e) =>
+                  draft &&
+                  setDraft({ ...draft, countryOfOrigin: e.target.value })
+                }
+              />
+            </Field>
+            <Field label={t("products.col.dutyRate")}>
+              <TextInput
+                type="number"
+                step="0.01"
+                min="0"
+                value={draft?.dutyRatePercent || ""}
+                onChange={(e) =>
+                  draft &&
+                  setDraft({
+                    ...draft,
+                    dutyRatePercent: Number(e.target.value) || 0,
+                  })
+                }
+              />
+            </Field>
+
             <Field
               label={t("componentModal.moq")}
               hint={t("componentModal.moqPlaceholder")}
