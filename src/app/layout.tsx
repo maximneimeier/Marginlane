@@ -9,9 +9,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Marginlane",
+  title: "Atheniks",
   description:
-    "Marginlane — Unit Economics und Landed Cost für Importeure und E-Commerce",
+    "Atheniks — Investa FP&A und Costerra Unit Economics",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeftRight,
   BarChart3,
   Building2,
   ChevronRight,
@@ -21,11 +20,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import {
-  initialsFromName,
-  usePrefs,
-  type AppModule,
-} from "@/context/PreferencesContext";
+import { usePrefs, type AppModule } from "@/context/PreferencesContext";
 import { useI18n } from "@/hooks/useI18n";
 import type { MessageKey } from "@/lib/i18n";
 import { FEATURES } from "@/lib/features";
@@ -193,8 +188,6 @@ export function AppNav() {
   const pathname = usePathname();
   const { prefs } = usePrefs();
   const { t } = useI18n();
-  const settingsActive = pathname.startsWith("/settings");
-  const initials = initialsFromName(prefs.displayName);
   const groups = useMemo(
     () => visibleGroups(prefs.activeModule),
     [prefs.activeModule],
@@ -255,17 +248,11 @@ export function AppNav() {
         : t("moduleChooser.navHint");
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-[220px] shrink-0 flex-col border-r border-line bg-sidebar md:flex">
-      <div className="flex items-center gap-2.5 px-4 py-4">
-        <span className="flex h-7 w-7 items-center justify-center rounded-[7px] bg-foreground text-[11px] font-semibold tracking-tight text-white">
-          ML
-        </span>
-        <div className="min-w-0">
-          <p className="truncate text-[13px] font-semibold tracking-tight text-foreground">
-            Marginlane
-          </p>
-          <p className="truncate text-[11px] text-muted-soft">{moduleLabel}</p>
-        </div>
+    <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-[220px] shrink-0 flex-col border-r border-line bg-sidebar md:flex">
+      <div className="px-4 pb-1 pt-4">
+        <p className="truncate text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
+          {moduleLabel}
+        </p>
       </div>
 
       <nav className="flex flex-1 flex-col gap-3 overflow-y-auto px-2 pb-3 pt-1">
@@ -315,42 +302,6 @@ export function AppNav() {
           );
         })}
       </nav>
-
-      <div className="space-y-1 border-t border-line p-2">
-        <Link
-          href="/"
-          className="flex items-center gap-2.5 rounded-[8px] px-2.5 py-2 text-[12px] text-muted transition-colors hover:bg-white/70 hover:text-foreground"
-        >
-          <ArrowLeftRight
-            size={14}
-            strokeWidth={1.75}
-            className="shrink-0 text-muted-soft"
-            aria-hidden
-          />
-          {t("moduleChooser.switch")}
-        </Link>
-        <Link
-          href="/settings"
-          className={`flex items-center gap-2.5 rounded-[10px] px-2 py-2 transition-colors ${
-            settingsActive
-              ? "bg-white shadow-[var(--shadow-sm)]"
-              : "hover:bg-white/70"
-          }`}
-        >
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[11px] font-semibold tracking-tight text-accent">
-            {initials}
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[13px] font-medium text-foreground">
-              {prefs.displayName}
-            </p>
-            <p className="truncate text-[11px] text-muted-soft">
-              {t("nav.settings")}
-            </p>
-          </div>
-          <SettingsChevron />
-        </Link>
-      </div>
     </aside>
   );
 }
@@ -364,14 +315,10 @@ export function MobileNav() {
     [prefs.activeModule],
   );
 
+  if (flatLinks.length === 0) return null;
+
   return (
     <nav className="flex gap-1 overflow-x-auto border-b border-line px-3 py-2 md:hidden">
-      <Link
-        href="/"
-        className="shrink-0 rounded-[8px] px-3 py-1.5 text-[13px] text-muted"
-      >
-        {t("moduleChooser.switchShort")}
-      </Link>
       {flatLinks.map((link) => {
         const active = isActive(pathname, link.href);
         return (
@@ -388,16 +335,6 @@ export function MobileNav() {
           </Link>
         );
       })}
-      <Link
-        href="/settings"
-        className={`shrink-0 rounded-[8px] px-3 py-1.5 text-[13px] ${
-          pathname.startsWith("/settings")
-            ? "bg-surface-soft font-medium text-foreground"
-            : "text-muted"
-        }`}
-      >
-        {t("nav.settings")}
-      </Link>
     </nav>
   );
 }
@@ -410,17 +347,6 @@ function GroupChevron({ open }: { open: boolean }) {
       className={`shrink-0 text-muted-soft transition-transform ${
         open ? "rotate-90" : ""
       }`}
-      aria-hidden
-    />
-  );
-}
-
-function SettingsChevron() {
-  return (
-    <ChevronRight
-      size={14}
-      strokeWidth={1.75}
-      className="shrink-0 text-muted-soft"
       aria-hidden
     />
   );

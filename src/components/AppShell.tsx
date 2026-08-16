@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { StoreProvider } from "@/context/StoreContext";
 import { PreferencesProvider } from "@/context/PreferencesContext";
+import { AtheniksTopNav } from "@/components/AtheniksTopNav";
 import { AppNav, MobileNav } from "@/components/AppNav";
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -13,38 +14,24 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <PreferencesProvider>
       <StoreProvider>
-        {isChooser ? (
-          <div className="flex min-h-full flex-col">
-            <header className="border-b border-line px-4 py-4 sm:px-8">
-              <div className="mx-auto flex max-w-3xl items-center gap-2.5">
-                <span className="flex h-7 w-7 items-center justify-center rounded-[7px] bg-foreground text-[11px] font-semibold tracking-tight text-white">
-                  ML
-                </span>
-                <p className="text-[13px] font-semibold tracking-tight text-foreground">
-                  Marginlane
-                </p>
-              </div>
-            </header>
-            <main className="mx-auto w-full max-w-[1180px] flex-1 px-4 py-6 sm:px-8 sm:py-7">
+        <div className="flex min-h-full flex-col bg-background">
+          <AtheniksTopNav />
+          {isChooser ? (
+            <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-10 sm:px-8">
               {children}
             </main>
-          </div>
-        ) : (
-          <div className="flex min-h-full">
-            <AppNav />
-            <div className="flex min-w-0 flex-1 flex-col">
-              <div className="border-b border-line px-4 py-3 md:hidden">
-                <p className="text-[13px] font-semibold tracking-tight">
-                  Marginlane
-                </p>
+          ) : (
+            <div className="flex min-h-0 flex-1">
+              <AppNav />
+              <div className="flex min-w-0 flex-1 flex-col">
+                <MobileNav />
+                <main className="mx-auto w-full max-w-[1180px] flex-1 px-4 py-6 sm:px-8 sm:py-7">
+                  {children}
+                </main>
               </div>
-              <MobileNav />
-              <main className="mx-auto w-full max-w-[1180px] flex-1 px-4 py-6 sm:px-8 sm:py-7">
-                {children}
-              </main>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </StoreProvider>
     </PreferencesProvider>
   );
