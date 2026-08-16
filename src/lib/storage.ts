@@ -25,6 +25,7 @@ import {
 import { createId } from "./format";
 import { emptyCommercialOverrides } from "./resolve";
 import { emptySale } from "./migrateAppData";
+import { normalizeDuty, normalizeQuote } from "./batchQuotes";
 
 function normalizeSupplier(raw: Partial<Supplier> & { contact?: string }): Supplier {
   const paymentDays = raw.paymentDays ?? 30;
@@ -501,6 +502,14 @@ function normalizeBatch(
       raw.fxRateOverride > 0
         ? raw.fxRateOverride
         : null,
+    duty: normalizeDuty(raw.duty),
+    quotes: Array.isArray(raw.quotes)
+      ? raw.quotes
+          .map((q) => normalizeQuote(q))
+          .filter((q): q is NonNullable<typeof q> => q != null)
+      : [],
+    activeQuoteId:
+      typeof raw.activeQuoteId === "string" ? raw.activeQuoteId : null,
   };
 }
 

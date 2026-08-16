@@ -43,7 +43,7 @@ import type {
   CogsCategory,
   CogsLineItem,
 } from "./types";
-import { MAX_PRODUCT_DOCUMENTS } from "./types";
+import { MAX_PRODUCT_DOCUMENTS, emptyBatchDuty } from "./types";
 import {
   EMPTY_DATA,
   migrateOverheadCategory,
@@ -340,6 +340,9 @@ export function migrateAppData(raw: unknown): AppData {
             typeof (b as Batch).fxRateOverride === "number"
               ? (b as Batch).fxRateOverride
               : null,
+          duty: emptyBatchDuty(),
+          quotes: [],
+          activeQuoteId: null,
         };
       })
     : [];

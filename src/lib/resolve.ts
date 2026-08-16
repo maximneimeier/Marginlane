@@ -22,6 +22,7 @@ import {
 } from "./migrateAppData";
 import { createId } from "./format";
 import { convertToBase, resolveFxContext } from "./fx";
+import { batchWithActiveQuote, dutyToCostItems } from "./batchQuotes";
 
 export type TermSource =
   | "batch"
@@ -333,7 +334,7 @@ export function resolveBatchSales(
 
 export function resolveBatchEconomicsInput(
   data: AppData,
-  batch: Batch,
+  batchInput: Batch,
 ): {
   quantity: number;
   unitPurchasePrice: number;
@@ -352,8 +353,15 @@ export function resolveBatchEconomicsInput(
   remainingQuantity: number;
   targetMarginPercent: number | null;
   marginGapPercent: number | null;
+  activeQuoteId: string | null;
 } {
-  const { baseCurrency, rates } = resolveFxContext(data.companySettings);
+  const batch = batchWithActiveQuote(batchInput);
+  const asOf =
+    batch.orderDate || batch.createdAt?.slice(0, 10) || null;
+  const { baseCurrency, rates } = resolveFxContext(
+    data.companySettings,
+    asOf,
+  );
   const catalogProduct = data.catalogProducts.find(
     (p) => p.id === batch.productId,
   );
@@ -369,8 +377,8 @@ export function resolveBatchEconomicsInput(
     components.find((c) => c.supplierId)?.supplierId ||
     "";
   const supplier = data.suppliers.find((s) => s.id === primarySupplierId);
-  const salesAggregate = resolveBatchSales(data, batch);
-  const firstSale = primarySale(batch);
+  const salesAggregate = resolveBatchSales(data, batchInput);
+  const firstSale = primarySale(batchInput);
   const dealer = data.dealers.find(
     (d) => d.id === (firstSale?.dealerId ?? ""),
   );
@@ -385,8 +393,12 @@ export function resolveBatchEconomicsInput(
     rates,
   );
 
+  const withDuty = [
+    ...batch.costItems,
+    ...dutyToCostItems(batch.duty),
+  ];
   const procurementItems = convertProcurementItemsToBase(
-    batch.costItems,
+    withDuty,
     commercial.currency,
     baseCurrency,
     rates,
@@ -414,13 +426,13 @@ export function resolveBatchEconomicsInput(
     (batch.applySkonto !== false && skontoPercent > 0);
 
   const remainingQuantity = Math.max(
-    batch.quantity - salesAggregate.soldQuantity,
+    batchInput.quantity - salesAggregate.soldQuantity,
     0,
   );
   const targetMarginPercent = catalogProduct?.targetMarginPercent ?? null;
 
   return {
-    quantity: batch.quantity,
+    quantity: batchInput.quantity,
     unitPurchasePrice: purchase.value,
     procurementItems,
     sellPrice: salesAggregate.effectiveSellPrice,
@@ -437,6 +449,7 @@ export function resolveBatchEconomicsInput(
     remainingQuantity,
     targetMarginPercent,
     marginGapPercent: null,
+    activeQuoteId: batchInput.activeQuoteId ?? null,
   };
 }
 

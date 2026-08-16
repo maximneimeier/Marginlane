@@ -14,7 +14,7 @@ export const FEATURES = {
   overviewCashflow: true,
 
   /** Sales volume planning (/sales-volume) and overview strip. */
-  salesVolumePlanning: false,
+  salesVolumePlanning: true,
 
   /**
    * Dedicated /overhead page under Abwicklung (Gemeinkosten erfassen & umlegen).

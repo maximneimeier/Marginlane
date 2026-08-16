@@ -83,13 +83,19 @@ const NAV_GROUPS: NavGroup[] = [
     labelKey: "nav.group.planung",
     collapsible: false,
     defaultOpen: true,
-    modules: ["invest"],
+    modules: ["invest", "batches"],
     links: [
       {
         href: "/sales-volume",
         key: "nav.salesVolume",
         icon: BarChart3,
         feature: "salesVolumePlanning",
+      },
+      {
+        href: "/compare",
+        key: "nav.compare",
+        icon: Layers,
+        modules: ["batches"],
       },
     ],
   },

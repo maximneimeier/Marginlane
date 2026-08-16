@@ -9,6 +9,8 @@ import { PROCUREMENT_PHASES, SALES_PHASES } from "@/lib/types";
 import { costItemTotal } from "@/lib/calc";
 import { createId, formatEuro, formatMoney, formatPercent } from "@/lib/format";
 import { emptySale } from "@/lib/migrateAppData";
+import { quoteFromBatch } from "@/lib/batchQuotes";
+import { emptyBatchDuty } from "@/lib/types";
 import { useI18n } from "@/hooks/useI18n";
 import { detachDealerFromSale, saleFromDealer } from "@/lib/storage";
 import {
@@ -105,7 +107,12 @@ export default function ChargeDetailPage({ id }: { id: string }) {
   const money = (v: number) => formatMoney(v, econ.baseCurrency, locale);
 
   function startEdit() {
-    setDraft(structuredClone(stored!));
+    setDraft({
+      ...structuredClone(stored!),
+      duty: stored!.duty ?? emptyBatchDuty(),
+      quotes: stored!.quotes ?? [],
+      activeQuoteId: stored!.activeQuoteId ?? null,
+    });
     setEditing(true);
   }
 
@@ -161,17 +168,20 @@ export default function ChargeDetailPage({ id }: { id: string }) {
                 <Button
                   variant="ghost"
                   onClick={() => {
-                    const clone: Batch = {
-                      ...structuredClone(stored!),
-                      id: createId("bat"),
-                      label: `${stored!.label} (Szenario)`,
-                      createdAt: new Date().toISOString(),
-                    };
-                    upsertBatch(clone);
-                    router.push(`/batches/${clone.id}`);
+                    const quote = quoteFromBatch(
+                      stored!,
+                      t("batchDetail.quoteLabel", {
+                        n: String((stored!.quotes?.length ?? 0) + 1),
+                      }),
+                    );
+                    upsertBatch({
+                      ...stored!,
+                      quotes: [...(stored!.quotes ?? []), quote],
+                      activeQuoteId: quote.id,
+                    });
                   }}
                 >
-                  {t("batchDetail.saveScenario")}
+                  {t("batchDetail.addQuote")}
                 </Button>
                 <Button variant="ghost" onClick={startEdit}>
                   {t("common.edit")}
@@ -192,6 +202,30 @@ export default function ChargeDetailPage({ id }: { id: string }) {
           </div>
         }
       />
+
+      {(batch.quotes?.length ?? 0) > 0 || batch.activeQuoteId ? (
+        <Card className="mb-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[13px] font-medium text-foreground">
+              {t("batchDetail.activeQuote")}
+            </span>
+            <Select
+              value={batch.activeQuoteId ?? ""}
+              onChange={(e) => {
+                const activeQuoteId = e.target.value || null;
+                upsertBatch({ ...stored!, activeQuoteId });
+              }}
+            >
+              <option value="">{t("batchDetail.baseScenario")}</option>
+              {(batch.quotes ?? []).map((q) => (
+                <option key={q.id} value={q.id}>
+                  {q.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </Card>
+      ) : null}
 
       <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Card>
@@ -426,6 +460,89 @@ export default function ChargeDetailPage({ id }: { id: string }) {
                   }
                 />
               ) : null}
+              <Card>
+                <h2 className="mb-4 font-medium">{t("batchDetail.dutyTitle")}</h2>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label={t("batchDetail.dutyHs")}>
+                    <TextInput
+                      value={draft.duty?.hsCode ?? ""}
+                      onChange={(e) =>
+                        setDraft((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                duty: {
+                                  ...(prev.duty ?? emptyBatchDuty()),
+                                  hsCode: e.target.value,
+                                },
+                              }
+                            : prev,
+                        )
+                      }
+                    />
+                  </Field>
+                  <Field label={t("batchDetail.dutyOrigin")}>
+                    <TextInput
+                      value={draft.duty?.countryOfOrigin ?? ""}
+                      onChange={(e) =>
+                        setDraft((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                duty: {
+                                  ...(prev.duty ?? emptyBatchDuty()),
+                                  countryOfOrigin: e.target.value,
+                                },
+                              }
+                            : prev,
+                        )
+                      }
+                    />
+                  </Field>
+                  <Field label={t("batchDetail.dutyRate")}>
+                    <TextInput
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={draft.duty?.ratePercent || ""}
+                      onChange={(e) =>
+                        setDraft((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                duty: {
+                                  ...(prev.duty ?? emptyBatchDuty()),
+                                  ratePercent: Number(e.target.value) || 0,
+                                },
+                              }
+                            : prev,
+                        )
+                      }
+                    />
+                  </Field>
+                  <Field label={t("batchDetail.dutyFixed")}>
+                    <TextInput
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={draft.duty?.fixedAmount || ""}
+                      onChange={(e) =>
+                        setDraft((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                duty: {
+                                  ...(prev.duty ?? emptyBatchDuty()),
+                                  fixedAmount: Number(e.target.value) || 0,
+                                },
+                              }
+                            : prev,
+                        )
+                      }
+                    />
+                  </Field>
+                </div>
+              </Card>
               <Card>
                 <CostItemEditor
                   title={t("batchDetail.procurement")}

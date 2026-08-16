@@ -33,6 +33,11 @@ import {
   resolveVatRatePercent,
 } from "@/lib/companySettings";
 import {
+  fxRatesCsvTemplate,
+  parseFxRatesCsv,
+} from "@/lib/fx";
+import { createId } from "@/lib/format";
+import {
   computeGermanTaxBreakdown,
   computeSwissTax,
   computeUsTaxBreakdown,
@@ -979,6 +984,108 @@ function CompanyPageInner() {
                   )}
                 </div>
               </Field>
+            </div>
+            <div className="sm:col-span-2 space-y-3">
+              <Field
+                label={t("company.field.fxHistory")}
+                hint={t("company.field.fxHistoryHint")}
+              >
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      const date = new Date().toISOString().slice(0, 10);
+                      patch({
+                        fxRateHistory: [
+                          {
+                            id: createId("fxh"),
+                            date,
+                            rates: { ...settings.fxRates },
+                            note: "",
+                          },
+                          ...(settings.fxRateHistory ?? []),
+                        ],
+                      });
+                    }}
+                  >
+                    {t("company.field.fxHistorySnapshot")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      const blob = new Blob(
+                        [fxRatesCsvTemplate(settings.baseCurrency)],
+                        { type: "text/csv;charset=utf-8" },
+                      );
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = "fx-rates-template.csv";
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                  >
+                    {t("company.field.fxCsvTemplate")}
+                  </Button>
+                  <label className="inline-flex h-8 cursor-pointer items-center rounded-[8px] border border-line px-3 text-[13px] font-medium text-foreground hover:bg-surface-faint">
+                    {t("company.field.fxCsvImport")}
+                    <input
+                      type="file"
+                      accept=".csv,text/csv"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        e.target.value = "";
+                        if (!file) return;
+                        const text = await file.text();
+                        const imported = parseFxRatesCsv(
+                          text,
+                          settings.baseCurrency,
+                        );
+                        if (!imported.length) return;
+                        const latest = imported[0];
+                        patch({
+                          fxRateHistory: [
+                            ...imported,
+                            ...(settings.fxRateHistory ?? []),
+                          ],
+                          fxRates: latest.rates,
+                        });
+                      }}
+                    />
+                  </label>
+                </div>
+              </Field>
+              {(settings.fxRateHistory ?? []).length > 0 ? (
+                <ul className="max-h-40 space-y-1 overflow-y-auto text-[12px] text-muted">
+                  {(settings.fxRateHistory ?? []).slice(0, 12).map((entry) => (
+                    <li
+                      key={entry.id}
+                      className="flex items-center justify-between gap-2 rounded-[8px] border border-line px-2 py-1.5"
+                    >
+                      <span>
+                        {entry.date}
+                        {entry.note ? ` · ${entry.note}` : ""}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() =>
+                          patch({
+                            fxRateHistory: (settings.fxRateHistory ?? []).filter(
+                              (x) => x.id !== entry.id,
+                            ),
+                          })
+                        }
+                      >
+                        ×
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
             <Field
               label={t("company.field.modelStartMonth")}

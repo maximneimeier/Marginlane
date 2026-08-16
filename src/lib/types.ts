@@ -300,6 +300,14 @@ export type UsTaxJurisdiction = {
  * Workspace-Unternehmensdaten (Finanzmodell-Annahmen).
  * Getrennt von Profil/Sprache in localStorage (`marginlane-prefs-v1`).
  */
+export type FxRateHistoryEntry = {
+  id: string;
+  /** YYYY-MM-DD */
+  date: string;
+  rates: Record<string, number>;
+  note: string;
+};
+
 export type CompanySettings = {
   companyName: string;
   /** Workspace-Basiswährung (z. B. neue Gehälter) */
@@ -403,6 +411,8 @@ export type CompanySettings = {
    * baseCurrency selbst ist immer 1.
    */
   fxRates: Record<string, number>;
+  /** Historische Kurstabellen (neueste zuerst empfohlen) */
+  fxRateHistory: FxRateHistoryEntry[];
 };
 
 export const EMPTY_COMPANY_SETTINGS: CompanySettings = {
@@ -465,6 +475,7 @@ export const EMPTY_COMPANY_SETTINGS: CompanySettings = {
     JPY: 0.0062,
     HKD: 0.118,
   },
+  fxRateHistory: [],
 };
 
 /**
@@ -562,6 +573,35 @@ export type Dealer = {
   createdAt: string;
 };
 
+export type BatchDuty = {
+  /** HS- / Zolltarifnummer */
+  hsCode: string;
+  /** Ursprungsland */
+  countryOfOrigin: string;
+  /** Zollsatz % vom Warenwert */
+  ratePercent: number;
+  /** Pauschaler Zollbetrag (Einkaufswährung) */
+  fixedAmount: number;
+};
+
+/** Alternative Beschaffungs-Quote derselben Charge (What-if) */
+export type BatchQuote = {
+  id: string;
+  label: string;
+  supplierId: string;
+  unitPurchasePrice: number | null;
+  currency: string | null;
+  paymentDays: number | null;
+  paymentUnit: PaymentUnit | null;
+  skontoPercent: number | null;
+  skontoDays: number | null;
+  incoterm: string | null;
+  costItems: CostItem[];
+  applySkonto: boolean | null;
+  fxRateOverride: number | null;
+  duty: BatchDuty;
+};
+
 export type Batch = {
   id: string;
   /** Verweis auf CatalogProduct */
@@ -600,10 +640,25 @@ export type Batch = {
   applySkonto: boolean | null;
   /**
    * Override: Einheiten baseCurrency pro 1 Einheit Einkaufswährung.
-   * `null` = Company-FX-Tabelle.
+   * `null` = Company-FX-Tabelle / Historie.
    */
   fxRateOverride: number | null;
+  /** Zoll / Duty */
+  duty: BatchDuty;
+  /** Alternative Quotes (What-if) — Basisdaten bleiben die „aktive“ Beschaffung */
+  quotes: BatchQuote[];
+  /** Aktive Quote; null = Batch-Stammdaten */
+  activeQuoteId: string | null;
 };
+
+export function emptyBatchDuty(): BatchDuty {
+  return {
+    hsCode: "",
+    countryOfOrigin: "",
+    ratePercent: 0,
+    fixedAmount: 0,
+  };
+}
 
 /** Wiederkehrende Gemeinkosten-Position (Unternehmensoverhead) */
 export type OverheadPeriod = "monatlich" | "quartalsweise" | "jaehrlich";

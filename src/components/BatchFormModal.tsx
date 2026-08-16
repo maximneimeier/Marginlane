@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { AppData, Batch, CommercialOverrides, CostItem } from "@/lib/types";
-import { PROCUREMENT_PHASES, SALES_PHASES } from "@/lib/types";
+import { emptyBatchDuty, PROCUREMENT_PHASES, SALES_PHASES } from "@/lib/types";
 import { calculateUnitEconomics } from "@/lib/calc";
 import { createId, formatEuro } from "@/lib/format";
 import {
@@ -243,6 +243,9 @@ export function BatchFormModal({
       soldDate: now.slice(0, 10),
       applySkonto: null,
       fxRateOverride: null,
+      duty: emptyBatchDuty(),
+      quotes: [],
+      activeQuoteId: null,
     };
     onSave(batch);
     onClose();

@@ -14,7 +14,7 @@ import {
 } from "./types";
 import { EMPTY_COMPANY_SETTINGS, VAT_FILING_CADENCES } from "./types";
 import { createId } from "./format";
-import { normalizeFxRates } from "./fx";
+import { normalizeFxRateHistory, normalizeFxRates } from "./fx";
 import {
   computeIncomeTax,
   computeSwissTax,
@@ -550,6 +550,7 @@ export function normalizeCompanySettings(
       EMPTY_COMPANY_SETTINGS.terminalGrowthPercent,
     ),
     fxRates: normalizeFxRates(raw.fxRates, currency),
+    fxRateHistory: normalizeFxRateHistory(raw.fxRateHistory, currency),
   };
 }
 

@@ -771,6 +771,9 @@ const BATCHES: Batch[] = [
     soldDate: null,
     applySkonto: null,
     fxRateOverride: null,
+    duty: { hsCode: "", countryOfOrigin: "", ratePercent: 0, fixedAmount: 0 },
+    quotes: [],
+    activeQuoteId: null,
     createdAt: NOW,
   },
   {
@@ -814,6 +817,9 @@ const BATCHES: Batch[] = [
     soldDate: null,
     applySkonto: null,
     fxRateOverride: null,
+    duty: { hsCode: "", countryOfOrigin: "", ratePercent: 0, fixedAmount: 0 },
+    quotes: [],
+    activeQuoteId: null,
     createdAt: NOW,
   },
   {
@@ -849,6 +855,9 @@ const BATCHES: Batch[] = [
     soldDate: null,
     applySkonto: null,
     fxRateOverride: null,
+    duty: { hsCode: "", countryOfOrigin: "", ratePercent: 0, fixedAmount: 0 },
+    quotes: [],
+    activeQuoteId: null,
     createdAt: NOW,
   },
 ];
