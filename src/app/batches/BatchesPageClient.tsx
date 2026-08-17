@@ -71,6 +71,15 @@ function ChargenPageInner() {
       {data.batches.length === 0 ? (
         <Card>
           <p className="text-[13px] text-muted">{t("batches.empty")}</p>
+          <Button
+            className="mt-4"
+            onClick={() => {
+              setInitialProductId("");
+              setModalOpen(true);
+            }}
+          >
+            {t("batches.emptyCta")}
+          </Button>
         </Card>
       ) : (
         <div className="overflow-hidden rounded-[12px] border border-line bg-white shadow-[var(--shadow-sm)]">

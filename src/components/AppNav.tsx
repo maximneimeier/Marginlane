@@ -12,7 +12,9 @@ import {
   Layers,
   Package,
   PackageOpen,
+  Plus,
   Receipt,
+  Scale,
   Store,
   TrendingUp,
   Truck,
@@ -31,9 +33,12 @@ type NavLink = {
   icon: LucideIcon;
   feature?: keyof typeof FEATURES;
   modules?: AppModule[];
+  /** Stärkere Darstellung — Hauptarbeitsplatz */
+  primary?: boolean;
 };
 
 type NavGroupId =
+  | "arbeiten"
   | "analyse"
   | "planung"
   | "umsatz"
@@ -49,15 +54,17 @@ type NavGroup = {
   defaultOpen: boolean;
   modules: AppModule[];
   links: NavLink[];
+  /** Primär-CTA unter den Links (nur Costerra Arbeiten) */
+  cta?: { href: string; key: MessageKey };
 };
 
-const NAV_GROUPS: NavGroup[] = [
+const INVEST_NAV_GROUPS: NavGroup[] = [
   {
     id: "analyse",
     labelKey: "nav.group.analyse",
     collapsible: false,
     defaultOpen: true,
-    modules: ["invest", "batches"],
+    modules: ["invest"],
     links: [
       { href: "/overview", key: "nav.overview", icon: LayoutDashboard },
     ],
@@ -67,7 +74,7 @@ const NAV_GROUPS: NavGroup[] = [
     labelKey: "nav.group.firma",
     collapsible: false,
     defaultOpen: true,
-    modules: ["invest", "batches"],
+    modules: ["invest"],
     links: [{ href: "/company", key: "nav.company", icon: Building2 }],
   },
   {
@@ -83,7 +90,7 @@ const NAV_GROUPS: NavGroup[] = [
     labelKey: "nav.group.planung",
     collapsible: false,
     defaultOpen: true,
-    modules: ["invest", "batches"],
+    modules: ["invest"],
     links: [
       {
         href: "/sales-volume",
@@ -92,12 +99,6 @@ const NAV_GROUPS: NavGroup[] = [
         feature: "salesVolumePlanning",
         modules: ["invest"],
       },
-      {
-        href: "/compare",
-        key: "nav.compare",
-        icon: Layers,
-        modules: ["batches"],
-      },
     ],
   },
   {
@@ -105,7 +106,7 @@ const NAV_GROUPS: NavGroup[] = [
     labelKey: "nav.group.gemeinkosten",
     collapsible: true,
     defaultOpen: true,
-    modules: ["invest", "batches"],
+    modules: ["invest"],
     links: [
       {
         href: "/cogs",
@@ -126,6 +127,50 @@ const NAV_GROUPS: NavGroup[] = [
         icon: UserRound,
         feature: "overheadTopLevelNav",
       },
+    ],
+  },
+];
+
+/** Costerra: Chargen = Hauptarbeitsplatz, Rest Setup/Auswertung. */
+const COSTERRA_NAV_GROUPS: NavGroup[] = [
+  {
+    id: "arbeiten",
+    labelKey: "nav.group.arbeiten",
+    collapsible: false,
+    defaultOpen: true,
+    modules: ["batches"],
+    links: [
+      {
+        href: "/batches",
+        key: "nav.batches",
+        icon: Layers,
+        primary: true,
+      },
+      {
+        href: "/compare",
+        key: "nav.compare",
+        icon: Scale,
+      },
+    ],
+    cta: { href: "/batches?new=1", key: "nav.newBatch" },
+  },
+  {
+    id: "analyse",
+    labelKey: "nav.group.auswertung",
+    collapsible: false,
+    defaultOpen: true,
+    modules: ["batches"],
+    links: [
+      { href: "/overview", key: "nav.overview", icon: LayoutDashboard },
+    ],
+  },
+  {
+    id: "gemeinkosten",
+    labelKey: "nav.group.gemeinkosten",
+    collapsible: true,
+    defaultOpen: false,
+    modules: ["batches"],
+    links: [
       {
         href: "/overhead",
         key: "nav.overheadSimple",
@@ -133,13 +178,19 @@ const NAV_GROUPS: NavGroup[] = [
         feature: "overheadTopLevelNav",
         modules: ["batches"],
       },
+      {
+        href: "/overhead/personnel",
+        key: "nav.overheadPersonnel",
+        icon: UserRound,
+        feature: "overheadTopLevelNav",
+      },
     ],
   },
   {
     id: "stammdaten",
     labelKey: "nav.group.stammdaten",
     collapsible: true,
-    defaultOpen: true,
+    defaultOpen: false,
     modules: ["batches"],
     links: [
       { href: "/products", key: "nav.products", icon: Package },
@@ -150,27 +201,31 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    id: "abwicklung",
-    labelKey: "nav.group.abwicklung",
-    collapsible: false,
-    defaultOpen: true,
+    id: "firma",
+    labelKey: "nav.group.firma",
+    collapsible: true,
+    defaultOpen: false,
     modules: ["batches"],
-    links: [{ href: "/batches", key: "nav.batches", icon: Layers }],
+    links: [{ href: "/company", key: "nav.company", icon: Building2 }],
   },
 ];
 
 function NavItemIcon({
   icon: Icon,
   active,
+  primary,
 }: {
   icon: LucideIcon;
   active: boolean;
+  primary?: boolean;
 }) {
   return (
     <Icon
-      size={15}
-      strokeWidth={1.75}
-      className={`shrink-0 ${active ? "text-accent" : "text-muted-soft"}`}
+      size={primary ? 16 : 15}
+      strokeWidth={primary ? 2 : 1.75}
+      className={`shrink-0 ${
+        active ? "text-accent" : primary ? "text-foreground" : "text-muted-soft"
+      }`}
       aria-hidden
     />
   );
@@ -186,7 +241,9 @@ function visibleLinks(links: NavLink[], module: AppModule): NavLink[] {
 
 function visibleGroups(module: AppModule | null): NavGroup[] {
   const active = module ?? "batches";
-  return NAV_GROUPS.filter((g) => g.modules.includes(active))
+  const source = active === "invest" ? INVEST_NAV_GROUPS : COSTERRA_NAV_GROUPS;
+  return source
+    .filter((g) => g.modules.includes(active))
     .map((g) => ({ ...g, links: visibleLinks(g.links, active) }))
     .filter((g) => g.links.length > 0);
 }
@@ -324,21 +381,39 @@ export function AppNav() {
                 <div className="mt-0.5 flex flex-col gap-0.5">
                   {group.links.map((link) => {
                     const active = isActive(pathname, link.href);
+                    const primary = Boolean(link.primary);
                     return (
                       <Link
-                        key={link.href}
+                        key={`${link.href}:${link.key}`}
                         href={link.href}
-                        className={`group flex items-center gap-2.5 rounded-[8px] px-2.5 py-[7px] text-[13px] transition-colors ${
+                        className={`group flex items-center gap-2.5 rounded-[8px] px-2.5 text-[13px] transition-colors ${
+                          primary ? "py-2" : "py-[7px]"
+                        } ${
                           active
                             ? "bg-white font-medium text-foreground shadow-[var(--shadow-sm)]"
-                            : "text-muted hover:bg-white/70 hover:text-foreground"
+                            : primary
+                              ? "font-medium text-foreground hover:bg-white/70"
+                              : "text-muted hover:bg-white/70 hover:text-foreground"
                         }`}
                       >
-                        <NavItemIcon icon={link.icon} active={active} />
+                        <NavItemIcon
+                          icon={link.icon}
+                          active={active}
+                          primary={primary}
+                        />
                         {t(link.key)}
                       </Link>
                     );
                   })}
+                  {group.cta ? (
+                    <Link
+                      href={group.cta.href}
+                      className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-[8px] bg-accent px-2.5 py-2 text-[13px] font-medium text-white transition-opacity hover:opacity-90"
+                    >
+                      <Plus size={14} strokeWidth={2.25} aria-hidden />
+                      {t(group.cta.key)}
+                    </Link>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -353,6 +428,7 @@ export function MobileNav() {
   const pathname = usePathname();
   const { prefs } = usePrefs();
   const { t } = useI18n();
+  const isCosterra = prefs.activeModule === "batches";
   const flatLinks = useMemo(
     () => visibleGroups(prefs.activeModule).flatMap((g) => g.links),
     [prefs.activeModule],
@@ -362,13 +438,24 @@ export function MobileNav() {
 
   return (
     <nav className="flex gap-1 overflow-x-auto border-b border-line px-3 py-2 md:hidden">
+      {isCosterra ? (
+        <Link
+          href="/batches?new=1"
+          className="inline-flex shrink-0 items-center gap-1 rounded-[8px] bg-accent px-3 py-1.5 text-[13px] font-medium text-white"
+        >
+          <Plus size={13} strokeWidth={2.25} aria-hidden />
+          {t("nav.newBatch")}
+        </Link>
+      ) : null}
       {flatLinks.map((link) => {
         const active = isActive(pathname, link.href);
         return (
           <Link
-            key={link.href}
+            key={`${link.href}:${link.key}`}
             href={link.href}
             className={`shrink-0 rounded-[8px] px-3 py-1.5 text-[13px] ${
+              link.primary ? "font-medium" : ""
+            } ${
               active
                 ? "bg-surface-soft font-medium text-foreground"
                 : "text-muted"

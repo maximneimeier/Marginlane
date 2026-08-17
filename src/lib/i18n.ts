@@ -26,6 +26,8 @@ const de = {
 
   "nav.workspace": "Workspace",
   "nav.group.analyse": "Analyse",
+  "nav.group.auswertung": "Auswertung",
+  "nav.group.arbeiten": "Arbeiten",
   "nav.group.planung": "Planung",
   "nav.group.umsatz": "Umsatz",
   "nav.group.firma": "Firma",
@@ -41,6 +43,7 @@ const de = {
   "nav.logistics": "Logistik",
   "nav.company": "Unternehmen",
   "nav.batches": "Chargen",
+  "nav.newBatch": "Neue Charge",
   "nav.settings": "Einstellungen",
   "nav.overview": "Übersicht",
   "nav.overhead": "Gemeinkosten",
@@ -874,9 +877,10 @@ const de = {
 
   "batches.title": "Chargen",
   "batches.description":
-    "Konkrete Einkäufe mit Kostenposten, Landed Cost und Verkaufsseite.",
+    "Dein Hauptarbeitsplatz: Chargen anlegen, Kosten und Margen (DB1–DB3) steuern.",
   "batches.add": "Neue Charge",
-  "batches.empty": "Noch keine Chargen angelegt.",
+  "batches.empty": "Noch keine Chargen. Hier startest du — jede Kalkulation beginnt mit einer Charge.",
+  "batches.emptyCta": "Erste Charge anlegen",
   "batches.col.batch": "Charge",
   "batches.col.product": "Produkt",
   "batches.col.supplier": "Lieferant",
@@ -1860,6 +1864,8 @@ const en: Record<MessageKey, string> = {
 
   "nav.workspace": "Workspace",
   "nav.group.analyse": "Analysis",
+  "nav.group.auswertung": "Results",
+  "nav.group.arbeiten": "Work",
   "nav.group.planung": "Planning",
   "nav.group.umsatz": "Revenue",
   "nav.group.firma": "Company",
@@ -1875,6 +1881,7 @@ const en: Record<MessageKey, string> = {
   "nav.logistics": "Logistics",
   "nav.company": "Company",
   "nav.batches": "Batches",
+  "nav.newBatch": "New batch",
   "nav.settings": "Settings",
   "nav.overview": "Overview",
   "nav.overhead": "Overhead",
@@ -2706,9 +2713,11 @@ const en: Record<MessageKey, string> = {
 
   "batches.title": "Batches",
   "batches.description":
-    "Purchase lots with cost items, landed cost and sales side.",
+    "Your main workspace: create batches and steer costs and margins (CM1–CM3).",
   "batches.add": "New batch",
-  "batches.empty": "No batches yet.",
+  "batches.empty":
+    "No batches yet. Start here — every calculation begins with a batch.",
+  "batches.emptyCta": "Create first batch",
   "batches.col.batch": "Batch",
   "batches.col.product": "Product",
   "batches.col.supplier": "Supplier",
