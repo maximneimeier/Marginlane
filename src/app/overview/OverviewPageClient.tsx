@@ -23,6 +23,7 @@ import { OverheadResultWaterfallChart } from "@/components/OverheadResultWaterfa
 import { SalesPlanOverviewStrip } from "@/components/SalesPlanOverviewStrip";
 import { MarginTrendChart } from "@/components/MarginTrendChart";
 import { ProductFilterDropdown } from "@/components/ProductFilterDropdown";
+import { CosterraGuidePanel } from "@/components/CosterraGuidePanel";
 import { Card, Field, PageHeader, Select, TextInput } from "@/components/ui";
 
 type BreakdownMode = "product" | "supplier" | "dealer";
@@ -173,6 +174,8 @@ export default function OverviewPage() {
           ) : undefined
         }
       />
+
+      {isCosterra ? <CosterraGuidePanel data={data} /> : null}
 
       <Card className="!p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">

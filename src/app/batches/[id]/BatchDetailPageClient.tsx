@@ -32,12 +32,13 @@ import {
   pickCommercialOverrides,
 } from "@/components/CommercialOverridesEditor";
 import { WaterfallChart } from "@/components/WaterfallChart";
+import { CosterraGuidePanel } from "@/components/CosterraGuidePanel";
 import {
   batchOverheadShare,
   buildBatchContributionWaterfall,
   getBatchContribution,
 } from "@/lib/batchContribution";
-import { defaultOverviewRange } from "@/lib/overview";
+import { defaultOverviewRange, isMarketingCost } from "@/lib/overview";
 import {
   Button,
   Card,
@@ -46,7 +47,6 @@ import {
   Select,
   TextInput,
 } from "@/components/ui";
-
 function patchSale(batch: Batch, saleId: string, patch: Partial<Sale>): Batch {
   return {
     ...batch,
@@ -96,6 +96,12 @@ export default function ChargeDetailPage({ id }: { id: string }) {
     (p) => p.id === batch.productId,
   );
   const supplier = data.suppliers.find((s) => s.id === batch.supplierId);
+  const saleDealers = batch.sales
+    .map((s) => data.dealers.find((d) => d.id === s.dealerId))
+    .filter((d): d is NonNullable<typeof d> => Boolean(d));
+  const uniqueDealers = [
+    ...new Map(saleDealers.map((d) => [d.id, d])).values(),
+  ];
   const unit = catalogProduct
     ? pricingUnitLabel(catalogProduct.pricingUnit)
     : pricingUnitLabel("pcs");
@@ -109,6 +115,7 @@ export default function ChargeDetailPage({ id }: { id: string }) {
   );
   const qty = Math.max(batch.quantity, 0);
   const perUnit = (n: number) => (qty > 0 ? n / qty : 0);
+  const quoteCount = batch.quotes?.length ?? 0;
   const { baseCurrency, rates } = resolveFxContext(data.companySettings);
   const displayPurchase = resolveUnitPurchasePrice(
     batch.productId,
@@ -218,29 +225,122 @@ export default function ChargeDetailPage({ id }: { id: string }) {
         }
       />
 
-      {(batch.quotes?.length ?? 0) > 0 || batch.activeQuoteId ? (
-        <Card className="mb-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[13px] font-medium text-foreground">
-              {t("batchDetail.activeQuote")}
-            </span>
-            <Select
-              value={batch.activeQuoteId ?? ""}
-              onChange={(e) => {
-                const activeQuoteId = e.target.value || null;
-                upsertBatch({ ...stored!, activeQuoteId });
-              }}
-            >
-              <option value="">{t("batchDetail.baseScenario")}</option>
-              {(batch.quotes ?? []).map((q) => (
-                <option key={q.id} value={q.id}>
-                  {q.label}
-                </option>
-              ))}
-            </Select>
+      <CosterraGuidePanel data={data} batch={batch} compact />
+
+      <Card className="mb-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-[14px] font-semibold text-foreground">
+              {t("batchDetail.story.title")}
+            </h2>
+            <p className="mt-1 text-[12px] text-muted">
+              {t("batchDetail.story.saleSplit")}
+            </p>
           </div>
-        </Card>
-      ) : null}
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/compare"
+              className="inline-flex h-8 items-center rounded-[8px] border border-line px-3 text-[13px] font-medium text-foreground hover:bg-surface-faint"
+            >
+              {t("batchDetail.story.compare")}
+            </Link>
+            {!editing ? (
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  const quote = quoteFromBatch(
+                    stored!,
+                    t("batchDetail.quoteLabel", {
+                      n: String((stored!.quotes?.length ?? 0) + 1),
+                    }),
+                  );
+                  upsertBatch({
+                    ...stored!,
+                    quotes: [...(stored!.quotes ?? []), quote],
+                    activeQuoteId: quote.id,
+                  });
+                }}
+              >
+                {t("batchDetail.addQuote")}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-[8px] border border-line bg-surface-faint px-3 py-2">
+            <p className="text-[11px] uppercase tracking-wide text-muted-soft">
+              {t("batchDetail.story.supplier")}
+            </p>
+            <p className="mt-1 text-[13px] font-medium text-foreground">
+              {supplier?.name ?? t("batchDetail.story.noSupplier")}
+            </p>
+          </div>
+          <div className="rounded-[8px] border border-line bg-surface-faint px-3 py-2">
+            <p className="text-[11px] uppercase tracking-wide text-muted-soft">
+              {t("batchDetail.story.dealers")}
+            </p>
+            <p className="mt-1 text-[13px] font-medium text-foreground">
+              {uniqueDealers.length > 0
+                ? uniqueDealers.map((d) => d.name).join(", ")
+                : t("batchDetail.story.noDealers")}
+            </p>
+          </div>
+          <div className="rounded-[8px] border border-line bg-surface-faint px-3 py-2">
+            <p className="text-[11px] uppercase tracking-wide text-muted-soft">
+              {t("batchDetail.kpi.marketing")}
+            </p>
+            <p className="mt-1 text-[13px] font-medium tabular-nums text-foreground">
+              {money(perUnit(contribution.marketing))}
+              <span className="ml-1 text-[11px] font-normal text-muted">
+                / {unit}
+              </span>
+            </p>
+          </div>
+          <div className="rounded-[8px] border border-line bg-surface-faint px-3 py-2">
+            <p className="text-[11px] uppercase tracking-wide text-muted-soft">
+              {t("batchDetail.kpi.salesCosts")}
+            </p>
+            <p className="mt-1 text-[13px] font-medium tabular-nums text-foreground">
+              {money(perUnit(contribution.sales))}
+              <span className="ml-1 text-[11px] font-normal text-muted">
+                / {unit}
+              </span>
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
+          <span className="text-[13px] font-medium text-foreground">
+            {t("batchDetail.story.quotes")}
+          </span>
+          {quoteCount > 0 || batch.activeQuoteId ? (
+            <>
+              <Select
+                value={batch.activeQuoteId ?? ""}
+                onChange={(e) => {
+                  const activeQuoteId = e.target.value || null;
+                  upsertBatch({ ...stored!, activeQuoteId });
+                }}
+              >
+                <option value="">{t("batchDetail.baseScenario")}</option>
+                {(batch.quotes ?? []).map((q) => (
+                  <option key={q.id} value={q.id}>
+                    {q.label}
+                  </option>
+                ))}
+              </Select>
+              <span className="text-[12px] text-muted">
+                {t("batchDetail.story.quotesCount", { count: quoteCount })}
+              </span>
+            </>
+          ) : (
+            <span className="text-[12px] text-muted">
+              {t("batchDetail.story.quotesEmpty")}
+            </span>
+          )}
+        </div>
+      </Card>
 
       <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
         <Card>
@@ -335,9 +435,17 @@ export default function ChargeDetailPage({ id }: { id: string }) {
         ) : (
           <Card>
             <p className="text-xs uppercase tracking-wide text-muted">
-              {t("batchDetail.sellPriceShort")}
+              {t("batchDetail.kpi.afterOverhead")}
             </p>
-            <p className="mt-1 text-xl tabular-nums">{money(econ.sellPrice)}</p>
+            <p className="mt-1 text-sm text-muted">
+              {t("batchDetail.kpi.afterOverheadHint")}
+            </p>
+            <Link
+              href="/overhead/personnel"
+              className="mt-2 inline-block text-[13px] font-medium text-accent hover:underline"
+            >
+              {t("batchDetail.kpi.afterOverheadCta")}
+            </Link>
           </Card>
         )}
         <Card>
@@ -688,6 +796,26 @@ export default function ChargeDetailPage({ id }: { id: string }) {
                 <p className="mb-4 text-[12px] text-muted">
                   {t("batchDetail.salesSpecHint")}
                 </p>
+                {(contribution.marketing > 0 || contribution.sales > 0) && (
+                  <div className="mb-4 grid gap-2 sm:grid-cols-2">
+                    <div className="rounded-[8px] border border-line bg-surface-faint px-3 py-2 text-[12px]">
+                      <span className="text-muted">
+                        {t("batchDetail.kpi.marketing")}
+                      </span>
+                      <span className="ml-2 font-medium tabular-nums">
+                        {money(contribution.marketing)}
+                      </span>
+                    </div>
+                    <div className="rounded-[8px] border border-line bg-surface-faint px-3 py-2 text-[12px]">
+                      <span className="text-muted">
+                        {t("batchDetail.kpi.salesCosts")}
+                      </span>
+                      <span className="ml-2 font-medium tabular-nums">
+                        {money(contribution.sales)}
+                      </span>
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-6">
                   {draft.sales.map((sale, index) => {
                     const saleDealer = data.dealers.find(
@@ -889,6 +1017,7 @@ export default function ChargeDetailPage({ id }: { id: string }) {
                               allowedPhases={SALES_PHASES}
                               percentOfRevenue
                               unitLabel={unit}
+                              salesMode
                             />
                           </div>
                         )}
@@ -978,7 +1107,14 @@ export default function ChargeDetailPage({ id }: { id: string }) {
                             key={item.id}
                             className="flex justify-between gap-3 border-b border-line/60 py-2 last:border-0"
                           >
-                            <span>{item.label}</span>
+                            <span>
+                              {item.label}
+                              <span className="ml-2 text-[11px] text-muted">
+                                {isMarketingCost(item)
+                                  ? t("batchDetail.kpi.marketing")
+                                  : t("batchDetail.kpi.salesCosts")}
+                              </span>
+                            </span>
                             <span className="tabular-nums">
                               {formatEuro(
                                 batch.quantity > 0

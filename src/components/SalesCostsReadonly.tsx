@@ -3,6 +3,7 @@
 import type { CostItem } from "@/lib/types";
 import { useI18n } from "@/hooks/useI18n";
 import { formatEuro } from "@/lib/format";
+import { isMarketingCost } from "@/lib/overview";
 
 type Props = {
   items: CostItem[];
@@ -32,6 +33,11 @@ export function SalesCostsReadonly({ items, emptyHint, unitLabel }: Props) {
               <span>
                 <span className="font-medium text-foreground">
                   {item.label || item.type}
+                </span>
+                <span className="ml-2 text-[11px] text-muted-soft">
+                  {isMarketingCost(item)
+                    ? t("batchDetail.kpi.marketing")
+                    : t("batchDetail.kpi.salesCosts")}
                 </span>
                 <span className="ml-2 text-[12px] text-muted-soft">
                   {allocationLabel(item.allocation, true, unitLabel)}

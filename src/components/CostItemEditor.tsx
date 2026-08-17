@@ -15,7 +15,11 @@ type Props = {
   percentOfRevenue?: boolean;
   /** Kurzlabel der Preisenheit (Stk., g, …) für „pro {unit}“ */
   unitLabel?: string;
+  /** Vertrieb: Provision/Marketing zuerst + Schnell-Buttons */
+  salesMode?: boolean;
 };
+
+const SALES_PREFERRED = ["Provision", "Marketing / CAC"] as const;
 
 export function CostItemEditor({
   items,
@@ -24,12 +28,24 @@ export function CostItemEditor({
   title,
   percentOfRevenue = false,
   unitLabel,
+  salesMode = false,
 }: Props) {
   const { t, costTypeLabel, phaseLabel, allocationLabel } = useI18n();
 
-  function addItem() {
+  const typeOptions = salesMode
+    ? [
+        ...SALES_PREFERRED,
+        ...COST_TYPE_PRESETS.filter(
+          (p) => !(SALES_PREFERRED as readonly string[]).includes(p),
+        ),
+      ]
+    : [...COST_TYPE_PRESETS];
+
+  function addItem(presetType?: string) {
     const phase = allowedPhases[0] ?? "einkauf";
-    const type = COST_TYPE_PRESETS[0];
+    const type =
+      presetType ??
+      (salesMode ? SALES_PREFERRED[0] : COST_TYPE_PRESETS[0]);
     onChange([
       ...items,
       {
@@ -37,7 +53,7 @@ export function CostItemEditor({
         type,
         label: costTypeLabel(type),
         amount: 0,
-        allocation: "lump_sum",
+        allocation: salesMode ? "percent_of_goods" : "lump_sum",
         phase,
       },
     ]);
@@ -62,16 +78,40 @@ export function CostItemEditor({
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between gap-3">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-sm font-medium text-foreground">{title}</h3>
-        <Button variant="ghost" onClick={addItem}>
-          {t("costEditor.add")}
-        </Button>
+        <div className="flex flex-wrap gap-1.5">
+          {salesMode ? (
+            <>
+              <Button
+                variant="secondary"
+                className="h-7 px-2 text-[12px]"
+                onClick={() => addItem("Provision")}
+              >
+                + {costTypeLabel("Provision")}
+              </Button>
+              <Button
+                variant="secondary"
+                className="h-7 px-2 text-[12px]"
+                onClick={() => addItem("Marketing / CAC")}
+              >
+                + {costTypeLabel("Marketing / CAC")}
+              </Button>
+            </>
+          ) : null}
+          <Button variant="ghost" onClick={() => addItem()}>
+            {t("costEditor.add")}
+          </Button>
+        </div>
       </div>
+
+      {salesMode ? (
+        <p className="mb-3 text-[12px] text-muted">{t("costEditor.salesHint")}</p>
+      ) : null}
 
       {items.length === 0 ? (
         <p className="rounded-md border border-dashed border-line px-4 py-6 text-center text-sm text-muted">
-          {t("costEditor.empty")}
+          {salesMode ? t("costEditor.emptySales") : t("costEditor.empty")}
         </p>
       ) : (
         <ul className="space-y-3">
@@ -92,12 +132,12 @@ export function CostItemEditor({
                       });
                     }}
                   >
-                    {COST_TYPE_PRESETS.map((preset) => (
+                    {typeOptions.map((preset) => (
                       <option key={preset} value={preset}>
                         {costTypeLabel(preset)}
                       </option>
                     ))}
-                    {!COST_TYPE_PRESETS.includes(
+                    {!typeOptions.includes(
                       item.type as (typeof COST_TYPE_PRESETS)[number],
                     ) ? (
                       <option value={item.type}>

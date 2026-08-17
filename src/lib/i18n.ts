@@ -1573,6 +1573,10 @@ const de = {
   "costEditor.add": "+ Kostenposten",
   "costEditor.empty":
     "Noch keine Kostenposten. z. B. Fracht, Zoll, QC, Montage/Repacking — Typen sind frei erweiterbar.",
+  "costEditor.emptySales":
+    "Noch keine Sale-Kosten. Starte mit Provision oder Marketing / CAC — das steuert DB3.",
+  "costEditor.salesHint":
+    "Marketing vs. Provision getrennt erfassen: Marketing senkt DB3 über CAC, Provision über Händlervergütung.",
   "costEditor.type": "Typ",
   "costEditor.label": "Bezeichnung",
   "costEditor.labelPlaceholder": "Optional anders benennen",
@@ -1580,6 +1584,20 @@ const de = {
   "costEditor.allocation": "Verteilung",
   "costEditor.phase": "Phase",
   "costEditor.remove": "Entfernen",
+
+  "costerraGuide.title": "5-Minuten-Pfad",
+  "costerraGuide.description":
+    "{done}/{total} erledigt — Charge planen, Margen sehen, Gemeinkosten anlegen.",
+  "costerraGuide.next": "Als Nächstes",
+  "costerraGuide.complete": "Demo-Pfad komplett",
+  "costerraGuide.step.master": "Lieferant, Produkt & Händler",
+  "costerraGuide.step.batch": "Charge öffnen",
+  "costerraGuide.step.material": "Material / Einkauf",
+  "costerraGuide.step.logistics": "Logistik hinterlegen",
+  "costerraGuide.step.sales": "Verkauf mit Händler",
+  "costerraGuide.step.margins": "DB1–DB3 prüfen",
+  "costerraGuide.step.personnel": "Gehälter anlegen",
+  "costerraGuide.step.afterOh": "Nach Gemeinkosten sehen",
 
   "salesCosts.title": "Vertriebskosten",
   "salesCosts.emptyHint": "Noch keine Vertriebskosten.",
@@ -1691,6 +1709,21 @@ const de = {
   "batchDetail.kpi.db3": "DB3 / Einheit",
   "batchDetail.kpi.afterOverhead": "Nach Gemeinkosten",
   "batchDetail.kpi.overheadShare": "davon OH {value}",
+  "batchDetail.kpi.marketing": "Marketing",
+  "batchDetail.kpi.salesCosts": "Provision / Vertrieb",
+  "batchDetail.kpi.afterOverheadCta": "Gehälter anlegen →",
+  "batchDetail.kpi.afterOverheadHint":
+    "Noch keine Umlage — Personal im Zeitraum anlegen.",
+  "batchDetail.story.title": "Partner & Vergleich",
+  "batchDetail.story.supplier": "Lieferant",
+  "batchDetail.story.dealers": "Händler",
+  "batchDetail.story.noSupplier": "Kein Lieferant",
+  "batchDetail.story.noDealers": "Noch kein Händler an Verkauf",
+  "batchDetail.story.compare": "Margenvergleich",
+  "batchDetail.story.quotes": "Quotes",
+  "batchDetail.story.quotesEmpty": "Noch keine Quotes — Szenarien für den Lieferantenvergleich.",
+  "batchDetail.story.quotesCount": "{count} Quotes",
+  "batchDetail.story.saleSplit": "Sale-Kosten dieser Charge",
   "batchDetail.contributionWaterfallHint":
     "Umsatz → Material → DB1 → Logistik → DB2 → Marketing/Vertrieb → DB3 (optional Gemeinkosten).",
   "batchDetail.wf.overhead": "− Gemeinkosten",
@@ -1710,9 +1743,10 @@ const de = {
   "batchDetail.inheritedFrom": "geerbt von {source}",
   "batchDetail.fromDealer": "vom Händler",
   "batchDetail.salesSpecHint":
-    "SalesData sitzt auf der Charge. Händler nur optionale Vorlage.",
-  "batchDetail.dealer": "Händler-Vorlage",
-  "batchDetail.dealerHint": "Optional — Vererbung von VK und Vertriebskosten.",
+    "Verkauf + Händler + Sale-Kosten (Marketing vs. Provision) — die Kernstory der Charge.",
+  "batchDetail.dealer": "Händler",
+  "batchDetail.dealerHint":
+    "Kern der Charge: VK und Sale-Kosten (Marketing vs. Provision) vom Händler erben oder überschreiben.",
   "batchDetail.noDealer": "Kein Händler",
   "batchDetail.selectDealer": "Händler wählen…",
   "batchDetail.channel": "Kanal",
@@ -3326,6 +3360,10 @@ const en: Record<MessageKey, string> = {
   "costEditor.add": "+ Cost item",
   "costEditor.empty":
     "No cost items yet. e.g. freight, customs, QC, assembly/repacking — types are freely extensible.",
+  "costEditor.emptySales":
+    "No sale costs yet. Start with commission or marketing / CAC — that drives CM3.",
+  "costEditor.salesHint":
+    "Keep marketing vs. commission separate: CAC vs. dealer payout both hit CM3.",
   "costEditor.type": "Type",
   "costEditor.label": "Label",
   "costEditor.labelPlaceholder": "Optional custom name",
@@ -3333,6 +3371,20 @@ const en: Record<MessageKey, string> = {
   "costEditor.allocation": "Allocation",
   "costEditor.phase": "Phase",
   "costEditor.remove": "Remove",
+
+  "costerraGuide.title": "5-minute path",
+  "costerraGuide.description":
+    "{done}/{total} done — plan a batch, see margins, add overhead.",
+  "costerraGuide.next": "Next",
+  "costerraGuide.complete": "Demo path complete",
+  "costerraGuide.step.master": "Supplier, product & dealer",
+  "costerraGuide.step.batch": "Open a batch",
+  "costerraGuide.step.material": "Material / purchase",
+  "costerraGuide.step.logistics": "Add logistics",
+  "costerraGuide.step.sales": "Sale with dealer",
+  "costerraGuide.step.margins": "Check CM1–CM3",
+  "costerraGuide.step.personnel": "Add salaries",
+  "costerraGuide.step.afterOh": "See after overhead",
 
   "salesCosts.title": "Sales costs",
   "salesCosts.emptyHint": "No sales costs yet.",
@@ -3445,6 +3497,22 @@ const en: Record<MessageKey, string> = {
   "batchDetail.kpi.db3": "CM3 / unit",
   "batchDetail.kpi.afterOverhead": "After overhead",
   "batchDetail.kpi.overheadShare": "OH share {value}",
+  "batchDetail.kpi.marketing": "Marketing",
+  "batchDetail.kpi.salesCosts": "Commission / sales",
+  "batchDetail.kpi.afterOverheadCta": "Add salaries →",
+  "batchDetail.kpi.afterOverheadHint":
+    "No allocation yet — add personnel in the period.",
+  "batchDetail.story.title": "Partners & compare",
+  "batchDetail.story.supplier": "Supplier",
+  "batchDetail.story.dealers": "Dealers",
+  "batchDetail.story.noSupplier": "No supplier",
+  "batchDetail.story.noDealers": "No dealer on a sale yet",
+  "batchDetail.story.compare": "Margin compare",
+  "batchDetail.story.quotes": "Quotes",
+  "batchDetail.story.quotesEmpty":
+    "No quotes yet — scenarios for supplier comparison.",
+  "batchDetail.story.quotesCount": "{count} quotes",
+  "batchDetail.story.saleSplit": "Sale costs on this batch",
   "batchDetail.contributionWaterfallHint":
     "Revenue → material → CM1 → logistics → CM2 → marketing/sales → CM3 (optional overhead).",
   "batchDetail.wf.overhead": "− Overhead",
@@ -3463,9 +3531,10 @@ const en: Record<MessageKey, string> = {
   "batchDetail.inheritedFrom": "inherited from {source}",
   "batchDetail.fromDealer": "from dealer",
   "batchDetail.salesSpecHint":
-    "SalesData lives on the batch. Dealer is an optional template only.",
-  "batchDetail.dealer": "Dealer template",
-  "batchDetail.dealerHint": "Optional — inherit sell price and sales costs.",
+    "Sale + dealer + sale costs (marketing vs. commission) — the core batch story.",
+  "batchDetail.dealer": "Dealer",
+  "batchDetail.dealerHint":
+    "Core of the batch: inherit or override sell price and sale costs (marketing vs. commission).",
   "batchDetail.noDealer": "No dealer",
   "batchDetail.selectDealer": "Select dealer…",
   "batchDetail.channel": "Channel",

@@ -8,6 +8,7 @@ import { calculateResolvedEconomics } from "@/lib/resolve";
 import { formatEuro, formatNumber, formatPercent } from "@/lib/format";
 import { useI18n } from "@/hooks/useI18n";
 import { BatchFormModal } from "@/components/BatchFormModal";
+import { CosterraGuidePanel } from "@/components/CosterraGuidePanel";
 import { Button, Card, PageHeader } from "@/components/ui";
 
 function ChargenPageInner() {
@@ -64,6 +65,8 @@ function ChargenPageInner() {
           </Button>
         }
       />
+
+      <CosterraGuidePanel data={data} compact />
 
       {data.batches.length === 0 ? (
         <Card>
