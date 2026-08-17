@@ -1022,7 +1022,7 @@ export default function ProductDetailPageClient({ id }: { id: string }) {
               {t("productDetail.batchesHint")}
             </p>
           </div>
-          <Link href={`/batches?new=1&product=${product.id}`}>
+          <Link href={`/batches/new?product=${product.id}`}>
             <Button variant="secondary">{t("products.action.batch")}</Button>
           </Link>
         </div>

@@ -152,7 +152,7 @@ const COSTERRA_NAV_GROUPS: NavGroup[] = [
         icon: Scale,
       },
     ],
-    cta: { href: "/batches?new=1", key: "nav.newBatch" },
+    cta: { href: "/batches/new", key: "nav.newBatch" },
   },
   {
     id: "analyse",
@@ -440,7 +440,7 @@ export function MobileNav() {
     <nav className="flex gap-1 overflow-x-auto border-b border-line px-3 py-2 md:hidden">
       {isCosterra ? (
         <Link
-          href="/batches?new=1"
+          href="/batches/new"
           className="inline-flex shrink-0 items-center gap-1 rounded-[8px] bg-accent px-3 py-1.5 text-[13px] font-medium text-white"
         >
           <Plus size={13} strokeWidth={2.25} aria-hidden />

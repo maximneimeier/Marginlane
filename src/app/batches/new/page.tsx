@@ -1,13 +1,18 @@
-import { redirect } from "next/navigation";
+import { Suspense } from "react";
+import NewBatchPageClient from "./NewBatchPageClient";
 
-type Props = {
-  searchParams: Promise<{ product?: string }>;
+type PageProps = {
+  params: Promise<Record<string, never>>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-/** Convenience URL → batches list with create modal */
-export default async function NewBatchRedirect({ searchParams }: Props) {
-  const params = await searchParams;
-  const qs = new URLSearchParams({ new: "1" });
-  if (params.product) qs.set("product", params.product);
-  redirect(`/batches?${qs.toString()}`);
+export default async function NewBatchPage({ params, searchParams }: PageProps) {
+  await Promise.all([params, searchParams]);
+  return (
+    <Suspense
+      fallback={<p className="text-sm text-muted">…</p>}
+    >
+      <NewBatchPageClient />
+    </Suspense>
+  );
 }

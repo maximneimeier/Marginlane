@@ -1,66 +1,29 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useStore } from "@/context/StoreContext";
 import { calculateResolvedEconomics } from "@/lib/resolve";
 import { formatEuro, formatNumber, formatPercent } from "@/lib/format";
 import { useI18n } from "@/hooks/useI18n";
-import { BatchFormModal } from "@/components/BatchFormModal";
 import { CosterraGuidePanel } from "@/components/CosterraGuidePanel";
 import { Button, Card, PageHeader } from "@/components/ui";
 
 function ChargenPageInner() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const { ready, data, upsertBatch, deleteBatch } = useStore();
+  const { ready, data, deleteBatch } = useStore();
   const { t, locale, pricingUnitLabel } = useI18n();
-  const [modalOpen, setModalOpen] = useState(false);
-  const [initialProductId, setInitialProductId] = useState("");
-
-  useEffect(() => {
-    if (!ready) return;
-    const wantsNew = searchParams.get("new") === "1";
-    const product = searchParams.get("product") ?? "";
-    if (!wantsNew && !product) return;
-    setInitialProductId(product);
-    setModalOpen(true);
-    // Prefer history API over router.replace — avoids App Router dispatch
-    // before initialization (Next.js 16 / Turbopack HMR edge case).
-    if (typeof window !== "undefined" && window.location.search) {
-      window.history.replaceState(window.history.state, "", "/batches");
-    }
-  }, [ready, searchParams]);
 
   if (!ready) return <p className="text-sm text-muted">{t("common.loading")}</p>;
 
   return (
     <div>
-      <BatchFormModal
-        open={modalOpen}
-        data={data}
-        initialProductId={initialProductId}
-        onClose={() => {
-          setModalOpen(false);
-          setInitialProductId("");
-        }}
-        onSave={(batch) => {
-          upsertBatch(batch);
-          router.push(`/batches/${batch.id}`);
-        }}
-      />
-
       <PageHeader
         title={t("batches.title")}
         description={t("batches.description")}
         action={
-          <Button
-            onClick={() => {
-              setInitialProductId("");
-              setModalOpen(true);
-            }}
-          >
+          <Button onClick={() => router.push("/batches/new")}>
             {t("batches.add")}
           </Button>
         }
@@ -73,10 +36,7 @@ function ChargenPageInner() {
           <p className="text-[13px] text-muted">{t("batches.empty")}</p>
           <Button
             className="mt-4"
-            onClick={() => {
-              setInitialProductId("");
-              setModalOpen(true);
-            }}
+            onClick={() => router.push("/batches/new")}
           >
             {t("batches.emptyCta")}
           </Button>
@@ -130,28 +90,21 @@ function ChargenPageInner() {
                     {formatEuro(econ.landedCostPerUnit, locale)}
                   </span>
                   <span className="text-right text-[13px]">
-                    <span
-                      className={`font-medium tabular-nums ${
-                        econ.contributionPerUnit >= 0
-                          ? "text-success"
-                          : "text-danger"
-                      }`}
-                    >
-                      {formatEuro(econ.contributionPerUnit, locale)}
-                    </span>
-                    <span className="ml-1 text-[12px] text-muted-soft">
-                      {formatPercent(econ.contributionPercent, locale)}
-                    </span>
+                    {formatPercent(econ.contributionPercent, locale)}
                   </span>
-                  <Button
-                    variant="danger"
-                    className="justify-self-end"
-                    onClick={() => {
-                      if (confirm(t("batches.deleteConfirm"))) deleteBatch(batch.id);
-                    }}
-                  >
-                    ×
-                  </Button>
+                  <div className="flex justify-end">
+                    <Button
+                      variant="ghost"
+                      className="h-7 px-2 text-[12px]"
+                      onClick={() => {
+                        if (confirm(t("batches.deleteConfirm"))) {
+                          deleteBatch(batch.id);
+                        }
+                      }}
+                    >
+                      {t("common.delete")}
+                    </Button>
+                  </div>
                 </li>
               );
             })}
@@ -162,14 +115,11 @@ function ChargenPageInner() {
   );
 }
 
-function ChargenPageFallback() {
-  const { t } = useI18n();
-  return <p className="text-sm text-muted">{t("common.loading")}</p>;
-}
-
 export default function ChargenPage() {
   return (
-    <Suspense fallback={<ChargenPageFallback />}>
+    <Suspense
+      fallback={<p className="text-sm text-muted">…</p>}
+    >
       <ChargenPageInner />
     </Suspense>
   );

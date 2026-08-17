@@ -58,7 +58,7 @@ export function buildCosterraGuide(
   }
 
   const personnel = (data.personnelRoles ?? []).length > 0;
-  const batchHref = focus ? `/batches/${focus.id}` : "/batches?new=1";
+  const batchHref = focus ? `/batches/${focus.id}` : "/batches/new";
   const masterHref =
     data.suppliers.length === 0
       ? "/suppliers"

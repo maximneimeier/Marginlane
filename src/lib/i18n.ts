@@ -889,6 +889,26 @@ const de = {
   "batches.qty": "{count} {unit}",
   "batches.deleteConfirm": "Charge löschen?",
 
+  "batchNew.title": "Neue Charge",
+  "batchNew.description":
+    "Bausteine zusammenklicken: Partner → Material → Logistik → Verkauf — Live-Margen rechts.",
+  "batchNew.save": "Charge speichern",
+  "batchNew.step.partners": "Partner",
+  "batchNew.step.material": "Material",
+  "batchNew.step.logistics": "Logistik",
+  "batchNew.step.sales": "Verkauf",
+  "batchNew.step.result": "Ergebnis",
+  "batchNew.partnersHint":
+    "Produkt und Lieferant antippen — das ist der Start der Charge.",
+  "batchNew.logisticsHint":
+    "Logistik-Vorlage anheften oder Kostenposten manuell ergänzen.",
+  "batchNew.salesHint":
+    "Händler wählen und Sale-Kosten als Marketing vs. Provision setzen.",
+  "batchNew.liveMargins": "Live-Margen",
+  "batchNew.liveMarginsHint": "Aktualisiert sich mit jedem Baustein.",
+  "batchNew.needProduct": "Zuerst ein Produkt wählen.",
+  "batchNew.noProducts": "Noch keine Produkte.",
+
   "overview.title": "Übersicht",
   "overview.description":
     "Unit Economics über alle Chargen — Landed Cost und Nettomarge auf einen Blick.",
@@ -2725,6 +2745,26 @@ const en: Record<MessageKey, string> = {
   "batches.col.margin": "Margin",
   "batches.qty": "{count} {unit}",
   "batches.deleteConfirm": "Delete batch?",
+
+  "batchNew.title": "New batch",
+  "batchNew.description":
+    "Click building blocks together: partners → material → logistics → sales — live margins on the right.",
+  "batchNew.save": "Save batch",
+  "batchNew.step.partners": "Partners",
+  "batchNew.step.material": "Material",
+  "batchNew.step.logistics": "Logistics",
+  "batchNew.step.sales": "Sales",
+  "batchNew.step.result": "Result",
+  "batchNew.partnersHint":
+    "Tap product and supplier — that starts the batch.",
+  "batchNew.logisticsHint":
+    "Attach a logistics template or add cost items manually.",
+  "batchNew.salesHint":
+    "Pick a dealer and set sale costs as marketing vs. commission.",
+  "batchNew.liveMargins": "Live margins",
+  "batchNew.liveMarginsHint": "Updates with every building block.",
+  "batchNew.needProduct": "Choose a product first.",
+  "batchNew.noProducts": "No products yet.",
 
   "overview.title": "Overview",
   "overview.description":
