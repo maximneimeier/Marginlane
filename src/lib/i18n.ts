@@ -904,6 +904,26 @@ const de = {
     "Konsolidierte KPIs und Grafiken zu Umsatz, Deckungsbeitrag, Gemeinkosten und Betriebsergebnis im gewählten Zeitraum.",
   "overviewPage.descriptionMvp":
     "Konsolidierte Übersicht folgt, sobald die Aggregation freigeschaltet ist.",
+  "overviewPage.titleCosterra": "Chargen & Margen",
+  "overviewPage.descriptionCosterra":
+    "Unit Economics über Chargen: DB1–DB3, Lieferanten und Händler im gewählten Zeitraum.",
+  "overviewPage.link.batches": "Chargen",
+  "overviewPage.link.compare": "Lieferantenvergleich",
+  "overviewPage.link.overhead": "Gehälter & Gemeinkosten",
+  "overviewPage.costerraResultHint":
+    "DB3 abzüglich Gemeinkosten ({overhead}) im Zeitraum.",
+  "overviewPage.waterfallTitleCosterra": "Margen-Wasserfall (DB1–DB3)",
+  "overviewPage.waterfallHintCosterra":
+    "Vom Umsatz über Material und Logistik bis DB3 — getrennt nach Marketing und Vertrieb.",
+  "overviewPage.breakdownTitleCosterra": "Marge nach Dimension",
+  "overviewPage.breakdownHintCosterra":
+    "DB3 nach Produkt, Lieferant oder Händler — Kern für Costerra-Entscheidungen.",
+  "overviewPage.byDealer": "Händler",
+  "overviewPage.col.dealer": "Händler",
+  "overviewPage.kpi.material": "Material",
+  "overviewPage.kpi.logistics": "Logistik",
+  "overviewPage.kpi.marketing": "Marketing",
+  "overviewPage.kpi.salesCosts": "Vertrieb",
   "overviewPage.rangeForOverhead": "Zeitraum gilt für Gemeinkosten",
   "overviewPage.from": "Von",
   "overviewPage.to": "Bis",
@@ -2640,6 +2660,26 @@ const en: Record<MessageKey, string> = {
     "Consolidated KPIs and charts for revenue, contribution, overhead and operating result in the selected period.",
   "overviewPage.descriptionMvp":
     "Consolidated overview appears once aggregation is enabled.",
+  "overviewPage.titleCosterra": "Batches & margins",
+  "overviewPage.descriptionCosterra":
+    "Unit economics across batches: CM1–CM3, suppliers and dealers in the selected period.",
+  "overviewPage.link.batches": "Batches",
+  "overviewPage.link.compare": "Supplier compare",
+  "overviewPage.link.overhead": "Salaries & overhead",
+  "overviewPage.costerraResultHint":
+    "CM3 minus overhead ({overhead}) in the period.",
+  "overviewPage.waterfallTitleCosterra": "Margin waterfall (CM1–CM3)",
+  "overviewPage.waterfallHintCosterra":
+    "From revenue through material and logistics to CM3 — marketing and sales split.",
+  "overviewPage.breakdownTitleCosterra": "Margin by dimension",
+  "overviewPage.breakdownHintCosterra":
+    "CM3 by product, supplier or dealer — the core Costerra decision view.",
+  "overviewPage.byDealer": "Dealers",
+  "overviewPage.col.dealer": "Dealer",
+  "overviewPage.kpi.material": "Material",
+  "overviewPage.kpi.logistics": "Logistics",
+  "overviewPage.kpi.marketing": "Marketing",
+  "overviewPage.kpi.salesCosts": "Sales",
   "overviewPage.rangeForOverhead": "Date range applies to overhead",
   "overviewPage.from": "From",
   "overviewPage.to": "To",

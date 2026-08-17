@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useStore } from "@/context/StoreContext";
+import { usePrefs } from "@/context/PreferencesContext";
 import {
   buildOverview,
   buildMarginTrend,
@@ -24,11 +25,13 @@ import { MarginTrendChart } from "@/components/MarginTrendChart";
 import { ProductFilterDropdown } from "@/components/ProductFilterDropdown";
 import { Card, Field, PageHeader, Select, TextInput } from "@/components/ui";
 
-type BreakdownMode = "product" | "supplier";
+type BreakdownMode = "product" | "supplier" | "dealer";
 
 export default function OverviewPage() {
   const { ready, data } = useStore();
+  const { prefs } = usePrefs();
   const { t, locale } = useI18n();
+  const isCosterra = prefs.activeModule === "batches";
 
   const [preset, setPreset] = useState<DatePreset>("this_year");
   const [range, setRange] = useState<DateRange>(() => defaultOverviewRange());
@@ -43,11 +46,14 @@ export default function OverviewPage() {
   const [cashflowProducts, setCashflowProducts] = useState<string[] | null>(
     null,
   );
-  const [breakdownMode, setBreakdownMode] = useState<BreakdownMode>("product");
+  const [breakdownMode, setBreakdownMode] = useState<BreakdownMode>(
+    isCosterra ? "supplier" : "product",
+  );
 
   const showConsolidation = FEATURES.overviewConsolidation;
-  const showCashflow = FEATURES.overviewCashflow;
-  const showSalesPlan = FEATURES.salesVolumePlanning;
+  const showCashflow = FEATURES.overviewCashflow && !isCosterra;
+  const showSalesPlan = FEATURES.salesVolumePlanning && !isCosterra;
+  const showInvestaOverheadCharts = showConsolidation && !isCosterra;
 
   const products = useMemo(
     () =>
@@ -124,7 +130,9 @@ export default function OverviewPage() {
       ? []
       : breakdownMode === "product"
         ? breakdownReport.byProduct
-        : breakdownReport.bySupplier;
+        : breakdownMode === "supplier"
+          ? breakdownReport.bySupplier
+          : breakdownReport.byDealer;
   const maxAbsDb3 = Math.max(...breakdown.map((r) => Math.abs(r.db3)), 1);
   const maxCash = Math.max(
     ...(cashflowReport?.cashFlow.flatMap((p) => [p.inflow, p.outflow]) ?? [0]),
@@ -134,11 +142,35 @@ export default function OverviewPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={t("overviewPage.title")}
+        title={
+          isCosterra
+            ? t("overviewPage.titleCosterra")
+            : t("overviewPage.title")
+        }
         description={
-          showConsolidation
-            ? t("overviewPage.description")
-            : t("overviewPage.descriptionMvp")
+          isCosterra
+            ? t("overviewPage.descriptionCosterra")
+            : showConsolidation
+              ? t("overviewPage.description")
+              : t("overviewPage.descriptionMvp")
+        }
+        action={
+          isCosterra ? (
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href="/batches"
+                className="inline-flex h-8 items-center rounded-[8px] border border-line px-3 text-[13px] font-medium text-foreground hover:bg-surface-faint"
+              >
+                {t("overviewPage.link.batches")}
+              </Link>
+              <Link
+                href="/compare"
+                className="inline-flex h-8 items-center rounded-[8px] border border-line px-3 text-[13px] font-medium text-foreground hover:bg-surface-faint"
+              >
+                {t("overviewPage.link.compare")}
+              </Link>
+            </div>
+          ) : undefined
         }
       />
 
@@ -226,7 +258,28 @@ export default function OverviewPage() {
             />
           </div>
 
-          {overheadReport ? (
+          {isCosterra ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Kpi
+                label={t("overviewPage.kpi.material")}
+                value={formatEuro(kpiReport.kpis.material, locale)}
+              />
+              <Kpi
+                label={t("overviewPage.kpi.logistics")}
+                value={formatEuro(kpiReport.kpis.logistics, locale)}
+              />
+              <Kpi
+                label={t("overviewPage.kpi.marketing")}
+                value={formatEuro(kpiReport.kpis.marketing, locale)}
+              />
+              <Kpi
+                label={t("overviewPage.kpi.salesCosts")}
+                value={formatEuro(kpiReport.kpis.sales, locale)}
+              />
+            </div>
+          ) : null}
+
+          {overheadReport && !isCosterra ? (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <Kpi
                 label={t("overviewPage.kpi.overhead")}
@@ -247,6 +300,41 @@ export default function OverviewPage() {
               />
             </div>
           ) : null}
+
+          {overheadReport && isCosterra ? (
+            <Card className="!p-4">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
+                    {t("overviewPage.kpi.result")}
+                  </p>
+                  <p
+                    className={`mt-1 text-[20px] font-semibold tabular-nums ${
+                      overheadReport.operatingResult >= 0
+                        ? "text-success"
+                        : "text-danger"
+                    }`}
+                  >
+                    {formatEuro(overheadReport.operatingResult, locale)}
+                  </p>
+                  <p className="mt-1 text-[12px] text-muted">
+                    {t("overviewPage.costerraResultHint", {
+                      overhead: formatEuro(
+                        overheadReport.totalOverhead,
+                        locale,
+                      ),
+                    })}
+                  </p>
+                </div>
+                <Link
+                  href="/overhead/personnel"
+                  className="text-[13px] font-medium text-accent hover:underline"
+                >
+                  {t("overviewPage.link.overhead")}
+                </Link>
+              </div>
+            </Card>
+          ) : null}
         </>
       ) : null}
 
@@ -258,7 +346,7 @@ export default function OverviewPage() {
         </div>
       ) : null}
 
-      {showConsolidation ? (
+      {showInvestaOverheadCharts ? (
         <div className="space-y-2">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <p className="text-[12px] text-muted">
@@ -278,8 +366,16 @@ export default function OverviewPage() {
       {showConsolidation && waterfallReport ? (
         <Card>
           <ChartHeader
-            title={t("overviewPage.waterfallTitle")}
-            hint={t("overviewPage.waterfallHint")}
+            title={
+              isCosterra
+                ? t("overviewPage.waterfallTitleCosterra")
+                : t("overviewPage.waterfallTitle")
+            }
+            hint={
+              isCosterra
+                ? t("overviewPage.waterfallHintCosterra")
+                : t("overviewPage.waterfallHint")
+            }
             products={products}
             productFilter={waterfallProducts}
             onProductFilterChange={setWaterfallProducts}
@@ -325,10 +421,14 @@ export default function OverviewPage() {
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <h2 className="text-[14px] font-medium text-foreground">
-                {t("overviewPage.breakdownTitle")}
+                {isCosterra
+                  ? t("overviewPage.breakdownTitleCosterra")
+                  : t("overviewPage.breakdownTitle")}
               </h2>
               <p className="mt-1 text-[12px] text-muted">
-                {t("overviewPage.breakdownHint")}
+                {isCosterra
+                  ? t("overviewPage.breakdownHintCosterra")
+                  : t("overviewPage.breakdownHint")}
               </p>
             </div>
             <div className="flex flex-col gap-2 sm:items-end">
@@ -341,7 +441,7 @@ export default function OverviewPage() {
                   />
                 </Field>
               </div>
-              <div className="flex gap-1 rounded-[8px] border border-line bg-surface-faint p-0.5">
+              <div className="flex flex-wrap gap-1 rounded-[8px] border border-line bg-surface-faint p-0.5">
                 <ModeButton
                   active={breakdownMode === "product"}
                   onClick={() => setBreakdownMode("product")}
@@ -354,6 +454,14 @@ export default function OverviewPage() {
                 >
                   {t("overviewPage.bySupplier")}
                 </ModeButton>
+                {isCosterra ? (
+                  <ModeButton
+                    active={breakdownMode === "dealer"}
+                    onClick={() => setBreakdownMode("dealer")}
+                  >
+                    {t("overviewPage.byDealer")}
+                  </ModeButton>
+                ) : null}
               </div>
             </div>
           </div>
@@ -578,16 +686,23 @@ function BreakdownTable({
   locale: string;
 }) {
   const { t } = useI18n();
-  const href = mode === "product" ? "/components" : "/suppliers";
+  const href =
+    mode === "product"
+      ? "/products"
+      : mode === "supplier"
+        ? "/suppliers"
+        : "/dealers";
+  const nameCol =
+    mode === "product"
+      ? t("overviewPage.col.product")
+      : mode === "supplier"
+        ? t("overviewPage.col.supplier")
+        : t("overviewPage.col.dealer");
 
   return (
     <div className="overflow-hidden rounded-[10px] border border-line">
       <div className="grid grid-cols-[1.4fr_0.9fr_0.9fr_0.7fr_0.6fr] gap-2 border-b border-line bg-surface-faint px-3 py-2 text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
-        <span>
-          {mode === "product"
-            ? t("overviewPage.col.product")
-            : t("overviewPage.col.supplier")}
-        </span>
+        <span>{nameCol}</span>
         <span className="text-right">{t("overviewPage.col.revenue")}</span>
         <span className="text-right">{t("overviewPage.col.db3")}</span>
         <span className="text-right">{t("overviewPage.col.margin")}</span>

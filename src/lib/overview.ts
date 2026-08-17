@@ -292,6 +292,7 @@ export function buildOverview(
   waterfall: OverviewWaterfallStep[];
   byProduct: BreakdownRow[];
   bySupplier: BreakdownRow[];
+  byDealer: BreakdownRow[];
   cashFlow: CashFlowPoint[];
 } {
   const productIds = filters.productIds;
@@ -300,10 +301,11 @@ export function buildOverview(
       ? null
       : new Set(productIds);
 
-  const slices = data.batches
+  const rangedBatches = data.batches
     .filter((b) => inRange(batchTimeline(b).soldDate, range))
-    .filter((b) => (productFilter ? productFilter.has(b.productId) : true))
-    .map((b) => sliceBatch(data, b));
+    .filter((b) => (productFilter ? productFilter.has(b.productId) : true));
+
+  const slices = rangedBatches.map((b) => sliceBatch(data, b));
 
   const sum = (pick: (s: BatchSlice) => number) =>
     slices.reduce((acc, s) => acc + pick(s), 0);
@@ -374,6 +376,42 @@ export function buildOverview(
       .sort((a, b) => b.db3 - a.db3);
   }
 
+  const byDealerMap = new Map<string, BreakdownRow>();
+  for (let i = 0; i < rangedBatches.length; i++) {
+    const batch = rangedBatches[i];
+    const slice = slices[i];
+    const resolved = calculateResolvedEconomics(data, batch);
+    const batchRevenue = slice.revenue;
+    for (const row of resolved.salesAggregate.rows) {
+      const dealerId = row.sale.dealerId || "_none";
+      const dealerName =
+        data.dealers.find((d) => d.id === row.sale.dealerId)?.name ??
+        (dealerId === "_none" ? "—" : dealerId);
+      const share = batchRevenue > 0 ? row.revenue / batchRevenue : 0;
+      const existing = byDealerMap.get(dealerId);
+      if (!existing) {
+        byDealerMap.set(dealerId, {
+          id: dealerId,
+          name: dealerName,
+          revenue: row.revenue,
+          db3: slice.db3 * share,
+          marginPercent: 0,
+          batchCount: 1,
+        });
+      } else {
+        existing.revenue += row.revenue;
+        existing.db3 += slice.db3 * share;
+        existing.batchCount += 1;
+      }
+    }
+  }
+  const byDealer = [...byDealerMap.values()]
+    .map((row) => ({
+      ...row,
+      marginPercent: row.revenue > 0 ? (row.db3 / row.revenue) * 100 : 0,
+    }))
+    .sort((a, b) => b.db3 - a.db3);
+
   const cashMap = new Map<string, { inflow: number; outflow: number }>();
   const bump = (month: string, field: "inflow" | "outflow", amount: number) => {
     const cur = cashMap.get(month) ?? { inflow: 0, outflow: 0 };
@@ -383,12 +421,7 @@ export function buildOverview(
 
   for (const s of slices) {
     bump(monthKey(s.soldAt), "inflow", s.revenue);
-    // Zahlungsplan: Warenwert + kategorisierte Beschaffung (Material-Extra + Logistics)
-    bump(
-      monthKey(s.payableAt),
-      "outflow",
-      s.material + s.logistics,
-    );
+    bump(monthKey(s.payableAt), "outflow", s.material + s.logistics);
   }
 
   const cashFlow: CashFlowPoint[] = [...cashMap.entries()]
@@ -405,6 +438,7 @@ export function buildOverview(
     waterfall,
     byProduct: aggregate("productId", "productName"),
     bySupplier: aggregate("supplierId", "supplierName"),
+    byDealer,
     cashFlow,
   };
 }
