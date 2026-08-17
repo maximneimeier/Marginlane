@@ -17,6 +17,7 @@ import {
   importSuppliersCsv,
 } from "@/lib/importMasterData";
 import { NUMBER_FORMAT_STYLES, type NumberFormatStyle } from "@/lib/types";
+import { MarginPackageExportButtons } from "@/components/MarginPackageExportButtons";
 import { Button, Card, Field, PageHeader, Select, TextInput } from "@/components/ui";
 
 export default function EinstellungenPage() {
@@ -147,6 +148,15 @@ export default function EinstellungenPage() {
           <p className="mb-4 text-[13px] text-muted">
             {t("settings.export.hint")}
           </p>
+          <div className="mb-4 rounded-[8px] border border-line bg-surface-faint p-3">
+            <p className="mb-2 text-[13px] font-medium text-foreground">
+              {t("settings.export.marginPackage")}
+            </p>
+            <p className="mb-3 text-[12px] text-muted">
+              {t("settings.export.marginPackageHint")}
+            </p>
+            <MarginPackageExportButtons data={data} />
+          </div>
           <div className="flex flex-wrap gap-2">
             <Button
               variant="secondary"

@@ -33,6 +33,7 @@ import {
 } from "@/components/CommercialOverridesEditor";
 import { WaterfallChart } from "@/components/WaterfallChart";
 import { CosterraGuidePanel } from "@/components/CosterraGuidePanel";
+import { MarginPackageExportButtons } from "@/components/MarginPackageExportButtons";
 import {
   batchOverheadShare,
   buildBatchContributionWaterfall,
@@ -187,6 +188,11 @@ export default function ChargeDetailPage({ id }: { id: string }) {
               </>
             ) : (
               <>
+                <MarginPackageExportButtons
+                  data={data}
+                  batch={batch}
+                  variant="ghost"
+                />
                 <Button
                   variant="ghost"
                   onClick={() => {
