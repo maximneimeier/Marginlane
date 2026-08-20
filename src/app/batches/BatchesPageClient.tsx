@@ -10,7 +10,7 @@ import { useI18n } from "@/hooks/useI18n";
 import {
   countBatchesByPipelineStatus,
   filterBatchesByPipeline,
-  getBatchPipelineStatus,
+  getBatchPipelineStatusForData,
   markBatchArrived,
   type BatchPipelineFilter,
   type BatchPipelineStatus,
@@ -23,12 +23,13 @@ const FILTERS: BatchPipelineFilter[] = [
   "ordered",
   "in_transit",
   "arrived",
+  "sold",
 ];
 
 function statusBadgeTone(
   status: BatchPipelineStatus,
 ): "neutral" | "accent" | "success" {
-  if (status === "arrived") return "success";
+  if (status === "arrived" || status === "sold") return "success";
   if (status === "in_transit") return "accent";
   return "neutral";
 }
@@ -40,13 +41,13 @@ function ChargenPageInner() {
   const [filter, setFilter] = useState<BatchPipelineFilter>("all");
 
   const counts = useMemo(
-    () => countBatchesByPipelineStatus(data.batches),
-    [data.batches],
+    () => countBatchesByPipelineStatus(data.batches, data),
+    [data],
   );
 
   const visible = useMemo(
-    () => filterBatchesByPipeline(data.batches, filter),
-    [data.batches, filter],
+    () => filterBatchesByPipeline(data.batches, filter, data),
+    [data, filter],
   );
 
   if (!ready) return <p className="text-sm text-muted">{t("common.loading")}</p>;
@@ -126,7 +127,7 @@ function ChargenPageInner() {
                     (s) => s.id === batch.supplierId,
                   );
                   const econ = calculateResolvedEconomics(data, batch);
-                  const status = getBatchPipelineStatus(batch);
+                  const status = getBatchPipelineStatusForData(data, batch);
 
                   return (
                     <li
@@ -167,7 +168,7 @@ function ChargenPageInner() {
                         {formatPercent(econ.contributionPercent, locale)}
                       </span>
                       <div className="flex flex-wrap justify-end gap-1">
-                        {status !== "arrived" ? (
+                        {status === "ordered" || status === "in_transit" ? (
                           <Button
                             variant="ghost"
                             className="h-7 px-2 text-[12px]"
@@ -177,6 +178,14 @@ function ChargenPageInner() {
                           >
                             {t("batches.pipeline.markArrived")}
                           </Button>
+                        ) : null}
+                        {status === "arrived" ? (
+                          <Link
+                            href={`/batches/${batch.id}?sell=1`}
+                            className="inline-flex h-7 items-center rounded-[8px] px-2 text-[12px] font-medium text-accent hover:underline"
+                          >
+                            {t("batches.pipeline.recordSale")}
+                          </Link>
                         ) : null}
                         <Button
                           variant="ghost"

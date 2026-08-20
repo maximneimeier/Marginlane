@@ -34,13 +34,16 @@ import {
 import { WaterfallChart } from "@/components/WaterfallChart";
 import { CosterraGuidePanel } from "@/components/CosterraGuidePanel";
 import { MarginPackageExportButtons } from "@/components/MarginPackageExportButtons";
+import { BatchQuickSellCard } from "@/components/BatchQuickSellCard";
 import {
   batchOverheadShare,
   buildBatchContributionWaterfall,
   getBatchContribution,
 } from "@/lib/batchContribution";
 import { defaultOverviewRange, isMarketingCost } from "@/lib/overview";
+import { getBatchPipelineStatusForData } from "@/lib/batchPipeline";
 import {
+  Badge,
   Button,
   Card,
   Field,
@@ -70,7 +73,13 @@ function removeSale(batch: Batch, saleId: string): Batch {
   };
 }
 
-export default function ChargeDetailPage({ id }: { id: string }) {
+export default function ChargeDetailPage({
+  id,
+  highlightSell = false,
+}: {
+  id: string;
+  highlightSell?: boolean;
+}) {
   const router = useRouter();
   const { ready, data, upsertBatch, deleteBatch } = useStore();
   const { t, allocationLabel, locale, pricingUnitLabel } = useI18n();
@@ -108,6 +117,7 @@ export default function ChargeDetailPage({ id }: { id: string }) {
     : pricingUnitLabel("pcs");
   const econ = calculateResolvedEconomics(data, batch);
   const contribution = getBatchContribution(data, batch);
+  const pipelineStatus = getBatchPipelineStatusForData(data, batch);
   const ohShare = batchOverheadShare(data, batch, defaultOverviewRange());
   const contributionWaterfall = buildBatchContributionWaterfall(
     contribution,
@@ -172,7 +182,18 @@ export default function ChargeDetailPage({ id }: { id: string }) {
         title={batch.label}
         description={`${catalogProduct?.name ?? t("components.col.product")} · ${supplier?.name ?? t("batchModal.supplier")} · ${t("batches.qty", { count: batch.quantity.toLocaleString(locale), unit })}`}
         action={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge
+              tone={
+                pipelineStatus === "sold" || pipelineStatus === "arrived"
+                  ? "success"
+                  : pipelineStatus === "in_transit"
+                    ? "accent"
+                    : "neutral"
+              }
+            >
+              {t(`batches.pipeline.${pipelineStatus}`)}
+            </Badge>
             {editing ? (
               <>
                 <Button onClick={save}>{t("common.save")}</Button>
@@ -232,6 +253,28 @@ export default function ChargeDetailPage({ id }: { id: string }) {
       />
 
       <CosterraGuidePanel data={data} batch={batch} compact />
+
+      {!editing &&
+      (pipelineStatus === "arrived" ||
+        pipelineStatus === "sold" ||
+        econ.salesAggregate.soldQuantity > 0) ? (
+        <div className="mb-4">
+          <BatchQuickSellCard batch={stored!} highlight={highlightSell} />
+        </div>
+      ) : null}
+      {!editing &&
+      (pipelineStatus === "ordered" || pipelineStatus === "in_transit") ? (
+        <Card className="mb-4">
+          <h2 className="text-[14px] font-semibold">{t("batchSell.waitTitle")}</h2>
+          <p className="mt-1 text-[13px] text-muted">{t("batchSell.waitHint")}</p>
+          <Link
+            href="/lagerung"
+            className="mt-3 inline-flex h-8 items-center rounded-[8px] border border-line px-3 text-[13px] font-medium hover:bg-surface-faint"
+          >
+            {t("nav.lagerungCosts")}
+          </Link>
+        </Card>
+      ) : null}
 
       <Card className="mb-4">
         <div className="flex flex-wrap items-start justify-between gap-3">

@@ -1,21 +1,31 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useStore } from "@/context/StoreContext";
 import { calculateResolvedEconomics } from "@/lib/resolve";
 import { getBatchContribution } from "@/lib/batchContribution";
 import {
-  getBatchPipelineStatus,
+  getBatchPipelineStatusForData,
   isBatchRelevantForSales,
+  type BatchPipelineStatus,
 } from "@/lib/batchPipeline";
-import { formatEuro, formatNumber, formatPercent } from "@/lib/format";
+import { formatNumber, formatPercent } from "@/lib/format";
 import { useI18n } from "@/hooks/useI18n";
 import { Badge, Card, PageHeader } from "@/components/ui";
+
+type SalesFilter = "all" | "open" | "sold";
+
+function tone(status: BatchPipelineStatus): "neutral" | "accent" | "success" {
+  if (status === "sold" || status === "arrived") return "success";
+  if (status === "in_transit") return "accent";
+  return "neutral";
+}
 
 export default function VerkaufPageClient() {
   const { ready, data } = useStore();
   const { t, locale, pricingUnitLabel } = useI18n();
+  const [filter, setFilter] = useState<SalesFilter>("all");
 
   const rows = useMemo(() => {
     return data.batches
@@ -33,21 +43,29 @@ export default function VerkaufPageClient() {
               .filter((n): n is string => Boolean(n)),
           ),
         ];
+        const status = getBatchPipelineStatusForData(data, batch);
         return {
           batch,
           product,
           econ,
           contrib,
           dealers,
-          status: getBatchPipelineStatus(batch),
+          status,
         };
       })
+      .filter(({ status, econ }) => {
+        if (filter === "open") return econ.remainingQuantity > 0;
+        if (filter === "sold") return status === "sold";
+        return true;
+      })
       .sort((a, b) => b.econ.remainingQuantity - a.econ.remainingQuantity);
-  }, [data]);
+  }, [data, filter]);
 
   if (!ready) {
     return <p className="text-sm text-muted">{t("common.loading")}</p>;
   }
+
+  const filters: SalesFilter[] = ["all", "open", "sold"];
 
   return (
     <div>
@@ -64,14 +82,34 @@ export default function VerkaufPageClient() {
         }
       />
 
+      <div className="mb-4 flex flex-wrap gap-1.5">
+        {filters.map((key) => {
+          const active = filter === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setFilter(key)}
+              className={`inline-flex items-center rounded-[8px] border px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+                active
+                  ? "border-accent/40 bg-accent-soft/50 text-foreground"
+                  : "border-line bg-white text-muted hover:bg-surface-faint hover:text-foreground"
+              }`}
+            >
+              {t(`verkauf.filter.${key}`)}
+            </button>
+          );
+        })}
+      </div>
+
       {rows.length === 0 ? (
         <Card>
           <p className="text-[13px] text-muted">{t("verkauf.page.empty")}</p>
           <Link
-            href="/batches"
+            href="/lagerung"
             className="mt-4 inline-flex h-8 items-center rounded-[8px] bg-foreground px-3 text-[13px] font-medium text-white hover:bg-ink-soft"
           >
-            {t("verkauf.page.toBatches")}
+            {t("verkauf.page.toStock")}
           </Link>
         </Card>
       ) : (
@@ -107,9 +145,7 @@ export default function VerkaufPageClient() {
                       })}
                     </p>
                   </div>
-                  <Badge
-                    tone={status === "arrived" ? "success" : "accent"}
-                  >
+                  <Badge tone={tone(status)}>
                     {t(`batches.pipeline.${status}`)}
                   </Badge>
                   <span className="truncate text-[13px] text-muted">
@@ -136,10 +172,16 @@ export default function VerkaufPageClient() {
                   </span>
                   <div className="flex justify-end">
                     <Link
-                      href={`/batches/${batch.id}`}
+                      href={
+                        econ.remainingQuantity > 0
+                          ? `/batches/${batch.id}?sell=1`
+                          : `/batches/${batch.id}`
+                      }
                       className="inline-flex h-7 items-center rounded-[8px] px-2 text-[12px] font-medium text-accent hover:underline"
                     >
-                      {t("verkauf.page.openSales")}
+                      {econ.remainingQuantity > 0
+                        ? t("verkauf.page.recordSale")
+                        : t("verkauf.page.openSales")}
                     </Link>
                   </div>
                 </li>

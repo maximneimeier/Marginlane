@@ -10,6 +10,9 @@ export default async function BatchDetailPage({
   searchParams,
 }: PageProps) {
   const { id } = await params;
-  await searchParams;
-  return <BatchDetailPageClient id={id} />;
+  const sp = await searchParams;
+  const sell = sp.sell;
+  const highlightSell =
+    sell === "1" || (Array.isArray(sell) && sell.includes("1"));
+  return <BatchDetailPageClient id={id} highlightSell={highlightSell} />;
 }

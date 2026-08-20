@@ -35,10 +35,15 @@ type NavLink = {
   modules?: AppModule[];
   /** Stärkere Darstellung — Hauptarbeitsplatz */
   primary?: boolean;
+  /** Nummerierter Schritt in der Wertschöpfung */
+  step?: number;
+  /** Unterstützende Links (Vergleich, Händler, …) */
+  secondary?: boolean;
 };
 
 type NavGroupId =
   | "arbeiten"
+  | "wertschoepfung"
   | "einkauf"
   | "lagerung"
   | "verkauf"
@@ -135,11 +140,11 @@ const INVEST_NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-/** Costerra: Wertschöpfung Einkauf → Lagerung → Verkauf, Stammdaten, unten konsolidiert. */
+/** Costerra: ein Ablauf + Stammdaten + Konsolidiert. */
 const COSTERRA_NAV_GROUPS: NavGroup[] = [
   {
-    id: "einkauf",
-    labelKey: "nav.group.einkauf",
+    id: "wertschoepfung",
+    labelKey: "nav.group.wertschoepfung",
     collapsible: false,
     defaultOpen: true,
     modules: ["batches"],
@@ -149,35 +154,33 @@ const COSTERRA_NAV_GROUPS: NavGroup[] = [
         key: "nav.batches",
         icon: Layers,
         primary: true,
+        step: 1,
       },
-      { href: "/compare", key: "nav.compare", icon: Scale },
-    ],
-    cta: { href: "/batches/new", key: "nav.newBatch" },
-  },
-  {
-    id: "lagerung",
-    labelKey: "nav.group.lagerung",
-    collapsible: false,
-    defaultOpen: true,
-    modules: ["batches"],
-    links: [
-      { href: "/lagerung", key: "nav.lagerungCosts", icon: PackageOpen },
-    ],
-  },
-  {
-    id: "verkauf",
-    labelKey: "nav.group.verkauf",
-    collapsible: false,
-    defaultOpen: true,
-    modules: ["batches"],
-    links: [
+      {
+        href: "/lagerung",
+        key: "nav.lagerungCosts",
+        icon: PackageOpen,
+        step: 2,
+      },
       {
         href: "/verkauf",
         key: "nav.abverkauf",
         icon: TrendingUp,
         primary: true,
+        step: 3,
       },
-      { href: "/dealers", key: "nav.dealers", icon: Store },
+      {
+        href: "/compare",
+        key: "nav.compare",
+        icon: Scale,
+        secondary: true,
+      },
+      {
+        href: "/dealers",
+        key: "nav.dealers",
+        icon: Store,
+        secondary: true,
+      },
     ],
   },
   {
@@ -196,8 +199,8 @@ const COSTERRA_NAV_GROUPS: NavGroup[] = [
   {
     id: "konsolidiert",
     labelKey: "nav.group.konsolidiert",
-    collapsible: false,
-    defaultOpen: true,
+    collapsible: true,
+    defaultOpen: false,
     modules: ["batches"],
     links: [
       { href: "/overview", key: "nav.overview", icon: LayoutDashboard },
@@ -281,10 +284,51 @@ function readOpenState(): Partial<Record<NavGroupId, boolean>> {
   }
 }
 
+function NavLinkRow({ link, pathname }: { link: NavLink; pathname: string }) {
+  const { t } = useI18n();
+  const active = isActive(pathname, link.href);
+  const primary = Boolean(link.primary);
+  const secondary = Boolean(link.secondary);
+
+  return (
+    <Link
+      href={link.href}
+      className={`group flex items-center gap-2 rounded-[8px] px-2 text-[13px] transition-colors ${
+        primary ? "py-2" : "py-[6px]"
+      } ${
+        active
+          ? "bg-white font-medium text-foreground shadow-[var(--shadow-sm)]"
+          : primary
+            ? "font-medium text-foreground hover:bg-white/70"
+            : secondary
+              ? "text-muted-soft hover:bg-white/70 hover:text-foreground"
+              : "text-muted hover:bg-white/70 hover:text-foreground"
+      }`}
+    >
+      {link.step != null ? (
+        <span
+          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] text-[10px] font-semibold tabular-nums ${
+            active
+              ? "bg-accent-soft text-accent"
+              : "bg-surface-soft text-muted-soft"
+          }`}
+          aria-hidden
+        >
+          {link.step}
+        </span>
+      ) : (
+        <NavItemIcon icon={link.icon} active={active} primary={primary} />
+      )}
+      <span className="truncate">{t(link.key)}</span>
+    </Link>
+  );
+}
+
 export function AppNav() {
   const pathname = usePathname();
   const { prefs } = usePrefs();
   const { t } = useI18n();
+  const isCosterra = prefs.activeModule === "batches";
   const groups = useMemo(
     () => visibleGroups(prefs.activeModule),
     [prefs.activeModule],
@@ -349,7 +393,7 @@ export function AppNav() {
 
   return (
     <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-[220px] shrink-0 flex-col border-r border-line bg-sidebar md:flex">
-      <div className="px-4 pb-1 pt-4">
+      <div className="px-4 pb-2 pt-4">
         <p className="truncate text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
           {moduleLabel}
         </p>
@@ -364,24 +408,39 @@ export function AppNav() {
         ) : null}
       </div>
 
-      <nav className="flex flex-1 flex-col gap-3 overflow-y-auto px-2 pb-3 pt-1">
+      {isCosterra ? (
+        <div className="px-2 pb-2">
+          <Link
+            href="/batches/new"
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-[8px] bg-accent px-2.5 py-2 text-[13px] font-medium text-white transition-opacity hover:opacity-90"
+          >
+            <Plus size={14} strokeWidth={2.25} aria-hidden />
+            {t("nav.newBatch")}
+          </Link>
+        </div>
+      ) : null}
+
+      <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-2 pb-3 pt-1">
         {groups.map((group) => {
           const open = isGroupOpen(group);
           const pinBottom = group.id === "konsolidiert";
+          const primaryLinks = group.links.filter((l) => !l.secondary);
+          const secondaryLinks = group.links.filter((l) => l.secondary);
+
           return (
             <div
               key={group.id}
               className={
                 pinBottom
-                  ? "mt-auto border-t border-line pt-3"
-                  : undefined
+                  ? "mt-auto border-t border-line pt-2"
+                  : "pb-2"
               }
             >
               {group.collapsible ? (
                 <button
                   type="button"
                   onClick={() => toggleGroup(group)}
-                  className="flex w-full items-center justify-between rounded-[6px] px-2 py-1 text-left transition-colors hover:bg-white/50"
+                  className="flex w-full items-center justify-between rounded-[6px] px-2 py-1.5 text-left transition-colors hover:bg-white/50"
                   aria-expanded={open}
                 >
                   <span className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
@@ -390,38 +449,30 @@ export function AppNav() {
                   <GroupChevron open={open} />
                 </button>
               ) : (
-                <p className="px-2 py-1 text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
+                <p className="px-2 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
                   {t(group.labelKey)}
                 </p>
               )}
               {open ? (
-                <div className="mt-0.5 flex flex-col gap-0.5">
-                  {group.links.map((link) => {
-                    const active = isActive(pathname, link.href);
-                    const primary = Boolean(link.primary);
-                    return (
-                      <Link
-                        key={`${link.href}:${link.key}`}
-                        href={link.href}
-                        className={`group flex items-center gap-2.5 rounded-[8px] px-2.5 text-[13px] transition-colors ${
-                          primary ? "py-2" : "py-[7px]"
-                        } ${
-                          active
-                            ? "bg-white font-medium text-foreground shadow-[var(--shadow-sm)]"
-                            : primary
-                              ? "font-medium text-foreground hover:bg-white/70"
-                              : "text-muted hover:bg-white/70 hover:text-foreground"
-                        }`}
-                      >
-                        <NavItemIcon
-                          icon={link.icon}
-                          active={active}
-                          primary={primary}
+                <div className="flex flex-col gap-0.5">
+                  {primaryLinks.map((link) => (
+                    <NavLinkRow
+                      key={`${link.href}:${link.key}`}
+                      link={link}
+                      pathname={pathname}
+                    />
+                  ))}
+                  {secondaryLinks.length > 0 ? (
+                    <div className="mt-1.5 space-y-0.5 border-t border-line/80 pt-1.5">
+                      {secondaryLinks.map((link) => (
+                        <NavLinkRow
+                          key={`${link.href}:${link.key}`}
+                          link={link}
+                          pathname={pathname}
                         />
-                        {t(link.key)}
-                      </Link>
-                    );
-                  })}
+                      ))}
+                    </div>
+                  ) : null}
                   {group.cta ? (
                     <Link
                       href={group.cta.href}
@@ -446,12 +497,12 @@ export function MobileNav() {
   const { prefs } = usePrefs();
   const { t } = useI18n();
   const isCosterra = prefs.activeModule === "batches";
-  const flatLinks = useMemo(
-    () => visibleGroups(prefs.activeModule).flatMap((g) => g.links),
-    [prefs.activeModule],
-  );
+  const flatLinks = useMemo(() => {
+    const groups = visibleGroups(prefs.activeModule);
+    return groups.flatMap((g) => g.links).filter((l) => !l.secondary);
+  }, [prefs.activeModule]);
 
-  if (flatLinks.length === 0) return null;
+  if (flatLinks.length === 0 && !isCosterra) return null;
 
   return (
     <nav className="flex gap-1 overflow-x-auto border-b border-line px-3 py-2 md:hidden">
