@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useStore } from "@/context/StoreContext";
 import type {
   CompanySettings,
+  OverheadCategory,
   OverheadCostBehavior,
   OverheadItem,
   PersonnelHireFrequency,
@@ -71,6 +72,10 @@ type Props = {
   section?: "positions" | "personnel";
   /** Costerra: nur Erfassung + Umlage, ohne Plan/Ist und Charts */
   simpleMode?: boolean;
+  /** Nur diese Kategorie anzeigen/anlegen (z. B. Lagerung) */
+  categoryFilter?: OverheadCategory;
+  /** Default-Verteilschlüssel bei Neuanlage (mit categoryFilter) */
+  defaultAllocation?: OverheadItem["verteilschluessel"];
 };
 
 type OverheadTab = "tables" | "charts" | "planVsActual";
@@ -80,14 +85,25 @@ export function OverviewOverheadPanel({
   hidePageHeader = false,
   section = "positions",
   simpleMode = false,
+  categoryFilter,
+  defaultAllocation,
 }: Props) {
   const {
-    data,
+    data: storeData,
     upsertOverheadItem,
     deleteOverheadItem,
     upsertPersonnelRole,
     deletePersonnelRole,
   } = useStore();
+  const data = useMemo(() => {
+    if (!categoryFilter || section !== "positions") return storeData;
+    return {
+      ...storeData,
+      overheadItems: storeData.overheadItems.filter(
+        (item) => item.kategorie === categoryFilter,
+      ),
+    };
+  }, [storeData, categoryFilter, section]);
   const { t, locale } = useI18n();
   const [draft, setDraft] = useState<OverheadItem | null>(null);
   const [personnelDraft, setPersonnelDraft] = useState<PersonnelRole | null>(
@@ -275,7 +291,14 @@ export function OverviewOverheadPanel({
       </Button>
     ) : section === "positions" && activeTab === "tables" ? (
       <Button
-        onClick={() => setDraft(emptyOverheadItem(defaultCurrency))}
+        onClick={() =>
+          setDraft(
+            emptyOverheadItem(defaultCurrency, {
+              kategorie: categoryFilter,
+              verteilschluessel: defaultAllocation,
+            }),
+          )
+        }
         className="shrink-0"
       >
         {t("overhead.add")}
@@ -345,8 +368,14 @@ export function OverviewOverheadPanel({
         products={data.catalogProducts}
         isEdit={isEdit}
         defaultCurrency={defaultCurrency}
+        lockedCategory={categoryFilter}
+        defaultAllocation={defaultAllocation}
         onClose={() => setDraft(null)}
-        onSave={(item) => upsertOverheadItem(item)}
+        onSave={(item) =>
+          upsertOverheadItem(
+            categoryFilter ? { ...item, kategorie: categoryFilter } : item,
+          )
+        }
       />
 
       <PersonnelRoleFormModal
@@ -424,7 +453,14 @@ export function OverviewOverheadPanel({
               </p>
               <Button
                 className="mt-4"
-                onClick={() => setDraft(emptyOverheadItem(defaultCurrency))}
+                onClick={() =>
+                  setDraft(
+                    emptyOverheadItem(defaultCurrency, {
+                      kategorie: categoryFilter,
+                      verteilschluessel: defaultAllocation,
+                    }),
+                  )
+                }
               >
                 {t("overhead.emptyCta")}
               </Button>

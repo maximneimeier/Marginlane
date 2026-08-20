@@ -38,6 +38,10 @@ type Props = {
   products: CatalogProduct[];
   isEdit: boolean;
   defaultCurrency?: string;
+  /** Kategorie fest vorgeben (z. B. Lagerung) */
+  lockedCategory?: OverheadItem["kategorie"];
+  /** Default-Verteilschlüssel bei Neuanlage */
+  defaultAllocation?: OverheadItem["verteilschluessel"];
   onClose: () => void;
   onSave: (item: OverheadItem) => void;
 };
@@ -48,6 +52,8 @@ export function OverheadFormModal({
   products,
   isEdit,
   defaultCurrency = "EUR",
+  lockedCategory,
+  defaultAllocation,
   onClose,
   onSave,
 }: Props) {
@@ -67,7 +73,9 @@ export function OverheadFormModal({
   useEffect(() => {
     if (!open) return;
     if (initial) {
-      setDraft(structuredClone(initial));
+      const cloned = structuredClone(initial);
+      if (lockedCategory) cloned.kategorie = lockedCategory;
+      setDraft(cloned);
       const inputs: Record<string, string> = {};
       for (const row of initial.manuelleAufteilung ?? []) {
         inputs[row.productId] = String(row.percent);
@@ -75,9 +83,14 @@ export function OverheadFormModal({
       setPercentInputs(inputs);
       return;
     }
-    setDraft(emptyOverheadItem(defaultCurrency));
+    setDraft(
+      emptyOverheadItem(defaultCurrency, {
+        kategorie: lockedCategory,
+        verteilschluessel: defaultAllocation,
+      }),
+    );
     setPercentInputs({});
-  }, [open, initial, defaultCurrency]);
+  }, [open, initial, defaultCurrency, lockedCategory, defaultAllocation]);
 
   useEffect(() => {
     if (!open) return;
@@ -306,21 +319,27 @@ export function OverheadFormModal({
             )}
             required
           >
-            <Select
-              value={draft.kategorie}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  kategorie: e.target.value as OverheadItem["kategorie"],
-                })
-              }
-            >
-              {OVERHEAD_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {t(`overhead.category.${c}` as MessageKey)}
-                </option>
-              ))}
-            </Select>
+            {lockedCategory ? (
+              <div className="flex h-[34px] items-center rounded-[8px] border border-line bg-surface-faint px-3 text-[13px] text-foreground">
+                {t(`overhead.category.${lockedCategory}` as MessageKey)}
+              </div>
+            ) : (
+              <Select
+                value={draft.kategorie}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    kategorie: e.target.value as OverheadItem["kategorie"],
+                  })
+                }
+              >
+                {OVERHEAD_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {t(`overhead.category.${c}` as MessageKey)}
+                  </option>
+                ))}
+              </Select>
+            )}
           </Field>
           <Field
             label={t("overhead.field.kostenart")}

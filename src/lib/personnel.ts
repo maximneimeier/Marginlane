@@ -731,7 +731,8 @@ export function normalizePersonnelRole(
     raw?.kategorie === "materialgemeinkosten" ||
     raw?.kategorie === "fertigungsgemeinkosten" ||
     raw?.kategorie === "verwaltungsgemeinkosten" ||
-    raw?.kategorie === "vertriebsgemeinkosten"
+    raw?.kategorie === "vertriebsgemeinkosten" ||
+    raw?.kategorie === "lagerungsgemeinkosten"
       ? raw.kategorie
       : "verwaltungsgemeinkosten";
 

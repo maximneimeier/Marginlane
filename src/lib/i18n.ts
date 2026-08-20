@@ -28,6 +28,12 @@ const de = {
   "nav.group.analyse": "Analyse",
   "nav.group.auswertung": "Auswertung",
   "nav.group.arbeiten": "Arbeiten",
+  "nav.group.einkauf": "Einkauf",
+  "nav.group.lagerung": "Lagerung",
+  "nav.lagerungCosts": "Lager & Betrieb",
+  "nav.group.verkauf": "Verkauf",
+  "nav.abverkauf": "Abverkauf",
+  "nav.group.konsolidiert": "Konsolidiert",
   "nav.group.planung": "Planung",
   "nav.group.umsatz": "Umsatz",
   "nav.group.firma": "Firma",
@@ -877,21 +883,39 @@ const de = {
 
   "batches.title": "Chargen",
   "batches.description":
-    "Dein Hauptarbeitsplatz: Chargen anlegen, Kosten und Margen (DB1–DB3) steuern.",
+    "PO-Pipeline: bestellen, unterwegs, angekommen — dann Marge steuern.",
   "batches.add": "Neue Charge",
   "batches.empty": "Noch keine Chargen. Hier startest du — jede Kalkulation beginnt mit einer Charge.",
   "batches.emptyCta": "Erste Charge anlegen",
   "batches.col.batch": "Charge",
+  "batches.col.status": "Status",
   "batches.col.product": "Produkt",
   "batches.col.supplier": "Lieferant",
   "batches.col.landed": "Landed Cost",
   "batches.col.margin": "Marge",
   "batches.qty": "{count} {unit}",
   "batches.deleteConfirm": "Charge löschen?",
+  "batches.pipeline.all": "Alle",
+  "batches.pipeline.ordered": "Bestellt",
+  "batches.pipeline.in_transit": "Unterwegs",
+  "batches.pipeline.arrived": "Angekommen",
+  "batches.pipeline.emptyFilter": "Keine Chargen in diesem Status.",
+  "batches.pipeline.markArrived": "Angekommen",
+
+  "verkauf.page.title": "Abverkauf",
+  "verkauf.page.description":
+    "Angekommene Chargen verkaufen: Restmenge, Händler und Marge — Details auf der Charge.",
+  "verkauf.page.empty":
+    "Noch nichts zum Abverkauf. Markiere Chargen als angekommen oder erfasse Verkäufe.",
+  "verkauf.page.toBatches": "Zur Chargen-Pipeline",
+  "verkauf.page.openSales": "Verkauf öffnen",
+  "verkauf.col.dealers": "Händler",
+  "verkauf.col.remaining": "Rest",
+  "verkauf.col.sold": "Verkauft",
 
   "batchNew.title": "Neue Charge",
   "batchNew.description":
-    "Bausteine zusammenklicken: Partner → Material → Logistik → Verkauf — Live-Margen rechts.",
+    "Einkauf planen: Partner → Material → Logistik — Landed Cost live rechts. Verkauf optional später.",
   "batchNew.save": "Charge speichern",
   "batchNew.step.partners": "Partner",
   "batchNew.step.material": "Material",
@@ -904,6 +928,13 @@ const de = {
     "Logistik-Vorlage anheften oder Kostenposten manuell ergänzen.",
   "batchNew.salesHint":
     "Händler wählen und Sale-Kosten als Marketing vs. Provision setzen.",
+  "batchNew.salesOptionalHint":
+    "Optional — Abverkauf und Marge kannst du auch später auf der Charge setzen.",
+  "batchNew.addSalesLater": "Verkauf jetzt planen",
+  "batchNew.hideSales": "Verkauf ausblenden",
+  "batchNew.livePurchase": "Landed Cost",
+  "batchNew.livePurchaseHint": "Einkauf + Logistik pro Einheit — aktualisiert sich live.",
+  "batchNew.saveAsOrdered": "Speichern legt die Charge als bestellt an (noch ohne Ankunft/Verkauf).",
   "batchNew.liveMargins": "Live-Margen",
   "batchNew.liveMarginsHint": "Aktualisiert sich mit jedem Baustein.",
   "batchNew.needProduct": "Zuerst ein Produkt wählen.",
@@ -1437,6 +1468,7 @@ const de = {
   "overhead.category.fertigungsgemeinkosten": "Fertigungsgemeinkosten",
   "overhead.category.verwaltungsgemeinkosten": "Verwaltungsgemeinkosten",
   "overhead.category.vertriebsgemeinkosten": "Vertriebsgemeinkosten",
+  "overhead.category.lagerungsgemeinkosten": "Lagerung / Betrieb",
   "overhead.categoryHint.materialgemeinkosten":
     "z. B. gemeinsame Rohmaterial-Lagerung, Einkaufsabteilung, nicht chargenspezifischer Schwund.",
   "overhead.categoryHint.fertigungsgemeinkosten":
@@ -1445,6 +1477,13 @@ const de = {
     "z. B. Geschäftsführung, Buchhaltung, Büromiete, IT, laufende Rechtsberatung, allgemeine Versicherungen.",
   "overhead.categoryHint.vertriebsgemeinkosten":
     "z. B. Fixgehälter Vertrieb, allgemeines Markenmarketing, CRM und Vertriebs-Tools.",
+  "overhead.categoryHint.lagerungsgemeinkosten":
+    "z. B. Lagermiete, Betriebskosten, Personal im Lager — wird über Chargen-Stückzahl auf Produkte umgelegt.",
+  "lagerung.page.title": "Lager & Betrieb",
+  "lagerung.page.description":
+    "Fixe Lager- und Betriebskosten erfassen. Die Umlage auf Produkte folgt den Chargen-Mengen im Zeitraum.",
+  "lagerung.page.hint":
+    "Chargenbezogene Fracht/Handling weiterhin über",
   "overhead.costBehavior.fix": "Fix",
   "overhead.costBehavior.variabel": "Variabel",
   "overhead.costBehavior.semi_variabel": "Semi-variabel",
@@ -1886,6 +1925,12 @@ const en: Record<MessageKey, string> = {
   "nav.group.analyse": "Analysis",
   "nav.group.auswertung": "Results",
   "nav.group.arbeiten": "Work",
+  "nav.group.einkauf": "Procurement",
+  "nav.group.lagerung": "Warehousing",
+  "nav.lagerungCosts": "Warehouse & ops",
+  "nav.group.verkauf": "Sales",
+  "nav.abverkauf": "Sell-through",
+  "nav.group.konsolidiert": "Consolidated",
   "nav.group.planung": "Planning",
   "nav.group.umsatz": "Revenue",
   "nav.group.firma": "Company",
@@ -2733,22 +2778,40 @@ const en: Record<MessageKey, string> = {
 
   "batches.title": "Batches",
   "batches.description":
-    "Your main workspace: create batches and steer costs and margins (CM1–CM3).",
+    "PO pipeline: ordered, in transit, arrived — then steer margins.",
   "batches.add": "New batch",
   "batches.empty":
     "No batches yet. Start here — every calculation begins with a batch.",
   "batches.emptyCta": "Create first batch",
   "batches.col.batch": "Batch",
+  "batches.col.status": "Status",
   "batches.col.product": "Product",
   "batches.col.supplier": "Supplier",
   "batches.col.landed": "Landed cost",
   "batches.col.margin": "Margin",
   "batches.qty": "{count} {unit}",
   "batches.deleteConfirm": "Delete batch?",
+  "batches.pipeline.all": "All",
+  "batches.pipeline.ordered": "Ordered",
+  "batches.pipeline.in_transit": "In transit",
+  "batches.pipeline.arrived": "Arrived",
+  "batches.pipeline.emptyFilter": "No batches in this status.",
+  "batches.pipeline.markArrived": "Mark arrived",
+
+  "verkauf.page.title": "Sell-through",
+  "verkauf.page.description":
+    "Sell arrived batches: remaining qty, dealers and margin — details on the batch.",
+  "verkauf.page.empty":
+    "Nothing to sell yet. Mark batches as arrived or record sales.",
+  "verkauf.page.toBatches": "Go to batch pipeline",
+  "verkauf.page.openSales": "Open sales",
+  "verkauf.col.dealers": "Dealers",
+  "verkauf.col.remaining": "Left",
+  "verkauf.col.sold": "Sold",
 
   "batchNew.title": "New batch",
   "batchNew.description":
-    "Click building blocks together: partners → material → logistics → sales — live margins on the right.",
+    "Plan procurement: partners → material → logistics — landed cost live on the right. Sales optional later.",
   "batchNew.save": "Save batch",
   "batchNew.step.partners": "Partners",
   "batchNew.step.material": "Material",
@@ -2761,6 +2824,13 @@ const en: Record<MessageKey, string> = {
     "Attach a logistics template or add cost items manually.",
   "batchNew.salesHint":
     "Pick a dealer and set sale costs as marketing vs. commission.",
+  "batchNew.salesOptionalHint":
+    "Optional — you can set sell-through and margin later on the batch.",
+  "batchNew.addSalesLater": "Plan sales now",
+  "batchNew.hideSales": "Hide sales",
+  "batchNew.livePurchase": "Landed cost",
+  "batchNew.livePurchaseHint": "Purchase + logistics per unit — updates live.",
+  "batchNew.saveAsOrdered": "Saving creates the batch as ordered (no arrival/sale yet).",
   "batchNew.liveMargins": "Live margins",
   "batchNew.liveMarginsHint": "Updates with every building block.",
   "batchNew.needProduct": "Choose a product first.",
@@ -3293,6 +3363,7 @@ const en: Record<MessageKey, string> = {
   "overhead.category.fertigungsgemeinkosten": "Manufacturing overhead",
   "overhead.category.verwaltungsgemeinkosten": "Admin overhead",
   "overhead.category.vertriebsgemeinkosten": "Sales overhead",
+  "overhead.category.lagerungsgemeinkosten": "Warehouse / ops",
   "overhead.categoryHint.materialgemeinkosten":
     "e.g. shared raw-material storage, purchasing team, scrap not attributable to a batch.",
   "overhead.categoryHint.fertigungsgemeinkosten":
@@ -3301,6 +3372,13 @@ const en: Record<MessageKey, string> = {
     "e.g. management, accounting, office rent, IT, ongoing legal advice, general insurance.",
   "overhead.categoryHint.vertriebsgemeinkosten":
     "e.g. fixed sales salaries, brand marketing, CRM and sales tools.",
+  "overhead.categoryHint.lagerungsgemeinkosten":
+    "e.g. warehouse rent, utilities, warehouse staff — allocated to products by batch quantity in the period.",
+  "lagerung.page.title": "Warehouse & ops",
+  "lagerung.page.description":
+    "Capture fixed warehouse and operating costs. Allocation to products follows batch quantities in the period.",
+  "lagerung.page.hint":
+    "Batch-level freight/handling still goes via",
   "overhead.costBehavior.fix": "Fixed",
   "overhead.costBehavior.variabel": "Variable",
   "overhead.costBehavior.semi_variabel": "Semi-variable",

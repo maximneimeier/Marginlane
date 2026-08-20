@@ -39,6 +39,10 @@ type NavLink = {
 
 type NavGroupId =
   | "arbeiten"
+  | "einkauf"
+  | "lagerung"
+  | "verkauf"
+  | "konsolidiert"
   | "analyse"
   | "planung"
   | "umsatz"
@@ -54,7 +58,7 @@ type NavGroup = {
   defaultOpen: boolean;
   modules: AppModule[];
   links: NavLink[];
-  /** Primär-CTA unter den Links (nur Costerra Arbeiten) */
+  /** Primär-CTA unter den Links (z. B. Neue Charge) */
   cta?: { href: string; key: MessageKey };
 };
 
@@ -131,11 +135,11 @@ const INVEST_NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-/** Costerra: Chargen = Hauptarbeitsplatz, Rest Setup/Auswertung. */
+/** Costerra: Wertschöpfung Einkauf → Lagerung → Verkauf, Stammdaten, unten konsolidiert. */
 const COSTERRA_NAV_GROUPS: NavGroup[] = [
   {
-    id: "arbeiten",
-    labelKey: "nav.group.arbeiten",
+    id: "einkauf",
+    labelKey: "nav.group.einkauf",
     collapsible: false,
     defaultOpen: true,
     modules: ["batches"],
@@ -146,31 +150,57 @@ const COSTERRA_NAV_GROUPS: NavGroup[] = [
         icon: Layers,
         primary: true,
       },
-      {
-        href: "/compare",
-        key: "nav.compare",
-        icon: Scale,
-      },
+      { href: "/compare", key: "nav.compare", icon: Scale },
     ],
     cta: { href: "/batches/new", key: "nav.newBatch" },
   },
   {
-    id: "analyse",
-    labelKey: "nav.group.auswertung",
+    id: "lagerung",
+    labelKey: "nav.group.lagerung",
+    collapsible: false,
+    defaultOpen: true,
+    modules: ["batches"],
+    links: [
+      { href: "/lagerung", key: "nav.lagerungCosts", icon: PackageOpen },
+    ],
+  },
+  {
+    id: "verkauf",
+    labelKey: "nav.group.verkauf",
+    collapsible: false,
+    defaultOpen: true,
+    modules: ["batches"],
+    links: [
+      {
+        href: "/verkauf",
+        key: "nav.abverkauf",
+        icon: TrendingUp,
+        primary: true,
+      },
+      { href: "/dealers", key: "nav.dealers", icon: Store },
+    ],
+  },
+  {
+    id: "stammdaten",
+    labelKey: "nav.group.stammdaten",
+    collapsible: true,
+    defaultOpen: false,
+    modules: ["batches"],
+    links: [
+      { href: "/suppliers", key: "nav.suppliers", icon: Users },
+      { href: "/products", key: "nav.products", icon: Package },
+      { href: "/components", key: "nav.components", icon: Grid2x2 },
+      { href: "/logistics", key: "nav.logistics", icon: Truck },
+    ],
+  },
+  {
+    id: "konsolidiert",
+    labelKey: "nav.group.konsolidiert",
     collapsible: false,
     defaultOpen: true,
     modules: ["batches"],
     links: [
       { href: "/overview", key: "nav.overview", icon: LayoutDashboard },
-    ],
-  },
-  {
-    id: "gemeinkosten",
-    labelKey: "nav.group.gemeinkosten",
-    collapsible: true,
-    defaultOpen: false,
-    modules: ["batches"],
-    links: [
       {
         href: "/overhead",
         key: "nav.overheadSimple",
@@ -184,29 +214,8 @@ const COSTERRA_NAV_GROUPS: NavGroup[] = [
         icon: UserRound,
         feature: "overheadTopLevelNav",
       },
+      { href: "/company", key: "nav.company", icon: Building2 },
     ],
-  },
-  {
-    id: "stammdaten",
-    labelKey: "nav.group.stammdaten",
-    collapsible: true,
-    defaultOpen: false,
-    modules: ["batches"],
-    links: [
-      { href: "/products", key: "nav.products", icon: Package },
-      { href: "/components", key: "nav.components", icon: Grid2x2 },
-      { href: "/suppliers", key: "nav.suppliers", icon: Users },
-      { href: "/logistics", key: "nav.logistics", icon: Truck },
-      { href: "/dealers", key: "nav.dealers", icon: Store },
-    ],
-  },
-  {
-    id: "firma",
-    labelKey: "nav.group.firma",
-    collapsible: true,
-    defaultOpen: false,
-    modules: ["batches"],
-    links: [{ href: "/company", key: "nav.company", icon: Building2 }],
   },
 ];
 
@@ -358,8 +367,16 @@ export function AppNav() {
       <nav className="flex flex-1 flex-col gap-3 overflow-y-auto px-2 pb-3 pt-1">
         {groups.map((group) => {
           const open = isGroupOpen(group);
+          const pinBottom = group.id === "konsolidiert";
           return (
-            <div key={group.id}>
+            <div
+              key={group.id}
+              className={
+                pinBottom
+                  ? "mt-auto border-t border-line pt-3"
+                  : undefined
+              }
+            >
               {group.collapsible ? (
                 <button
                   type="button"

@@ -10,6 +10,7 @@ import type {
   AppData,
   CatalogProduct,
   OverheadActual,
+  OverheadAllocation,
   OverheadCategory,
   OverheadItem,
 } from "./types";
@@ -295,6 +296,7 @@ export function buildOverheadByCategory(
     fertigungsgemeinkosten: 0,
     verwaltungsgemeinkosten: 0,
     vertriebsgemeinkosten: 0,
+    lagerungsgemeinkosten: 0,
   };
   for (const item of items) {
     totals[item.kategorie] += amountForRange(item, range, activity);
@@ -728,6 +730,7 @@ const CATEGORY_LABELS_FALLBACK: Record<OverheadItem["kategorie"], string> = {
   fertigungsgemeinkosten: "Fertigungsgemeinkosten",
   verwaltungsgemeinkosten: "Verwaltungsgemeinkosten",
   vertriebsgemeinkosten: "Vertriebsgemeinkosten",
+  lagerungsgemeinkosten: "Lagerung / Betrieb",
 };
 
 /**
@@ -981,7 +984,13 @@ export function buildOverheadWaterfall(
   };
 }
 
-export function emptyOverheadItem(currency = "EUR"): OverheadItem {
+export function emptyOverheadItem(
+  currency = "EUR",
+  opts?: {
+    kategorie?: OverheadCategory;
+    verteilschluessel?: OverheadAllocation;
+  },
+): OverheadItem {
   const now = new Date().toISOString();
   return {
     id: createId("oh"),
@@ -989,11 +998,11 @@ export function emptyOverheadItem(currency = "EUR"): OverheadItem {
     betrag: 0,
     waehrung: currency,
     periode: "monatlich",
-    kategorie: "verwaltungsgemeinkosten",
+    kategorie: opts?.kategorie ?? "verwaltungsgemeinkosten",
     kostenart: "fix",
     variableBasis: null,
     variableRate: null,
-    verteilschluessel: "gleichmaessig",
+    verteilschluessel: opts?.verteilschluessel ?? "gleichmaessig",
     manuelleAufteilung: null,
     gueltigVon: null,
     gueltigBis: null,
@@ -1213,6 +1222,7 @@ export function buildPlanVsActual(
     fertigungsgemeinkosten: { plan: 0, actual: 0 },
     verwaltungsgemeinkosten: { plan: 0, actual: 0 },
     vertriebsgemeinkosten: { plan: 0, actual: 0 },
+    lagerungsgemeinkosten: { plan: 0, actual: 0 },
   });
 
   const byMonth: PlanVsActualMonthRow[] = months.map((month) => {

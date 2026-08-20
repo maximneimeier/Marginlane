@@ -40,15 +40,9 @@ import {
   TextInput,
 } from "@/components/ui";
 
-type StepId = "partners" | "material" | "logistics" | "sales" | "result";
+type StepId = "partners" | "material" | "logistics" | "sales";
 
-const STEPS: StepId[] = [
-  "partners",
-  "material",
-  "logistics",
-  "sales",
-  "result",
-];
+const PRIMARY_STEPS = ["partners", "material", "logistics"] as const;
 
 export default function NewBatchPageClient() {
   const router = useRouter();
@@ -66,12 +60,13 @@ export default function NewBatchPageClient() {
   const [costItems, setCostItems] = useState<CostItem[]>([]);
   const [dealerId, setDealerId] = useState("");
   const [channel, setChannel] = useState("");
-  const [sellPrice, setSellPrice] = useState<number | null>(0);
-  const [salesItems, setSalesItems] = useState<CostItem[] | null>([]);
+  const [sellPrice, setSellPrice] = useState<number | null>(null);
+  const [salesItems, setSalesItems] = useState<CostItem[] | null>(null);
   const [commercialOverrides, setCommercialOverrides] =
     useState<CommercialOverrides>(emptyCommercialOverrides());
   const [priceManual, setPriceManual] = useState(false);
   const [activeStep, setActiveStep] = useState<StepId>("partners");
+  const [showSales, setShowSales] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
   const sectionRefs = useRef<Partial<Record<StepId, HTMLElement | null>>>({});
@@ -202,13 +197,13 @@ export default function NewBatchPageClient() {
   }, [initialized, bomPurchase, priceManual]);
 
   const draftBatch: Batch = useMemo(() => {
-    const sale = emptySale(quantity);
-    if (dealerId) {
+    const sale = emptySale(showSales ? quantity : 0);
+    if (showSales && dealerId) {
       sale.dealerId = dealerId;
       sale.channel = channel.trim() || dealer?.name || "";
       sale.salePricePerUnit = sellPrice;
       sale.costItems = salesItems;
-    } else {
+    } else if (showSales) {
       sale.channel = channel.trim();
       sale.salePricePerUnit = sellPrice ?? 0;
       sale.costItems = salesItems ?? [];
@@ -227,7 +222,7 @@ export default function NewBatchPageClient() {
       createdAt: now,
       orderDate: now.slice(0, 10),
       arrivalDate: null,
-      soldDate: now.slice(0, 10),
+      soldDate: null,
       applySkonto: null,
       fxRateOverride: null,
       duty: emptyBatchDuty(),
@@ -243,6 +238,7 @@ export default function NewBatchPageClient() {
     unitPrice,
     commercialOverrides,
     costItems,
+    showSales,
     dealerId,
     channel,
     dealer?.name,
@@ -325,13 +321,13 @@ export default function NewBatchPageClient() {
   function handleSave() {
     if (!product || !label.trim() || quantity <= 0) return;
 
-    const sale = emptySale(quantity);
-    if (dealerId) {
+    const sale = emptySale(showSales ? quantity : 0);
+    if (showSales && dealerId) {
       sale.dealerId = dealerId;
       sale.channel = channel.trim() || dealer?.name || "";
       sale.salePricePerUnit = sellPrice;
       sale.costItems = salesItems;
-    } else {
+    } else if (showSales) {
       sale.channel = channel.trim();
       sale.salePricePerUnit = sellPrice ?? 0;
       sale.costItems = salesItems ?? [];
@@ -351,7 +347,7 @@ export default function NewBatchPageClient() {
       createdAt: now,
       orderDate: now.slice(0, 10),
       arrivalDate: null,
-      soldDate: now.slice(0, 10),
+      soldDate: null,
       applySkonto: null,
       fxRateOverride: null,
       duty: emptyBatchDuty(),
@@ -368,14 +364,12 @@ export default function NewBatchPageClient() {
   const qty = Math.max(quantity, 0);
   const perUnit = (n: number) => (qty > 0 ? n / qty : 0);
 
-  const stepDone: Record<StepId, boolean> = {
+  const stepDone: Record<Exclude<StepId, "sales">, boolean> = {
     partners: Boolean(productId && supplierId),
     material: Boolean(productId && (unitPrice > 0 || bomPurchase > 0)),
     logistics: costItems.some(
       (i) => i.phase === "transport" || i.phase === "lager",
     ),
-    sales: Boolean(dealerId || resolvedSell > 0),
-    result: Boolean(previewData && previewData.contrib.revenue > 0),
   };
 
   if (!ready) {
@@ -400,7 +394,7 @@ export default function NewBatchPageClient() {
       />
 
       <div className="mb-5 flex flex-wrap gap-1.5">
-        {STEPS.map((step, index) => {
+        {PRIMARY_STEPS.map((step, index) => {
           const active = activeStep === step;
           const done = stepDone[step];
           return (
@@ -622,159 +616,160 @@ export default function NewBatchPageClient() {
             className="scroll-mt-24"
           >
             <Card>
-              <h2 className="mb-1 text-[15px] font-semibold">
-                {t("batchNew.step.sales")}
-              </h2>
-              <p className="mb-3 text-[12px] text-muted">
-                {t("batchNew.salesHint")}
-              </p>
-
-              <p className="mb-2 text-[12px] font-medium text-muted">
-                {t("batchModal.dealer")}
-              </p>
-              <div className="mb-4 flex flex-wrap gap-1.5">
-                <button
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-[15px] font-semibold">
+                    {t("batchNew.step.sales")}
+                  </h2>
+                  <p className="mt-1 text-[12px] text-muted">
+                    {t("batchNew.salesOptionalHint")}
+                  </p>
+                </div>
+                <Button
                   type="button"
-                  onClick={() => applyDealer("")}
-                  className={`rounded-[8px] border px-2.5 py-1.5 text-[13px] ${
-                    !dealerId
-                      ? "border-accent bg-accent-soft/40 font-medium"
-                      : "border-line bg-white text-muted"
-                  }`}
+                  variant={showSales ? "ghost" : "secondary"}
+                  onClick={() => {
+                    setShowSales((prev) => {
+                      const next = !prev;
+                      if (next) {
+                        queueMicrotask(() => scrollToStep("sales"));
+                      }
+                      return next;
+                    });
+                  }}
                 >
-                  {t("batchModal.noDealer")}
-                </button>
-                {activeDealers.map((d) => (
-                  <button
-                    key={d.id}
-                    type="button"
-                    onClick={() => applyDealer(d.id)}
-                    className={`rounded-[8px] border px-2.5 py-1.5 text-[13px] transition-colors ${
-                      dealerId === d.id
-                        ? "border-accent bg-accent-soft/40 font-medium text-foreground"
-                        : "border-line bg-white text-muted hover:bg-surface-faint hover:text-foreground"
-                    }`}
-                  >
-                    {d.name}
-                    {d.defaultSellPrice > 0
-                      ? ` · ${formatEuro(d.defaultSellPrice, locale)}`
-                      : ""}
-                  </button>
-                ))}
+                  {showSales
+                    ? t("batchNew.hideSales")
+                    : t("batchNew.addSalesLater")}
+                </Button>
               </div>
 
-              <div className="mb-4 grid gap-3 sm:grid-cols-2">
-                <Field label={t("batchModal.channel")}>
-                  <TextInput
-                    value={channel}
-                    onChange={(e) => setChannel(e.target.value)}
-                    placeholder={t("batchModal.channelPlaceholder")}
-                  />
-                </Field>
-                <Field
-                  label={t("batchModal.sellPrice", { unit })}
-                  hint={
-                    sellInherited
-                      ? t("batchModal.sellPriceInherited", {
-                          name: dealer?.name ?? "",
-                        })
-                      : t("batchModal.sellPriceOwn")
-                  }
-                >
-                  <div className="flex gap-2">
-                    <TextInput
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={resolvedSell || ""}
-                      onChange={(e) =>
-                        setSellPrice(
-                          e.target.value === ""
-                            ? null
-                            : Number(e.target.value),
-                        )
+              {showSales ? (
+                <div className="mt-4">
+                  <p className="mb-3 text-[12px] text-muted">
+                    {t("batchNew.salesHint")}
+                  </p>
+
+                  <p className="mb-2 text-[12px] font-medium text-muted">
+                    {t("batchModal.dealer")}
+                  </p>
+                  <div className="mb-4 flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => applyDealer("")}
+                      className={`rounded-[8px] border px-2.5 py-1.5 text-[13px] ${
+                        !dealerId
+                          ? "border-accent bg-accent-soft/40 font-medium"
+                          : "border-line bg-white text-muted"
+                      }`}
+                    >
+                      {t("batchModal.noDealer")}
+                    </button>
+                    {activeDealers.map((d) => (
+                      <button
+                        key={d.id}
+                        type="button"
+                        onClick={() => applyDealer(d.id)}
+                        className={`rounded-[8px] border px-2.5 py-1.5 text-[13px] transition-colors ${
+                          dealerId === d.id
+                            ? "border-accent bg-accent-soft/40 font-medium text-foreground"
+                            : "border-line bg-white text-muted hover:bg-surface-faint hover:text-foreground"
+                        }`}
+                      >
+                        {d.name}
+                        {d.defaultSellPrice > 0
+                          ? ` · ${formatEuro(d.defaultSellPrice, locale)}`
+                          : ""}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="mb-4 grid gap-3 sm:grid-cols-2">
+                    <Field label={t("batchModal.channel")}>
+                      <TextInput
+                        value={channel}
+                        onChange={(e) => setChannel(e.target.value)}
+                        placeholder={t("batchModal.channelPlaceholder")}
+                      />
+                    </Field>
+                    <Field
+                      label={t("batchModal.sellPrice", { unit })}
+                      hint={
+                        sellInherited
+                          ? t("batchModal.sellPriceInherited", {
+                              name: dealer?.name ?? "",
+                            })
+                          : t("batchModal.sellPriceOwn")
                       }
-                    />
-                    {dealerId && sellPrice !== null ? (
+                    >
+                      <div className="flex gap-2">
+                        <TextInput
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={resolvedSell || ""}
+                          onChange={(e) =>
+                            setSellPrice(
+                              e.target.value === ""
+                                ? null
+                                : Number(e.target.value),
+                            )
+                          }
+                        />
+                        {dealerId && sellPrice !== null ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="shrink-0"
+                            onClick={() => setSellPrice(null)}
+                          >
+                            {t("batchModal.inherit")}
+                          </Button>
+                        ) : null}
+                      </div>
+                    </Field>
+                  </div>
+
+                  {costsInherited && dealer ? (
+                    <div>
+                      <SalesCostsReadonly
+                        items={resolvedSalesItems}
+                        unitLabel={unit}
+                      />
                       <Button
                         type="button"
                         variant="ghost"
-                        className="shrink-0"
-                        onClick={() => setSellPrice(null)}
+                        className="mt-2 h-7 px-2 text-[12px]"
+                        onClick={() => setSalesItems(resolvedSalesItems)}
                       >
-                        {t("batchModal.inherit")}
+                        {t("batchModal.overrideCosts")}
                       </Button>
-                    ) : null}
-                  </div>
-                </Field>
-              </div>
-
-              {costsInherited && dealer ? (
-                <div>
-                  <SalesCostsReadonly
-                    items={resolvedSalesItems}
-                    unitLabel={unit}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="mt-2 h-7 px-2 text-[12px]"
-                    onClick={() => setSalesItems(resolvedSalesItems)}
-                  >
-                    {t("batchModal.overrideCosts")}
-                  </Button>
+                    </div>
+                  ) : (
+                    <div>
+                      <CostItemEditor
+                        items={salesItems ?? []}
+                        onChange={(items) => setSalesItems(items)}
+                        allowedPhases={SALES_PHASES}
+                        title={t("batchModal.salesCosts")}
+                        percentOfRevenue
+                        unitLabel={unit}
+                        salesMode
+                      />
+                      {dealerId ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="mt-2 h-7 px-2 text-[12px]"
+                          onClick={() => setSalesItems(null)}
+                        >
+                          {t("batchModal.inheritCosts")}
+                        </Button>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <div>
-                  <CostItemEditor
-                    items={salesItems ?? []}
-                    onChange={(items) => setSalesItems(items)}
-                    allowedPhases={SALES_PHASES}
-                    title={t("batchModal.salesCosts")}
-                    percentOfRevenue
-                    unitLabel={unit}
-                    salesMode
-                  />
-                  {dealerId ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="mt-2 h-7 px-2 text-[12px]"
-                      onClick={() => setSalesItems(null)}
-                    >
-                      {t("batchModal.inheritCosts")}
-                    </Button>
-                  ) : null}
-                </div>
-              )}
-            </Card>
-          </section>
-
-          <section
-            ref={(el) => {
-              sectionRefs.current.result = el;
-            }}
-            className="scroll-mt-24 lg:hidden"
-          >
-            <Card>
-              <h2 className="mb-3 text-[15px] font-semibold">
-                {t("batchNew.step.result")}
-              </h2>
-              {previewData ? (
-                <WaterfallChart
-                  steps={previewData.waterfall}
-                  unitLabel={unit}
-                />
-              ) : (
-                <p className="text-[13px] text-muted">{t("batchNew.needProduct")}</p>
-              )}
-              <Button
-                className="mt-4 w-full"
-                onClick={handleSave}
-                disabled={!canSave}
-              >
-                {t("batchNew.save")}
-              </Button>
+              ) : null}
             </Card>
           </section>
         </div>
@@ -783,71 +778,58 @@ export default function NewBatchPageClient() {
           <div className="sticky top-20 space-y-3">
             <Card>
               <h2 className="mb-1 text-[14px] font-semibold">
-                {t("batchNew.liveMargins")}
+                {t("batchNew.livePurchase")}
               </h2>
               <p className="mb-4 text-[12px] text-muted">
-                {t("batchNew.liveMarginsHint")}
+                {t("batchNew.livePurchaseHint")}
               </p>
               {previewData ? (
                 <>
-                  <div className="mb-4 grid grid-cols-3 gap-2">
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide text-muted">
-                        DB1
-                      </p>
-                      <p className="text-[15px] tabular-nums font-medium">
-                        {money(perUnit(previewData.contrib.db1))}
-                      </p>
+                  <div className="mb-4 space-y-2">
+                    <div className="flex justify-between gap-2 text-[13px]">
+                      <span className="text-muted">{t("batchDetail.purchase")}</span>
+                      <span className="tabular-nums font-medium">
+                        {money(previewData.econ.purchasePerUnit)}
+                      </span>
                     </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide text-muted">
-                        DB2
-                      </p>
-                      <p className="text-[15px] tabular-nums font-medium">
-                        {money(perUnit(previewData.contrib.db2))}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide text-muted">
-                        DB3
-                      </p>
-                      <p className="text-[15px] tabular-nums font-medium text-accent">
-                        {money(perUnit(previewData.contrib.db3))}
-                      </p>
-                      <p className="text-[11px] text-muted">
-                        {formatPercent(
-                          previewData.contrib.revenue > 0
-                            ? (previewData.contrib.db3 /
-                                previewData.contrib.revenue) *
-                                100
-                            : 0,
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="mb-3 space-y-1 text-[12px] text-muted">
-                    <p>
-                      {t("batchDetail.landedCost")}:{" "}
-                      <span className="tabular-nums text-foreground">
+                    <div className="flex justify-between gap-2 text-[13px]">
+                      <span className="text-muted">
+                        {t("batchDetail.landedCost")}
+                      </span>
+                      <span className="tabular-nums font-medium text-accent">
                         {money(previewData.econ.landedCostPerUnit)}
                       </span>
-                    </p>
-                    <p>
-                      {t("batchDetail.kpi.marketing")}:{" "}
-                      <span className="tabular-nums text-foreground">
-                        {money(perUnit(previewData.contrib.marketing))}
-                      </span>
-                      {" · "}
-                      {t("batchDetail.kpi.salesCosts")}:{" "}
-                      <span className="tabular-nums text-foreground">
-                        {money(perUnit(previewData.contrib.sales))}
-                      </span>
-                    </p>
+                    </div>
+                    {showSales ? (
+                      <>
+                        <div className="flex justify-between gap-2 border-t border-line pt-2 text-[13px]">
+                          <span className="text-muted">DB3 / {unit}</span>
+                          <span className="tabular-nums font-medium">
+                            {money(perUnit(previewData.contrib.db3))}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-muted">
+                          {formatPercent(
+                            previewData.contrib.revenue > 0
+                              ? (previewData.contrib.db3 /
+                                  previewData.contrib.revenue) *
+                                  100
+                              : 0,
+                          )}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="border-t border-line pt-2 text-[12px] text-muted">
+                        {t("batchNew.saveAsOrdered")}
+                      </p>
+                    )}
                   </div>
-                  <WaterfallChart
-                    steps={previewData.waterfall}
-                    unitLabel={unit}
-                  />
+                  {showSales ? (
+                    <WaterfallChart
+                      steps={previewData.waterfall}
+                      unitLabel={unit}
+                    />
+                  ) : null}
                 </>
               ) : (
                 <p className="text-[13px] text-muted">
@@ -870,6 +852,20 @@ export default function NewBatchPageClient() {
             </Link>
           </div>
         </aside>
+      </div>
+
+      <div className="sticky bottom-0 z-10 -mx-1 border-t border-line bg-canvas/95 px-1 py-3 backdrop-blur lg:hidden">
+        <div className="mb-2 flex justify-between text-[13px]">
+          <span className="text-muted">{t("batchDetail.landedCost")}</span>
+          <span className="tabular-nums font-medium text-accent">
+            {previewData
+              ? money(previewData.econ.landedCostPerUnit)
+              : "—"}
+          </span>
+        </div>
+        <Button className="w-full" onClick={handleSave} disabled={!canSave}>
+          {t("batchNew.save")}
+        </Button>
       </div>
     </div>
   );

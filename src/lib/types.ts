@@ -677,7 +677,8 @@ export type OverheadCategory =
   | "materialgemeinkosten"
   | "fertigungsgemeinkosten"
   | "verwaltungsgemeinkosten"
-  | "vertriebsgemeinkosten";
+  | "vertriebsgemeinkosten"
+  | "lagerungsgemeinkosten";
 /** Beeinflussbarkeit / Kostenverhalten */
 export type OverheadCostBehavior = "fix" | "variabel" | "semi_variabel";
 /** Bezugsgröße für den variablen Anteil */
@@ -1047,6 +1048,7 @@ export const OVERHEAD_CATEGORIES: OverheadCategory[] = [
   "fertigungsgemeinkosten",
   "verwaltungsgemeinkosten",
   "vertriebsgemeinkosten",
+  "lagerungsgemeinkosten",
 ];
 
 export const OVERHEAD_COST_BEHAVIORS: OverheadCostBehavior[] = [
@@ -1069,6 +1071,13 @@ export function migrateOverheadCategory(value: unknown): OverheadCategory {
   }
   if (value === "vertriebsgemeinkosten" || value === "vertrieb_fix") {
     return "vertriebsgemeinkosten";
+  }
+  if (
+    value === "lagerungsgemeinkosten" ||
+    value === "lager" ||
+    value === "lagerkosten"
+  ) {
+    return "lagerungsgemeinkosten";
   }
   if (value === "sonstige") return "materialgemeinkosten";
   return "verwaltungsgemeinkosten";
