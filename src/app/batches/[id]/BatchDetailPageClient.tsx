@@ -1,23 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/context/StoreContext";
-import type { Batch, Sale } from "@/lib/types";
-import { PROCUREMENT_PHASES, SALES_PHASES } from "@/lib/types";
-import { costItemTotal } from "@/lib/calc";
-import { createId, formatEuro, formatMoney, formatPercent } from "@/lib/format";
-import { emptySale } from "@/lib/migrateAppData";
-import { quoteFromBatch } from "@/lib/batchQuotes";
-import { emptyBatchDuty } from "@/lib/types";
+import type { Batch } from "@/lib/types";
+import { PROCUREMENT_PHASES, emptyBatchDuty } from "@/lib/types";
+import { formatEuro, formatMoney, formatDate } from "@/lib/format";
 import { useI18n } from "@/hooks/useI18n";
-import { detachDealerFromSale, saleFromDealer } from "@/lib/storage";
 import {
   calculateResolvedEconomics,
   resolveCommercial,
-  resolveSaleCostItems,
-  resolveSalePrice,
   resolveUnitPurchasePrice,
 } from "@/lib/resolve";
 import { resolveFxContext } from "@/lib/fx";
@@ -26,21 +19,11 @@ import {
   rankLogisticsTemplates,
 } from "@/lib/logistics";
 import { CostItemEditor } from "@/components/CostItemEditor";
-import { SalesCostsReadonly } from "@/components/SalesCostsReadonly";
 import {
   CommercialOverridesEditor,
   pickCommercialOverrides,
 } from "@/components/CommercialOverridesEditor";
 import { WaterfallChart } from "@/components/WaterfallChart";
-import { CosterraGuidePanel } from "@/components/CosterraGuidePanel";
-import { MarginPackageExportButtons } from "@/components/MarginPackageExportButtons";
-import { BatchQuickSellCard } from "@/components/BatchQuickSellCard";
-import {
-  batchOverheadShare,
-  buildBatchContributionWaterfall,
-  getBatchContribution,
-} from "@/lib/batchContribution";
-import { defaultOverviewRange, isMarketingCost } from "@/lib/overview";
 import { getBatchPipelineStatusForData } from "@/lib/batchPipeline";
 import {
   Badge,
@@ -50,35 +33,15 @@ import {
   PageHeader,
   Select,
   TextInput,
+  TextArea,
 } from "@/components/ui";
-function patchSale(batch: Batch, saleId: string, patch: Partial<Sale>): Batch {
-  return {
-    ...batch,
-    sales: batch.sales.map((s) => (s.id === saleId ? { ...s, ...patch } : s)),
-  };
-}
-
-function addSale(batch: Batch): Batch {
-  return {
-    ...batch,
-    sales: [...batch.sales, emptySale(batch.quantity)],
-  };
-}
-
-function removeSale(batch: Batch, saleId: string): Batch {
-  const next = batch.sales.filter((s) => s.id !== saleId);
-  return {
-    ...batch,
-    sales: next.length > 0 ? next : [emptySale(batch.quantity)],
-  };
-}
 
 export default function ChargeDetailPage({
   id,
-  highlightSell = false,
+  startEditing = false,
 }: {
   id: string;
-  highlightSell?: boolean;
+  startEditing?: boolean;
 }) {
   const router = useRouter();
   const { ready, data, upsertBatch, deleteBatch } = useStore();
@@ -87,8 +50,23 @@ export default function ChargeDetailPage({
   const [draft, setDraft] = useState<Batch | null>(null);
   const [editing, setEditing] = useState(false);
   const [logisticsTemplateId, setLogisticsTemplateId] = useState("");
+  const [editBootstrapped, setEditBootstrapped] = useState(false);
 
   const batch = editing && draft ? draft : stored;
+
+  useEffect(() => {
+    if (!ready || !stored || !startEditing || editBootstrapped || editing) {
+      return;
+    }
+    setDraft({
+      ...structuredClone(stored),
+      duty: stored.duty ?? emptyBatchDuty(),
+      quotes: stored.quotes ?? [],
+      activeQuoteId: stored.activeQuoteId ?? null,
+    });
+    setEditing(true);
+    setEditBootstrapped(true);
+  }, [ready, stored, startEditing, editBootstrapped, editing]);
 
   if (!ready) return <p className="text-sm text-muted">{t("common.loading")}</p>;
   if (!stored || !batch) {
@@ -106,27 +84,19 @@ export default function ChargeDetailPage({
     (p) => p.id === batch.productId,
   );
   const supplier = data.suppliers.find((s) => s.id === batch.supplierId);
-  const saleDealers = batch.sales
-    .map((s) => data.dealers.find((d) => d.id === s.dealerId))
-    .filter((d): d is NonNullable<typeof d> => Boolean(d));
-  const uniqueDealers = [
-    ...new Map(saleDealers.map((d) => [d.id, d])).values(),
-  ];
   const unit = catalogProduct
     ? pricingUnitLabel(catalogProduct.pricingUnit)
     : pricingUnitLabel("pcs");
   const econ = calculateResolvedEconomics(data, batch);
-  const contribution = getBatchContribution(data, batch);
   const pipelineStatus = getBatchPipelineStatusForData(data, batch);
-  const ohShare = batchOverheadShare(data, batch, defaultOverviewRange());
-  const contributionWaterfall = buildBatchContributionWaterfall(
-    contribution,
-    batch.quantity,
-    ohShare,
-  );
-  const qty = Math.max(batch.quantity, 0);
-  const perUnit = (n: number) => (qty > 0 ? n / qty : 0);
-  const quoteCount = batch.quotes?.length ?? 0;
+  const landedIdx = econ.waterfall.findIndex((s) => s.id === "landed");
+  const landedWaterfall =
+    landedIdx >= 0
+      ? econ.waterfall.slice(0, landedIdx + 1)
+      : econ.waterfall.filter(
+          (s) =>
+            s.kind === "base" || s.kind === "cost" || s.kind === "subtotal",
+        );
   const { baseCurrency, rates } = resolveFxContext(data.companySettings);
   const displayPurchase = resolveUnitPurchasePrice(
     batch.productId,
@@ -154,26 +124,6 @@ export default function ChargeDetailPage({
     upsertBatch(draft);
     setEditing(false);
     setDraft(null);
-  }
-
-  function applyDealerToSale(saleId: string, dealerId: string) {
-    setDraft((prev) => {
-      if (!prev) return prev;
-      const sale = prev.sales.find((s) => s.id === saleId);
-      if (!sale) return prev;
-
-      if (!dealerId) {
-        const current = data.dealers.find((d) => d.id === sale.dealerId);
-        return patchSale(prev, saleId, detachDealerFromSale(sale, current));
-      }
-
-      const next = data.dealers.find((d) => d.id === dealerId);
-      if (!next) return prev;
-      return patchSale(prev, saleId, {
-        ...sale,
-        ...saleFromDealer(next, sale.quantity),
-      });
-    });
   }
 
   return (
@@ -209,36 +159,13 @@ export default function ChargeDetailPage({
               </>
             ) : (
               <>
-                <MarginPackageExportButtons
-                  data={data}
-                  batch={batch}
-                  variant="ghost"
-                />
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    const quote = quoteFromBatch(
-                      stored!,
-                      t("batchDetail.quoteLabel", {
-                        n: String((stored!.quotes?.length ?? 0) + 1),
-                      }),
-                    );
-                    upsertBatch({
-                      ...stored!,
-                      quotes: [...(stored!.quotes ?? []), quote],
-                      activeQuoteId: quote.id,
-                    });
-                  }}
-                >
-                  {t("batchDetail.addQuote")}
-                </Button>
                 <Button variant="ghost" onClick={startEdit}>
                   {t("common.edit")}
                 </Button>
                 <Button
                   variant="danger"
                   onClick={() => {
-                    if (confirm(t("batches.deleteConfirm"))) {
+                    if (window.confirm(t("batches.deleteConfirm"))) {
                       deleteBatch(batch.id);
                       router.push("/batches");
                     }
@@ -252,152 +179,20 @@ export default function ChargeDetailPage({
         }
       />
 
-      <CosterraGuidePanel data={data} batch={batch} compact />
-
-      {!editing &&
-      (pipelineStatus === "arrived" ||
-        pipelineStatus === "sold" ||
-        econ.salesAggregate.soldQuantity > 0) ? (
-        <div className="mb-4">
-          <BatchQuickSellCard batch={stored!} highlight={highlightSell} />
-        </div>
-      ) : null}
-      {!editing &&
-      (pipelineStatus === "ordered" || pipelineStatus === "in_transit") ? (
-        <Card className="mb-4">
-          <h2 className="text-[14px] font-semibold">{t("batchSell.waitTitle")}</h2>
-          <p className="mt-1 text-[13px] text-muted">{t("batchSell.waitHint")}</p>
-          <Link
-            href="/lagerung"
-            className="mt-3 inline-flex h-8 items-center rounded-[8px] border border-line px-3 text-[13px] font-medium hover:bg-surface-faint"
-          >
-            {t("nav.lagerungCosts")}
-          </Link>
-        </Card>
-      ) : null}
-
-      <Card className="mb-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-[14px] font-semibold text-foreground">
-              {t("batchDetail.story.title")}
-            </h2>
-            <p className="mt-1 text-[12px] text-muted">
-              {t("batchDetail.story.saleSplit")}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href="/compare"
-              className="inline-flex h-8 items-center rounded-[8px] border border-line px-3 text-[13px] font-medium text-foreground hover:bg-surface-faint"
-            >
-              {t("batchDetail.story.compare")}
-            </Link>
-            {!editing ? (
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  const quote = quoteFromBatch(
-                    stored!,
-                    t("batchDetail.quoteLabel", {
-                      n: String((stored!.quotes?.length ?? 0) + 1),
-                    }),
-                  );
-                  upsertBatch({
-                    ...stored!,
-                    quotes: [...(stored!.quotes ?? []), quote],
-                    activeQuoteId: quote.id,
-                  });
-                }}
-              >
-                {t("batchDetail.addQuote")}
-              </Button>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-[8px] border border-line bg-surface-faint px-3 py-2">
-            <p className="text-[11px] uppercase tracking-wide text-muted-soft">
-              {t("batchDetail.story.supplier")}
-            </p>
-            <p className="mt-1 text-[13px] font-medium text-foreground">
-              {supplier?.name ?? t("batchDetail.story.noSupplier")}
-            </p>
-          </div>
-          <div className="rounded-[8px] border border-line bg-surface-faint px-3 py-2">
-            <p className="text-[11px] uppercase tracking-wide text-muted-soft">
-              {t("batchDetail.story.dealers")}
-            </p>
-            <p className="mt-1 text-[13px] font-medium text-foreground">
-              {uniqueDealers.length > 0
-                ? uniqueDealers.map((d) => d.name).join(", ")
-                : t("batchDetail.story.noDealers")}
-            </p>
-          </div>
-          <div className="rounded-[8px] border border-line bg-surface-faint px-3 py-2">
-            <p className="text-[11px] uppercase tracking-wide text-muted-soft">
-              {t("batchDetail.kpi.marketing")}
-            </p>
-            <p className="mt-1 text-[13px] font-medium tabular-nums text-foreground">
-              {money(perUnit(contribution.marketing))}
-              <span className="ml-1 text-[11px] font-normal text-muted">
-                / {unit}
-              </span>
-            </p>
-          </div>
-          <div className="rounded-[8px] border border-line bg-surface-faint px-3 py-2">
-            <p className="text-[11px] uppercase tracking-wide text-muted-soft">
-              {t("batchDetail.kpi.salesCosts")}
-            </p>
-            <p className="mt-1 text-[13px] font-medium tabular-nums text-foreground">
-              {money(perUnit(contribution.sales))}
-              <span className="ml-1 text-[11px] font-normal text-muted">
-                / {unit}
-              </span>
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
-          <span className="text-[13px] font-medium text-foreground">
-            {t("batchDetail.story.quotes")}
-          </span>
-          {quoteCount > 0 || batch.activeQuoteId ? (
-            <>
-              <Select
-                value={batch.activeQuoteId ?? ""}
-                onChange={(e) => {
-                  const activeQuoteId = e.target.value || null;
-                  upsertBatch({ ...stored!, activeQuoteId });
-                }}
-              >
-                <option value="">{t("batchDetail.baseScenario")}</option>
-                {(batch.quotes ?? []).map((q) => (
-                  <option key={q.id} value={q.id}>
-                    {q.label}
-                  </option>
-                ))}
-              </Select>
-              <span className="text-[12px] text-muted">
-                {t("batchDetail.story.quotesCount", { count: quoteCount })}
-              </span>
-            </>
-          ) : (
-            <span className="text-[12px] text-muted">
-              {t("batchDetail.story.quotesEmpty")}
-            </span>
-          )}
-        </div>
-      </Card>
-
-      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+      <div className="mb-6 grid gap-3 sm:grid-cols-2">
         <Card>
           <p className="text-xs uppercase tracking-wide text-muted">
             {t("batchDetail.purchase")}
           </p>
           <p className="mt-1 text-xl tabular-nums">
             {money(econ.purchasePerUnit)}
+            <span className="ml-1 text-sm font-normal text-muted">
+              / {unit}
+            </span>
+          </p>
+          <p className="mt-0.5 text-sm tabular-nums text-muted">
+            {money(econ.purchasePerUnit * batch.quantity)}{" "}
+            {t("batchNew.batchTotalShort")}
           </p>
           {econ.skontoPerUnit > 0 ? (
             <p className="text-xs text-muted">
@@ -413,102 +208,15 @@ export default function ChargeDetailPage({
           </p>
           <p className="mt-1 text-xl tabular-nums font-medium text-accent">
             {money(econ.landedCostPerUnit)}
+            <span className="ml-1 text-sm font-normal text-muted">
+              / {unit}
+            </span>
           </p>
-        </Card>
-        <Card>
-          <p className="text-xs uppercase tracking-wide text-muted">
-            {t("batchDetail.kpi.db1")}
-          </p>
-          <p
-            className={`mt-1 text-xl tabular-nums ${
-              contribution.db1 >= 0 ? "text-foreground" : "text-red-700"
-            }`}
-          >
-            {money(perUnit(contribution.db1))}
-          </p>
-        </Card>
-        <Card>
-          <p className="text-xs uppercase tracking-wide text-muted">
-            {t("batchDetail.kpi.db2")}
-          </p>
-          <p
-            className={`mt-1 text-xl tabular-nums ${
-              contribution.db2 >= 0 ? "text-foreground" : "text-red-700"
-            }`}
-          >
-            {money(perUnit(contribution.db2))}
-          </p>
-        </Card>
-        <Card>
-          <p className="text-xs uppercase tracking-wide text-muted">
-            {t("batchDetail.kpi.db3")}
-          </p>
-          <p
-            className={`mt-1 text-xl tabular-nums ${
-              contribution.db3 >= 0 ? "text-accent" : "text-red-700"
-            }`}
-          >
-            {money(perUnit(contribution.db3))}
-          </p>
-          <p className="text-xs text-muted">
-            {formatPercent(
-              contribution.revenue > 0
-                ? (contribution.db3 / contribution.revenue) * 100
-                : 0,
-            )}
-            {econ.targetMarginPercent != null
-              ? ` · ${t("batchDetail.targetMargin", {
-                  value: formatPercent(econ.targetMarginPercent),
-                })}`
-              : ""}
-          </p>
-        </Card>
-        {ohShare > 0 ? (
-          <Card>
-            <p className="text-xs uppercase tracking-wide text-muted">
-              {t("batchDetail.kpi.afterOverhead")}
-            </p>
-            <p
-              className={`mt-1 text-xl tabular-nums ${
-                contribution.db3 - ohShare >= 0 ? "text-accent" : "text-red-700"
-              }`}
-            >
-              {money(perUnit(contribution.db3 - ohShare))}
-            </p>
-            <p className="text-xs text-muted">
-              {t("batchDetail.kpi.overheadShare", {
-                value: money(perUnit(ohShare)),
-              })}
-            </p>
-          </Card>
-        ) : (
-          <Card>
-            <p className="text-xs uppercase tracking-wide text-muted">
-              {t("batchDetail.kpi.afterOverhead")}
-            </p>
-            <p className="mt-1 text-sm text-muted">
-              {t("batchDetail.kpi.afterOverheadHint")}
-            </p>
-            <Link
-              href="/overhead/personnel"
-              className="mt-2 inline-block text-[13px] font-medium text-accent hover:underline"
-            >
-              {t("batchDetail.kpi.afterOverheadCta")}
-            </Link>
-          </Card>
-        )}
-        <Card>
-          <p className="text-xs uppercase tracking-wide text-muted">
-            {t("batchDetail.remaining")}
-          </p>
-          <p className="mt-1 text-xl tabular-nums">
-            {econ.remainingQuantity.toLocaleString(locale)}
-          </p>
-          <p className="text-xs text-muted">
-            {t("batchDetail.soldOf", {
-              sold: econ.salesAggregate.soldQuantity.toLocaleString(locale),
-              total: batch.quantity.toLocaleString(locale),
-            })}
+          <p className="mt-0.5 text-sm tabular-nums font-medium text-accent">
+            {money(econ.landedCostPerUnit * batch.quantity)}{" "}
+            <span className="font-normal text-muted">
+              {t("batchNew.batchTotalShort")}
+            </span>
           </p>
         </Card>
       </div>
@@ -556,6 +264,22 @@ export default function ChargeDetailPage({
                       }
                     />
                   </Field>
+                  <Field label={t("batchDetail.expectedArrival")}>
+                    <TextInput
+                      type="date"
+                      value={(draft.expectedArrivalDate || "").slice(0, 10)}
+                      onChange={(e) =>
+                        setDraft((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                expectedArrivalDate: e.target.value || null,
+                              }
+                            : prev,
+                        )
+                      }
+                    />
+                  </Field>
                   <Field label={t("batchDetail.arrivalDate")}>
                     <TextInput
                       type="date"
@@ -569,17 +293,57 @@ export default function ChargeDetailPage({
                       }
                     />
                   </Field>
-                  <Field label={t("batchDetail.soldDate")}>
+                  <Field
+                    label={t("batchDetail.poNumber")}
+                    hint={t("batchNew.poNumberHint")}
+                  >
                     <TextInput
-                      type="date"
-                      value={(draft.soldDate || "").slice(0, 10)}
+                      value={draft.poNumber ?? ""}
                       onChange={(e) =>
                         setDraft((prev) =>
                           prev
-                            ? { ...prev, soldDate: e.target.value || null }
+                            ? { ...prev, poNumber: e.target.value }
                             : prev,
                         )
                       }
+                      placeholder={t("batchNew.poNumberPlaceholder")}
+                    />
+                  </Field>
+                  <Field
+                    label={t("batchDetail.receivedQuantity", { unit })}
+                    hint={t("batchDetail.receivedQuantityHint")}
+                  >
+                    <TextInput
+                      type="number"
+                      min="0"
+                      placeholder={String(draft.quantity)}
+                      value={draft.receivedQuantity ?? ""}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        setDraft((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                receivedQuantity:
+                                  raw === "" ? null : Number(raw) || 0,
+                              }
+                            : prev,
+                        );
+                      }}
+                    />
+                  </Field>
+                  <Field
+                    label={t("batchDetail.notes")}
+                    className="sm:col-span-2"
+                  >
+                    <TextArea
+                      value={draft.notes ?? ""}
+                      onChange={(e) =>
+                        setDraft((prev) =>
+                          prev ? { ...prev, notes: e.target.value } : prev,
+                        )
+                      }
+                      rows={3}
                     />
                   </Field>
                   <Field label={t("batchDetail.fxRateOverride")}>
@@ -596,9 +360,7 @@ export default function ChargeDetailPage({
                             ? {
                                 ...prev,
                                 fxRateOverride:
-                                  raw === ""
-                                    ? null
-                                    : Number(raw) || null,
+                                  raw === "" ? null : Number(raw) || null,
                               }
                             : prev,
                         );
@@ -792,7 +554,9 @@ export default function ChargeDetailPage({
                           },
                         ).map((tpl) => (
                           <option key={tpl.id} value={tpl.id}>
-                            {tpl.name}
+                            {tpl.incoterm
+                              ? `${tpl.incoterm} — ${tpl.name}`
+                              : tpl.name}
                           </option>
                         ))}
                       </Select>
@@ -809,390 +573,172 @@ export default function ChargeDetailPage({
                             data.logisticsBuildingBlocks ?? [],
                           );
                           if (added.length === 0) return;
+                          const manual = draft.costItems.filter(
+                            (item) =>
+                              item.phase !== "transport" &&
+                              item.phase !== "lager",
+                          );
                           setDraft({
                             ...draft,
-                            costItems: [...draft.costItems, ...added],
+                            costItems: [...added, ...manual],
+                            ...(tpl.incoterm
+                              ? { incoterm: tpl.incoterm }
+                              : {}),
                           });
                           setLogisticsTemplateId("");
                         }}
                       >
-                        {t("batchDetail.applyLogisticsAppend")}
+                        {t("batchDetail.applyLogisticsReplace")}
                       </Button>
                     </div>
                   </div>
                 ) : (
                   <p className="mt-4 border-t border-line pt-4 text-[12px] text-muted">
                     {t("batchDetail.applyLogisticsEmpty")}{" "}
-                    <Link href="/logistics" className="text-accent hover:underline">
+                    <Link
+                      href="/logistics"
+                      className="text-accent hover:underline"
+                    >
                       {t("nav.logistics")}
                     </Link>
                   </p>
                 )}
               </Card>
               <Card>
-                <div className="mb-4 flex items-center justify-between gap-2">
-                  <h2 className="font-medium">{t("batchDetail.salesTitle")}</h2>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() =>
-                      setDraft((prev) => (prev ? addSale(prev) : prev))
-                    }
-                  >
-                    {t("batchDetail.addSale")}
-                  </Button>
-                </div>
-                <p className="mb-4 text-[12px] text-muted">
-                  {t("batchDetail.salesSpecHint")}
+                <p className="text-[13px] text-muted">
+                  {t("batchDetail.salesMovedHint")}{" "}
+                  <Link href="/verkauf" className="text-accent hover:underline">
+                    {t("nav.abverkauf")}
+                  </Link>
+                  .
                 </p>
-                {(contribution.marketing > 0 || contribution.sales > 0) && (
-                  <div className="mb-4 grid gap-2 sm:grid-cols-2">
-                    <div className="rounded-[8px] border border-line bg-surface-faint px-3 py-2 text-[12px]">
-                      <span className="text-muted">
-                        {t("batchDetail.kpi.marketing")}
-                      </span>
-                      <span className="ml-2 font-medium tabular-nums">
-                        {money(contribution.marketing)}
-                      </span>
-                    </div>
-                    <div className="rounded-[8px] border border-line bg-surface-faint px-3 py-2 text-[12px]">
-                      <span className="text-muted">
-                        {t("batchDetail.kpi.salesCosts")}
-                      </span>
-                      <span className="ml-2 font-medium tabular-nums">
-                        {money(contribution.sales)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-                <div className="space-y-6">
-                  {draft.sales.map((sale, index) => {
-                    const saleDealer = data.dealers.find(
-                      (d) => d.id === sale.dealerId,
-                    );
-                    const resolvedSell = resolveSalePrice(saleDealer, sale);
-                    const resolvedCosts = resolveSaleCostItems(saleDealer, sale);
-                    const costsInherited =
-                      sale.costItems === null && Boolean(sale.dealerId);
-                    const sellInherited =
-                      sale.salePricePerUnit === null && Boolean(sale.dealerId);
-
-                    return (
-                      <div
-                        key={sale.id}
-                        className="rounded-[10px] border border-line p-4"
-                      >
-                        <div className="mb-4 flex items-center justify-between gap-2">
-                          <h3 className="text-[13px] font-medium">
-                            {t("batchDetail.saleN", { n: index + 1 })}
-                          </h3>
-                          {draft.sales.length > 1 ? (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              className="h-7 px-2 text-[12px]"
-                              onClick={() =>
-                                setDraft((prev) =>
-                                  prev ? removeSale(prev, sale.id) : prev,
-                                )
-                              }
-                            >
-                              {t("batchDetail.removeSale")}
-                            </Button>
-                          ) : null}
-                        </div>
-                        <div className="mb-5 grid gap-4 sm:grid-cols-2">
-                          <Field
-                            label={t("batchDetail.dealer")}
-                            hint={t("batchDetail.dealerHint")}
-                          >
-                            <Select
-                              value={sale.dealerId || ""}
-                              onChange={(e) =>
-                                applyDealerToSale(sale.id, e.target.value)
-                              }
-                            >
-                              <option value="">{t("batchDetail.noDealer")}</option>
-                              {data.dealers.map((d) => (
-                                <option key={d.id} value={d.id}>
-                                  {d.name}
-                                  {d.defaultSellPrice > 0
-                                    ? ` · VK ${formatEuro(d.defaultSellPrice, locale)}`
-                                    : ""}
-                                </option>
-                              ))}
-                            </Select>
-                          </Field>
-                          <Field label={t("batchDetail.channel")}>
-                            <TextInput
-                              value={sale.channel}
-                              onChange={(e) =>
-                                setDraft((prev) =>
-                                  prev
-                                    ? patchSale(prev, sale.id, {
-                                        channel: e.target.value,
-                                      })
-                                    : prev,
-                                )
-                              }
-                              placeholder={t("batchDetail.channelPlaceholder")}
-                            />
-                          </Field>
-                          <Field label={t("unit.qtyLabel", { unit })}>
-                            <TextInput
-                              type="number"
-                              min="0"
-                              value={sale.quantity || ""}
-                              onChange={(e) =>
-                                setDraft((prev) =>
-                                  prev
-                                    ? patchSale(prev, sale.id, {
-                                        quantity: Number(e.target.value) || 0,
-                                      })
-                                    : prev,
-                                )
-                              }
-                            />
-                          </Field>
-                          <Field
-                            label={t("batchDetail.sellPrice", { unit })}
-                            hint={
-                              sellInherited
-                                ? t("batchDetail.sellPriceInherited")
-                                : t("batchDetail.sellPriceOwn")
-                            }
-                          >
-                            <div className="flex gap-2">
-                              <TextInput
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={resolvedSell.value || ""}
-                                onChange={(e) =>
-                                  setDraft((prev) =>
-                                    prev
-                                      ? patchSale(prev, sale.id, {
-                                          salePricePerUnit:
-                                            Number(e.target.value) || 0,
-                                        })
-                                      : prev,
-                                  )
-                                }
-                              />
-                              {sale.dealerId && sale.salePricePerUnit !== null ? (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  onClick={() =>
-                                    setDraft((prev) =>
-                                      prev
-                                        ? patchSale(prev, sale.id, {
-                                            salePricePerUnit: null,
-                                          })
-                                        : prev,
-                                    )
-                                  }
-                                >
-                                  {t("batchDetail.inheritAgain")}
-                                </Button>
-                              ) : null}
-                            </div>
-                          </Field>
-                        </div>
-                        {costsInherited ? (
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="text-[12px] text-muted">
-                                {t("batchDetail.costsInherited")}
-                              </p>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                onClick={() =>
-                                  setDraft((prev) => {
-                                    if (!prev) return prev;
-                                    const items = resolvedCosts.value.map(
-                                      (item) => ({
-                                        ...item,
-                                        id: createId("cost"),
-                                      }),
-                                    );
-                                    return patchSale(prev, sale.id, {
-                                      costItems: items,
-                                    });
-                                  })
-                                }
-                              >
-                                {t("batchDetail.overrideCosts")}
-                              </Button>
-                            </div>
-                            <SalesCostsReadonly
-                              items={resolvedCosts.value}
-                              emptyHint={t("salesCosts.emptyHint")}
-                              unitLabel={unit}
-                            />
-                          </div>
-                        ) : (
-                          <div className="space-y-2">
-                            {sale.dealerId ? (
-                              <div className="flex justify-end">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  onClick={() =>
-                                    setDraft((prev) =>
-                                      prev
-                                        ? patchSale(prev, sale.id, {
-                                            costItems: null,
-                                          })
-                                        : prev,
-                                    )
-                                  }
-                                >
-                                  {t("batchDetail.inheritAgain")}
-                                </Button>
-                              </div>
-                            ) : null}
-                            <CostItemEditor
-                              title={t("batchDetail.salesCosts")}
-                              items={sale.costItems ?? []}
-                              onChange={(costItems) =>
-                                setDraft((prev) =>
-                                  prev
-                                    ? patchSale(prev, sale.id, { costItems })
-                                    : prev,
-                                )
-                              }
-                              allowedPhases={SALES_PHASES}
-                              percentOfRevenue
-                              unitLabel={unit}
-                              salesMode
-                            />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
               </Card>
             </>
           ) : (
             <>
               <Card>
-                <h2 className="mb-3 font-medium">{t("batchDetail.procurement")}</h2>
-                <p className="mb-3 text-sm text-muted">
-                  {econ.commercial.paymentTerms ||
-                    t("batchDetail.noPaymentTerms")}
-                  {displayPurchase.source !== "batch" ? (
-                    <span className="ml-2 text-xs text-muted-soft">
-                      ({t("batchDetail.inheritedFrom", {
-                        source: displayPurchase.source,
-                      })})
-                    </span>
+                <h2 className="mb-3 font-medium">{t("batchDetail.basicData")}</h2>
+                <dl className="grid gap-3 sm:grid-cols-2 text-sm">
+                  {batch.poNumber ? (
+                    <div>
+                      <dt className="text-[12px] text-muted">
+                        {t("batchDetail.poNumber")}
+                      </dt>
+                      <dd className="mt-0.5">{batch.poNumber}</dd>
+                    </div>
                   ) : null}
-                </p>
-                {econ.procurementBreakdown.length === 0 ? (
-                  <p className="text-sm text-muted">
-                    {t("batchDetail.noProcurement")}
-                  </p>
-                ) : (
-                  <ul className="space-y-2 text-sm">
-                    {econ.procurementBreakdown.map((row) => (
-                      <li
-                        key={row.item.id}
-                        className="flex justify-between gap-3 border-b border-line/60 py-2 last:border-0"
-                      >
-                        <span>
-                          {row.item.label}
-                          <span className="ml-2 text-xs text-muted">
-                            {allocationLabel(row.item.allocation, false, unit)}
-                          </span>
-                        </span>
-                        <span className="tabular-nums">
-                          {formatEuro(row.perUnit, locale)}
-                          <span className="ml-2 text-xs text-muted">
-                            ({formatEuro(row.total, locale)} {t("common.total")})
-                          </span>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                  <div>
+                    <dt className="text-[12px] text-muted">
+                      {t("batchDetail.orderDate")}
+                    </dt>
+                    <dd className="mt-0.5 tabular-nums">
+                      {formatDate(
+                        batch.orderDate || batch.createdAt,
+                        locale,
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[12px] text-muted">
+                      {t("batchDetail.expectedArrival")}
+                    </dt>
+                    <dd className="mt-0.5 tabular-nums">
+                      {batch.expectedArrivalDate
+                        ? formatDate(batch.expectedArrivalDate, locale)
+                        : t("common.emDash")}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[12px] text-muted">
+                      {t("batchDetail.arrivalDate")}
+                    </dt>
+                    <dd className="mt-0.5 tabular-nums">
+                      {batch.arrivalDate
+                        ? formatDate(batch.arrivalDate, locale)
+                        : t("common.emDash")}
+                    </dd>
+                  </div>
+                  {batch.receivedQuantity != null ? (
+                    <div>
+                      <dt className="text-[12px] text-muted">
+                        {t("batchDetail.receivedQuantity", { unit })}
+                      </dt>
+                      <dd className="mt-0.5 tabular-nums">
+                        {batch.receivedQuantity.toLocaleString(locale)} /{" "}
+                        {batch.quantity.toLocaleString(locale)}
+                      </dd>
+                    </div>
+                  ) : null}
+                  {batch.notes ? (
+                    <div className="sm:col-span-2">
+                      <dt className="text-[12px] text-muted">
+                        {t("batchDetail.notes")}
+                      </dt>
+                      <dd className="mt-0.5 whitespace-pre-wrap">
+                        {batch.notes}
+                      </dd>
+                    </div>
+                  ) : null}
+                </dl>
               </Card>
-              {econ.salesAggregate.rows.length === 0 ? (
-                <Card>
-                  <h2 className="mb-3 font-medium">{t("batchDetail.sales")}</h2>
-                  <p className="text-sm text-muted">
-                    {t("batchDetail.noSalesCosts")}
-                  </p>
-                </Card>
+              <Card>
+              <h2 className="mb-3 font-medium">{t("batchDetail.procurement")}</h2>
+              <p className="mb-3 text-sm text-muted">
+                {econ.commercial.paymentTerms ||
+                  t("batchDetail.noPaymentTerms")}
+                {displayPurchase.source !== "batch" ? (
+                  <span className="ml-2 text-xs text-muted-soft">
+                    (
+                    {t("batchDetail.inheritedFrom", {
+                      source: displayPurchase.source,
+                    })}
+                    )
+                  </span>
+                ) : null}
+              </p>
+              {econ.procurementBreakdown.length === 0 ? (
+                <p className="text-sm text-muted">
+                  {t("batchDetail.noProcurement")}
+                </p>
               ) : (
-                econ.salesAggregate.rows.map((row, index) => (
-                  <Card key={row.sale.id}>
-                    <h2 className="mb-3 font-medium">
-                      {t("batchDetail.saleN", { n: index + 1 })}
-                      {row.sale.channel || row.dealer?.name
-                        ? ` — ${row.sale.channel || row.dealer?.name}`
-                        : ""}
-                    </h2>
-                    <p className="mb-3 text-sm text-muted">
-                      {t("batchDetail.sellPrice", { unit })}:{" "}
-                      {formatEuro(row.sellPrice, locale)}
-                      {row.sale.quantity > 0 ? (
-                        <span className="ml-2">
-                          · {t("unit.qtyLabel", { unit })}:{" "}
-                          {row.sale.quantity.toLocaleString(locale)}
+                <ul className="space-y-2 text-sm">
+                  {econ.procurementBreakdown.map((row) => (
+                    <li
+                      key={row.item.id}
+                      className="flex justify-between gap-3 border-b border-line/60 py-2 last:border-0"
+                    >
+                      <span>
+                        {row.item.label}
+                        <span className="ml-2 text-xs text-muted">
+                          {allocationLabel(row.item.allocation, false, unit)}
                         </span>
-                      ) : null}
-                    </p>
-                    {row.salesItems.length === 0 ? (
-                      <p className="text-sm text-muted">
-                        {t("batchDetail.noSalesCosts")}
-                      </p>
-                    ) : (
-                      <ul className="space-y-2 text-sm">
-                        {row.salesItems.map((item) => (
-                          <li
-                            key={item.id}
-                            className="flex justify-between gap-3 border-b border-line/60 py-2 last:border-0"
-                          >
-                            <span>
-                              {item.label}
-                              <span className="ml-2 text-[11px] text-muted">
-                                {isMarketingCost(item)
-                                  ? t("batchDetail.kpi.marketing")
-                                  : t("batchDetail.kpi.salesCosts")}
-                              </span>
-                            </span>
-                            <span className="tabular-nums">
-                              {formatEuro(
-                                batch.quantity > 0
-                                  ? costItemTotal(
-                                      item,
-                                      row.sale.quantity,
-                                      row.revenue,
-                                    ) / batch.quantity
-                                  : 0,
-                              )}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </Card>
-                ))
+                      </span>
+                      <span className="tabular-nums">
+                        {formatEuro(row.perUnit, locale)}
+                        <span className="ml-2 text-xs text-muted">
+                          ({formatEuro(row.total, locale)} {t("common.total")})
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               )}
+            </Card>
             </>
           )}
         </div>
 
         <aside>
           <Card>
-            <h2 className="mb-1 font-medium">{t("batchDetail.unitEconomics")}</h2>
+            <h2 className="mb-1 font-medium">{t("batchDetail.landedCost")}</h2>
             <p className="mb-5 text-xs text-muted">
-              {t("batchDetail.contributionWaterfallHint")}
+              {t("batchDetail.landedWaterfallHint")}
             </p>
-            <WaterfallChart steps={contributionWaterfall} unitLabel={unit} />
+            <WaterfallChart
+              steps={landedWaterfall}
+              unitLabel={unit}
+              quantity={batch.quantity}
+            />
           </Card>
         </aside>
       </div>

@@ -588,10 +588,11 @@ const de = {
     "„{name}“ wird unwiderruflich gelöscht.",
   "batchDetail.applyLogistics": "Logistik aus Vorlage",
   "batchDetail.applyLogisticsHint":
-    "Fügt CostItems aus der Vorlage hinzu (bestehende bleiben).",
+    "Ersetzt Transport-/Lager-Posten durch die Vorlage; manuelle Einkaufs-Posten bleiben.",
   "batchDetail.applyLogisticsEmpty": "Keine Logistik-Vorlagen angelegt.",
   "batchDetail.applyLogisticsChoose": "Vorlage wählen…",
   "batchDetail.applyLogisticsAppend": "Übernehmen",
+  "batchDetail.applyLogisticsReplace": "Vorlage anwenden",
 
   "teams.title": "Teams",
   "teams.description":
@@ -884,7 +885,7 @@ const de = {
 
   "batches.title": "Chargen",
   "batches.description":
-    "PO-Pipeline: bestellen, unterwegs, angekommen — dann Marge steuern.",
+    "Einkauf bis Landed Cost: bestellt, unterwegs, im Lager — Kalkulation pro Charge.",
   "batches.add": "Neue Charge",
   "batches.empty": "Noch keine Chargen. Hier startest du — jede Kalkulation beginnt mit einer Charge.",
   "batches.emptyCta": "Erste Charge anlegen",
@@ -894,6 +895,8 @@ const de = {
   "batches.col.supplier": "Lieferant",
   "batches.col.landed": "Landed Cost",
   "batches.col.margin": "Marge",
+  "batches.col.ordered": "Bestellt",
+  "batches.col.arrival": "Ankunft",
   "batches.qty": "{count} {unit}",
   "batches.deleteConfirm": "Charge löschen?",
   "batches.pipeline.all": "Alle",
@@ -935,17 +938,38 @@ const de = {
 
   "batchNew.title": "Neue Charge",
   "batchNew.description":
-    "Einkauf planen: Partner → Material → Logistik — Landed Cost live rechts. Verkauf optional später.",
+    "Produkt wählen, Lieferant der Quelle setzen, Logistik — Landed Cost live rechts.",
   "batchNew.save": "Charge speichern",
-  "batchNew.step.partners": "Partner",
-  "batchNew.step.material": "Material",
+  "batchNew.step.partners": "Beschaffung",
+  "batchNew.step.material": "Einkaufspreis",
   "batchNew.step.logistics": "Logistik",
   "batchNew.step.sales": "Verkauf",
   "batchNew.step.result": "Ergebnis",
   "batchNew.partnersHint":
     "Produkt und Lieferant antippen — das ist der Start der Charge.",
+  "batchNew.productFirstHint":
+    "Zuerst Produkt, dann einen Lieferanten der dieses Produkt liefern kann.",
+  "batchNew.chooseProduct": "Produkt wählen…",
+  "batchNew.chooseSupplier": "Lieferant wählen…",
+  "batchNew.chooseProductFirst": "Zuerst Produkt wählen",
+  "batchNew.noSuppliersForProduct":
+    "Keine Lieferanten verknüpft — in Stammdaten Produkt↔Lieferant oder BOM setzen.",
+  "batchNew.salesMovedHint": "Verkauf planst du später unter",
   "batchNew.logisticsHint":
     "Logistik-Vorlage anheften oder Kostenposten manuell ergänzen.",
+  "batchNew.logisticsReplaceHint":
+    "Incoterm/Vorlage wählen — die Vorlagen-Kosten werden ersetzt, manuelle Posten bleiben.",
+  "batchNew.logisticsTemplate": "Incoterm / Logistik-Vorlage",
+  "batchNew.logisticsTemplateNone": "Keine Vorlage",
+  "batchNew.orderDateHint": "Steuert den Status „Bestellt“ und den FX-Kurs.",
+  "batchNew.expectedArrivalHint":
+    "ETA — setzt Status „Unterwegs“, bis die Ist-Ankunft erfasst ist.",
+  "batchNew.arrivalDateHint":
+    "Nur setzen, wenn die Ware schon da ist (sonst leer lassen).",
+  "batchNew.poNumberHint": "Referenz beim Lieferanten / auf der PO.",
+  "batchNew.poNumberPlaceholder": "z. B. PO-10482",
+  "batchNew.notesHint": "Optional — Verzögerungen, Sonderkonditionen, Hinweise.",
+  "batchNew.notesPlaceholder": "Kurznotiz zur Charge…",
   "batchNew.salesHint":
     "Händler wählen und Sale-Kosten als Marketing vs. Provision setzen.",
   "batchNew.salesOptionalHint":
@@ -953,7 +977,10 @@ const de = {
   "batchNew.addSalesLater": "Verkauf jetzt planen",
   "batchNew.hideSales": "Verkauf ausblenden",
   "batchNew.livePurchase": "Landed Cost",
-  "batchNew.livePurchaseHint": "Einkauf + Logistik pro Einheit — aktualisiert sich live.",
+  "batchNew.livePurchaseHint":
+    "Einkauf + Logistik pro Einheit und für die gesamte Charge — aktualisiert sich live.",
+  "batchNew.perUnitShort": "pro Einheit",
+  "batchNew.batchTotalShort": "Charge gesamt",
   "batchNew.saveAsOrdered": "Speichern legt die Charge als bestellt an (noch ohne Ankunft/Verkauf).",
   "batchNew.liveMargins": "Live-Margen",
   "batchNew.liveMarginsHint": "Aktualisiert sich mit jedem Baustein.",
@@ -1501,19 +1528,30 @@ const de = {
     "z. B. Lagermiete, Betriebskosten, Personal im Lager — wird über Chargen-Stückzahl auf Produkte umgelegt.",
   "lagerung.page.title": "Bestand & Ankunft",
   "lagerung.page.description":
-    "Wareneingang steuern: bestellt, unterwegs, im Lager — inkl. Restbestand und Landed Cost.",
+    "Lagerbestand nach Produkt, Wareneingang je Charge und Betriebskosten.",
   "lagerung.page.hint":
     "Chargenbezogene Fracht/Handling weiterhin über",
+  "lagerung.tab.bestand": "Bestand",
+  "lagerung.tab.ankunft": "Ankunft",
+  "lagerung.tab.betrieb": "Lager & Betrieb",
   "lagerung.kpi.inStock": "Im Lager",
   "lagerung.kpi.inTransit": "Unterwegs",
   "lagerung.kpi.ordered": "Bestellt",
+  "lagerung.kpi.stockValue": "Lagerwert",
   "lagerung.kpi.batches": "{count} Chargen",
   "lagerung.filter.all": "Alle offen",
   "lagerung.filter.ordered": "Bestellt",
   "lagerung.filter.in_transit": "Unterwegs",
   "lagerung.filter.arrived": "Im Lager",
-  "lagerung.col.onHand": "Menge",
+  "lagerung.col.onHand": "Im Lager",
+  "lagerung.col.ordered": "Bestellt",
+  "lagerung.col.inTransit": "Unterwegs",
   "lagerung.col.arrival": "Ankunft",
+  "lagerung.col.stockValue": "Lagerwert",
+  "lagerung.col.avgLanded": "Ø Landed",
+  "lagerung.sort.label": "Sortieren:",
+  "lagerung.sort.product": "Produkt",
+  "lagerung.sort.value": "Lagerwert",
   "lagerung.stock.empty": "Kein offener Bestand in diesem Filter.",
   "lagerung.stock.toBatches": "Zur Chargen-Pipeline",
   "lagerung.action.setEta": "ETA",
@@ -1725,6 +1763,8 @@ const de = {
   "costEditor.allocation": "Verteilung",
   "costEditor.phase": "Phase",
   "costEditor.remove": "Entfernen",
+  "costEditor.moveUp": "Nach oben",
+  "costEditor.moveDown": "Nach unten",
 
   "costerraGuide.title": "5-Minuten-Pfad",
   "costerraGuide.description":
@@ -1760,7 +1800,13 @@ const de = {
   "batchDetail.remaining": "Restmenge",
   "batchDetail.soldOf": "{sold} / {total} verkauft",
   "batchDetail.orderDate": "Bestelldatum",
-  "batchDetail.arrivalDate": "Ankunft",
+  "batchDetail.expectedArrival": "Erwartete Ankunft",
+  "batchDetail.arrivalDate": "Ankunft (Ist)",
+  "batchDetail.poNumber": "Bestell-/PO-Nr.",
+  "batchDetail.notes": "Notiz",
+  "batchDetail.receivedQuantity": "Geliefert ({unit})",
+  "batchDetail.receivedQuantityHint":
+    "Leer = Bestellmenge. Weniger = Fehlmenge/Bruch für Bestand.",
   "batchDetail.soldDate": "Verkaufsdatum",
   "batchDetail.fxRateOverride": "FX-Kurs (Override)",
   "batchDetail.fxRateInherited": "Company-Kurse",
@@ -1786,7 +1832,7 @@ const de = {
   "batchModal.selectProduct": "Produkt wählen…",
   "batchModal.noSupplier": "Kein Lieferant",
   "batchModal.bomHint": "Automatischer EK aus BOM-Summe: {price}",
-  "batchModal.useBomPrice": "BOM-Preis verwenden",
+  "batchModal.useBomPrice": "Automatischen EK verwenden",
   "batchModal.salesSection": "Erster Verkauf",
   "batchModal.inherit": "Erben",
   "batchModal.inheritCosts": "Kosten erben",
@@ -1817,7 +1863,7 @@ const de = {
   "batchModal.tierActive": "aktiv",
   "batchModal.nextTier":
     "Nächste Stufe ab {minQty} {unit} (−{percent}) — noch {remaining} {unit} bis dahin.",
-  "batchModal.overridePrice": "EK / {unit} überschreiben (€)",
+  "batchModal.overridePrice": "Abweichenden EK angeben",
   "batchModal.overrideHint": "Optional — sonst gilt der berechnete Preis.",
   "batchModal.procurementCosts": "Beschaffungskosten (z. B. Fracht, Zoll, QC, Montage/Repacking)",
   "batchModal.section.sales": "Verkauf",
@@ -1867,6 +1913,12 @@ const de = {
   "batchDetail.story.saleSplit": "Sale-Kosten dieser Charge",
   "batchDetail.contributionWaterfallHint":
     "Umsatz → Material → DB1 → Logistik → DB2 → Marketing/Vertrieb → DB3 (optional Gemeinkosten).",
+  "batchDetail.procurementFocus":
+    "Einkauf bis Landed Cost — Deckungsbeitrag folgt erst im Abverkauf.",
+  "batchDetail.landedWaterfallHint":
+    "Aufbau der Landed Cost pro Einheit und für die gesamte Charge: Einkauf plus Beschaffungs- und Logistikkosten.",
+  "batchDetail.salesMovedHint":
+    "Verkauf und Marge steuerst du unter",
   "batchDetail.wf.overhead": "− Gemeinkosten",
   "batchDetail.wf.result": "Betriebsergebnis",
   "batchDetail.basicData": "Basisdaten",
@@ -2520,10 +2572,11 @@ const en: Record<MessageKey, string> = {
     "“{name}” will be permanently deleted.",
   "batchDetail.applyLogistics": "Logistics from template",
   "batchDetail.applyLogisticsHint":
-    "Appends cost items from the template (existing items stay).",
+    "Replaces transport/storage items with the template; manual purchase items stay.",
   "batchDetail.applyLogisticsEmpty": "No logistics templates yet.",
   "batchDetail.applyLogisticsChoose": "Choose template…",
   "batchDetail.applyLogisticsAppend": "Apply",
+  "batchDetail.applyLogisticsReplace": "Apply template",
 
   "teams.title": "Teams",
   "teams.description":
@@ -2815,7 +2868,7 @@ const en: Record<MessageKey, string> = {
 
   "batches.title": "Batches",
   "batches.description":
-    "PO pipeline: ordered, in transit, arrived — then steer margins.",
+    "Procurement to landed cost: ordered, in transit, in stock — unit economics per batch.",
   "batches.add": "New batch",
   "batches.empty":
     "No batches yet. Start here — every calculation begins with a batch.",
@@ -2826,6 +2879,8 @@ const en: Record<MessageKey, string> = {
   "batches.col.supplier": "Supplier",
   "batches.col.landed": "Landed cost",
   "batches.col.margin": "Margin",
+  "batches.col.ordered": "Ordered",
+  "batches.col.arrival": "Arrival",
   "batches.qty": "{count} {unit}",
   "batches.deleteConfirm": "Delete batch?",
   "batches.pipeline.all": "All",
@@ -2867,17 +2922,38 @@ const en: Record<MessageKey, string> = {
 
   "batchNew.title": "New batch",
   "batchNew.description":
-    "Plan procurement: partners → material → logistics — landed cost live on the right. Sales optional later.",
+    "Pick product, set the sourcing supplier, logistics — landed cost live on the right.",
   "batchNew.save": "Save batch",
-  "batchNew.step.partners": "Partners",
-  "batchNew.step.material": "Material",
+  "batchNew.step.partners": "Procurement",
+  "batchNew.step.material": "Purchase price",
   "batchNew.step.logistics": "Logistics",
   "batchNew.step.sales": "Sales",
   "batchNew.step.result": "Result",
   "batchNew.partnersHint":
     "Tap product and supplier — that starts the batch.",
+  "batchNew.productFirstHint":
+    "Choose the product first, then a supplier that can supply it.",
+  "batchNew.chooseProduct": "Choose product…",
+  "batchNew.chooseSupplier": "Choose supplier…",
+  "batchNew.chooseProductFirst": "Choose a product first",
+  "batchNew.noSuppliersForProduct":
+    "No suppliers linked — set product↔supplier or BOM in master data.",
+  "batchNew.salesMovedHint": "Plan sales later under",
   "batchNew.logisticsHint":
     "Attach a logistics template or add cost items manually.",
+  "batchNew.logisticsReplaceHint":
+    "Pick an Incoterm/template — template costs are replaced; manual items stay.",
+  "batchNew.logisticsTemplate": "Incoterm / logistics template",
+  "batchNew.logisticsTemplateNone": "No template",
+  "batchNew.orderDateHint": "Drives “ordered” status and FX rate date.",
+  "batchNew.expectedArrivalHint":
+    "ETA — sets “in transit” until actual arrival is recorded.",
+  "batchNew.arrivalDateHint":
+    "Only set when goods have arrived (otherwise leave empty).",
+  "batchNew.poNumberHint": "Supplier / purchase-order reference.",
+  "batchNew.poNumberPlaceholder": "e.g. PO-10482",
+  "batchNew.notesHint": "Optional — delays, special terms, reminders.",
+  "batchNew.notesPlaceholder": "Short note about this batch…",
   "batchNew.salesHint":
     "Pick a dealer and set sale costs as marketing vs. commission.",
   "batchNew.salesOptionalHint":
@@ -2885,7 +2961,10 @@ const en: Record<MessageKey, string> = {
   "batchNew.addSalesLater": "Plan sales now",
   "batchNew.hideSales": "Hide sales",
   "batchNew.livePurchase": "Landed cost",
-  "batchNew.livePurchaseHint": "Purchase + logistics per unit — updates live.",
+  "batchNew.livePurchaseHint":
+    "Purchase + logistics per unit and for the full batch — updates live.",
+  "batchNew.perUnitShort": "per unit",
+  "batchNew.batchTotalShort": "batch total",
   "batchNew.saveAsOrdered": "Saving creates the batch as ordered (no arrival/sale yet).",
   "batchNew.liveMargins": "Live margins",
   "batchNew.liveMarginsHint": "Updates with every building block.",
@@ -3432,19 +3511,30 @@ const en: Record<MessageKey, string> = {
     "e.g. warehouse rent, utilities, warehouse staff — allocated to products by batch quantity in the period.",
   "lagerung.page.title": "Stock & arrivals",
   "lagerung.page.description":
-    "Track goods receipt: ordered, in transit, in stock — remaining qty and landed cost.",
+    "Stock by product, goods receipt per batch, and warehouse overhead.",
   "lagerung.page.hint":
     "Batch-level freight/handling still goes via",
+  "lagerung.tab.bestand": "Stock",
+  "lagerung.tab.ankunft": "Arrivals",
+  "lagerung.tab.betrieb": "Warehouse & ops",
   "lagerung.kpi.inStock": "In stock",
   "lagerung.kpi.inTransit": "In transit",
   "lagerung.kpi.ordered": "Ordered",
+  "lagerung.kpi.stockValue": "Stock value",
   "lagerung.kpi.batches": "{count} batches",
   "lagerung.filter.all": "All open",
   "lagerung.filter.ordered": "Ordered",
   "lagerung.filter.in_transit": "In transit",
   "lagerung.filter.arrived": "In stock",
-  "lagerung.col.onHand": "Qty",
+  "lagerung.col.onHand": "In stock",
+  "lagerung.col.ordered": "Ordered",
+  "lagerung.col.inTransit": "In transit",
   "lagerung.col.arrival": "Arrival",
+  "lagerung.col.stockValue": "Stock value",
+  "lagerung.col.avgLanded": "Avg landed",
+  "lagerung.sort.label": "Sort:",
+  "lagerung.sort.product": "Product",
+  "lagerung.sort.value": "Stock value",
   "lagerung.stock.empty": "No open stock in this filter.",
   "lagerung.stock.toBatches": "Go to batch pipeline",
   "lagerung.action.setEta": "ETA",
@@ -3654,6 +3744,8 @@ const en: Record<MessageKey, string> = {
   "costEditor.allocation": "Allocation",
   "costEditor.phase": "Phase",
   "costEditor.remove": "Remove",
+  "costEditor.moveUp": "Move up",
+  "costEditor.moveDown": "Move down",
 
   "costerraGuide.title": "5-minute path",
   "costerraGuide.description":
@@ -3689,7 +3781,13 @@ const en: Record<MessageKey, string> = {
   "batchDetail.remaining": "Remaining qty",
   "batchDetail.soldOf": "{sold} / {total} sold",
   "batchDetail.orderDate": "Order date",
-  "batchDetail.arrivalDate": "Arrival",
+  "batchDetail.expectedArrival": "Expected arrival",
+  "batchDetail.arrivalDate": "Arrival (actual)",
+  "batchDetail.poNumber": "PO number",
+  "batchDetail.notes": "Notes",
+  "batchDetail.receivedQuantity": "Received ({unit})",
+  "batchDetail.receivedQuantityHint":
+    "Empty = ordered qty. Lower = shortage/damage for stock.",
   "batchDetail.soldDate": "Sale date",
   "batchDetail.fxRateOverride": "FX rate (override)",
   "batchDetail.fxRateInherited": "Company rates",
@@ -3715,7 +3813,7 @@ const en: Record<MessageKey, string> = {
   "batchModal.selectProduct": "Select product…",
   "batchModal.noSupplier": "No supplier",
   "batchModal.bomHint": "Automatic purchase cost from BOM sum: {price}",
-  "batchModal.useBomPrice": "Use BOM price",
+  "batchModal.useBomPrice": "Use automatic purchase price",
   "batchModal.salesSection": "First sale",
   "batchModal.inherit": "Inherit",
   "batchModal.inheritCosts": "Inherit costs",
@@ -3746,7 +3844,7 @@ const en: Record<MessageKey, string> = {
   "batchModal.tierActive": "active",
   "batchModal.nextTier":
     "Next tier from {minQty} {unit} (−{percent}) — {remaining} {unit} to go.",
-  "batchModal.overridePrice": "Override purchase / {unit} (€)",
+  "batchModal.overridePrice": "Set different purchase price",
   "batchModal.overrideHint": "Optional — otherwise the calculated price applies.",
   "batchModal.procurementCosts":
     "Procurement costs (e.g. freight, customs, QC, assembly/repacking)",
@@ -3798,6 +3896,12 @@ const en: Record<MessageKey, string> = {
   "batchDetail.story.saleSplit": "Sale costs on this batch",
   "batchDetail.contributionWaterfallHint":
     "Revenue → material → CM1 → logistics → CM2 → marketing/sales → CM3 (optional overhead).",
+  "batchDetail.procurementFocus":
+    "Procurement to landed cost — contribution margin comes with sell-through.",
+  "batchDetail.landedWaterfallHint":
+    "Landed cost build-up per unit and for the full batch: purchase plus procurement and logistics costs.",
+  "batchDetail.salesMovedHint":
+    "Manage sales and margin under",
   "batchDetail.wf.overhead": "− Overhead",
   "batchDetail.wf.result": "Operating result",
   "batchDetail.basicData": "Basic data",

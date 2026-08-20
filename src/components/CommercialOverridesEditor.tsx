@@ -151,6 +151,7 @@ export function CommercialOverridesEditor({
                 })
               : t("commercial.overridden")
           }
+          className="sm:col-span-2"
         >
           <div className="flex gap-2">
             <TextInput
@@ -169,7 +170,7 @@ export function CommercialOverridesEditor({
                   paymentUnit: value.paymentUnit ?? inherited.paymentUnit,
                 });
               }}
-              className="min-w-0 flex-[2.5]"
+              className="!w-auto min-w-[7rem] flex-1 basis-0"
             />
             <Select
               value={value.paymentUnit ?? ""}
@@ -184,7 +185,7 @@ export function CommercialOverridesEditor({
                   paymentDays: value.paymentDays ?? inherited.paymentDays,
                 });
               }}
-              className="w-[110px] shrink-0"
+              className="!w-[8rem] shrink-0"
             >
               <option value="">{t("commercial.inheritShort")}</option>
               <option value="Tage">{t("paymentUnit.Tage")}</option>
@@ -206,6 +207,7 @@ export function CommercialOverridesEditor({
                 })
               : t("commercial.overridden")
           }
+          className="sm:col-span-2"
         >
           <div className="flex gap-2">
             <TextInput
@@ -225,7 +227,7 @@ export function CommercialOverridesEditor({
                   skontoDays: value.skontoDays ?? inherited.skontoDays,
                 });
               }}
-              className="flex-1"
+              className="!w-auto min-w-[7rem] flex-1 basis-0"
             />
             <TextInput
               type="number"
@@ -244,7 +246,7 @@ export function CommercialOverridesEditor({
                     value.skontoPercent ?? inherited.skontoPercent,
                 });
               }}
-              className="w-[110px]"
+              className="!w-[8rem] shrink-0"
             />
           </div>
         </Field>

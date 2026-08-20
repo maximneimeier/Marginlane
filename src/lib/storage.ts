@@ -488,12 +488,24 @@ function normalizeBatch(
       typeof raw.orderDate === "string" && raw.orderDate
         ? raw.orderDate
         : null,
+    expectedArrivalDate:
+      typeof raw.expectedArrivalDate === "string" && raw.expectedArrivalDate
+        ? raw.expectedArrivalDate
+        : null,
     arrivalDate:
       typeof raw.arrivalDate === "string" && raw.arrivalDate
         ? raw.arrivalDate
         : null,
     soldDate:
       typeof raw.soldDate === "string" && raw.soldDate ? raw.soldDate : null,
+    poNumber: typeof raw.poNumber === "string" ? raw.poNumber : "",
+    notes: typeof raw.notes === "string" ? raw.notes : "",
+    receivedQuantity:
+      typeof raw.receivedQuantity === "number" &&
+      Number.isFinite(raw.receivedQuantity) &&
+      raw.receivedQuantity >= 0
+        ? raw.receivedQuantity
+        : null,
     applySkonto:
       typeof raw.applySkonto === "boolean" ? raw.applySkonto : null,
     fxRateOverride:

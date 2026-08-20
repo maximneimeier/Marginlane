@@ -5,14 +5,17 @@ type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
+function flagOn(value: string | string[] | undefined): boolean {
+  return value === "1" || (Array.isArray(value) && value.includes("1"));
+}
+
 export default async function BatchDetailPage({
   params,
   searchParams,
 }: PageProps) {
   const { id } = await params;
   const sp = await searchParams;
-  const sell = sp.sell;
-  const highlightSell =
-    sell === "1" || (Array.isArray(sell) && sell.includes("1"));
-  return <BatchDetailPageClient id={id} highlightSell={highlightSell} />;
+  return (
+    <BatchDetailPageClient id={id} startEditing={flagOn(sp.edit)} />
+  );
 }

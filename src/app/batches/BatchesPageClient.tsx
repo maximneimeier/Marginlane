@@ -3,19 +3,18 @@
 import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Pencil, Trash2 } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
 import { calculateResolvedEconomics } from "@/lib/resolve";
-import { formatEuro, formatNumber, formatPercent } from "@/lib/format";
+import { formatEuro, formatNumber, formatDate } from "@/lib/format";
 import { useI18n } from "@/hooks/useI18n";
 import {
   countBatchesByPipelineStatus,
   filterBatchesByPipeline,
   getBatchPipelineStatusForData,
-  markBatchArrived,
   type BatchPipelineFilter,
   type BatchPipelineStatus,
 } from "@/lib/batchPipeline";
-import { CosterraGuidePanel } from "@/components/CosterraGuidePanel";
 import { Badge, Button, Card, PageHeader } from "@/components/ui";
 
 const FILTERS: BatchPipelineFilter[] = [
@@ -23,7 +22,6 @@ const FILTERS: BatchPipelineFilter[] = [
   "ordered",
   "in_transit",
   "arrived",
-  "sold",
 ];
 
 function statusBadgeTone(
@@ -36,19 +34,23 @@ function statusBadgeTone(
 
 function ChargenPageInner() {
   const router = useRouter();
-  const { ready, data, deleteBatch, upsertBatch } = useStore();
+  const { ready, data, deleteBatch } = useStore();
   const { t, locale, pricingUnitLabel } = useI18n();
   const [filter, setFilter] = useState<BatchPipelineFilter>("all");
 
-  const counts = useMemo(
-    () => countBatchesByPipelineStatus(data.batches, data),
-    [data],
-  );
+  const visible = useMemo(() => {
+    const open = data.batches.filter(
+      (b) => getBatchPipelineStatusForData(data, b) !== "sold",
+    );
+    return filterBatchesByPipeline(open, filter, data);
+  }, [data, filter]);
 
-  const visible = useMemo(
-    () => filterBatchesByPipeline(data.batches, filter, data),
-    [data, filter],
-  );
+  const counts = useMemo(() => {
+    const open = data.batches.filter(
+      (b) => getBatchPipelineStatusForData(data, b) !== "sold",
+    );
+    return countBatchesByPipelineStatus(open, data);
+  }, [data]);
 
   if (!ready) return <p className="text-sm text-muted">{t("common.loading")}</p>;
 
@@ -63,8 +65,6 @@ function ChargenPageInner() {
           </Button>
         }
       />
-
-      <CosterraGuidePanel data={data} compact />
 
       {data.batches.length === 0 ? (
         <Card>
@@ -82,7 +82,7 @@ function ChargenPageInner() {
             {FILTERS.map((key) => {
               const count =
                 key === "all"
-                  ? data.batches.length
+                  ? Object.values(counts).reduce((a, b) => a + b, 0)
                   : counts[key as BatchPipelineStatus];
               const active = filter === key;
               return (
@@ -103,107 +103,143 @@ function ChargenPageInner() {
             })}
           </div>
 
-          <div className="overflow-hidden rounded-[12px] border border-line bg-white shadow-[var(--shadow-sm)]">
-            <div className="grid grid-cols-[1.1fr_0.9fr_0.9fr_0.75fr_0.7fr_0.7fr_auto] gap-3 border-b border-line bg-surface-faint px-4 py-2 text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
-              <span>{t("batches.col.batch")}</span>
-              <span>{t("batches.col.status")}</span>
-              <span>{t("batches.col.product")}</span>
-              <span>{t("batches.col.supplier")}</span>
-              <span className="text-right">{t("batches.col.landed")}</span>
-              <span className="text-right">{t("batches.col.margin")}</span>
-              <span />
-            </div>
-            <ul>
-              {visible.length === 0 ? (
-                <li className="px-4 py-8 text-center text-[13px] text-muted">
-                  {t("batches.pipeline.emptyFilter")}
-                </li>
-              ) : (
-                visible.map((batch) => {
-                  const product = data.catalogProducts.find(
-                    (p) => p.id === batch.productId,
-                  );
-                  const supplier = data.suppliers.find(
-                    (s) => s.id === batch.supplierId,
-                  );
-                  const econ = calculateResolvedEconomics(data, batch);
-                  const status = getBatchPipelineStatusForData(data, batch);
-
-                  return (
-                    <li
-                      key={batch.id}
-                      className="grid grid-cols-[1.1fr_0.9fr_0.9fr_0.75fr_0.7fr_0.7fr_auto] items-center gap-3 border-b border-line px-4 py-3 last:border-b-0 hover:bg-surface-faint"
+          <div className="overflow-x-auto rounded-[12px] border border-line bg-white shadow-[var(--shadow-sm)]">
+            <table className="w-full min-w-[780px] table-fixed border-collapse text-left">
+              <colgroup>
+                <col className="w-[20%]" />
+                <col className="w-[11%]" />
+                <col className="w-[14%]" />
+                <col className="w-[13%]" />
+                <col className="w-[11%]" />
+                <col className="w-[11%]" />
+                <col className="w-[10%]" />
+                <col className="w-[10%]" />
+              </colgroup>
+              <thead>
+                <tr className="border-b border-line bg-surface-faint text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
+                  <th className="px-4 py-2.5 font-medium">{t("batches.col.batch")}</th>
+                  <th className="px-3 py-2.5 font-medium">{t("batches.col.status")}</th>
+                  <th className="px-3 py-2.5 font-medium">{t("batches.col.product")}</th>
+                  <th className="px-3 py-2.5 font-medium">{t("batches.col.supplier")}</th>
+                  <th className="px-3 py-2.5 font-medium">
+                    {t("batches.col.ordered")}
+                  </th>
+                  <th className="px-3 py-2.5 font-medium">
+                    {t("batches.col.arrival")}
+                  </th>
+                  <th className="px-3 py-2.5 text-right font-medium">
+                    {t("batches.col.landed")}
+                  </th>
+                  <th className="px-4 py-2.5" />
+                </tr>
+              </thead>
+              <tbody>
+                {visible.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={8}
+                      className="px-4 py-8 text-center text-[13px] text-muted"
                     >
-                      <div className="min-w-0">
-                        <Link
-                          href={`/batches/${batch.id}`}
-                          className="font-medium text-foreground hover:text-accent"
-                        >
-                          {batch.label}
-                        </Link>
-                        <p className="text-[12px] text-muted-soft">
-                          {t("batches.qty", {
-                            count: formatNumber(batch.quantity, locale),
-                            unit: pricingUnitLabel(
-                              product?.pricingUnit ?? "pcs",
-                            ),
-                          })}
-                        </p>
-                      </div>
-                      <div>
-                        <Badge tone={statusBadgeTone(status)}>
-                          {t(`batches.pipeline.${status}`)}
-                        </Badge>
-                      </div>
-                      <span className="truncate text-[13px] text-muted">
-                        {product?.name ?? t("common.emDash")}
-                      </span>
-                      <span className="truncate text-[13px] text-muted">
-                        {supplier?.name ?? t("common.emDash")}
-                      </span>
-                      <span className="text-right text-[13px] tabular-nums">
-                        {formatEuro(econ.landedCostPerUnit, locale)}
-                      </span>
-                      <span className="text-right text-[13px]">
-                        {formatPercent(econ.contributionPercent, locale)}
-                      </span>
-                      <div className="flex flex-wrap justify-end gap-1">
-                        {status === "ordered" || status === "in_transit" ? (
-                          <Button
-                            variant="ghost"
-                            className="h-7 px-2 text-[12px]"
-                            onClick={() =>
-                              upsertBatch(markBatchArrived(batch))
-                            }
-                          >
-                            {t("batches.pipeline.markArrived")}
-                          </Button>
-                        ) : null}
-                        {status === "arrived" ? (
-                          <Link
-                            href={`/batches/${batch.id}?sell=1`}
-                            className="inline-flex h-7 items-center rounded-[8px] px-2 text-[12px] font-medium text-accent hover:underline"
-                          >
-                            {t("batches.pipeline.recordSale")}
-                          </Link>
-                        ) : null}
-                        <Button
-                          variant="ghost"
-                          className="h-7 px-2 text-[12px]"
-                          onClick={() => {
-                            if (confirm(t("batches.deleteConfirm"))) {
-                              deleteBatch(batch.id);
-                            }
-                          }}
-                        >
-                          {t("common.delete")}
-                        </Button>
-                      </div>
-                    </li>
-                  );
-                })
-              )}
-            </ul>
+                      {t("batches.pipeline.emptyFilter")}
+                    </td>
+                  </tr>
+                ) : (
+                  visible.map((batch) => {
+                    const product = data.catalogProducts.find(
+                      (p) => p.id === batch.productId,
+                    );
+                    const supplier = data.suppliers.find(
+                      (s) => s.id === batch.supplierId,
+                    );
+                    const econ = calculateResolvedEconomics(data, batch);
+                    const status = getBatchPipelineStatusForData(data, batch);
+
+                    return (
+                      <tr
+                        key={batch.id}
+                        className="border-b border-line last:border-b-0 hover:bg-surface-faint"
+                      >
+                        <td className="px-4 py-3 align-middle">
+                          <div className="min-w-0">
+                            <Link
+                              href={`/batches/${batch.id}`}
+                              className="block truncate font-medium text-foreground hover:text-accent"
+                            >
+                              {batch.label}
+                            </Link>
+                            <p className="truncate text-[12px] text-muted-soft">
+                              {batch.poNumber
+                                ? `${batch.poNumber} · `
+                                : ""}
+                              {t("batches.qty", {
+                                count: formatNumber(batch.quantity, locale),
+                                unit: pricingUnitLabel(
+                                  product?.pricingUnit ?? "pcs",
+                                ),
+                              })}
+                            </p>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3 align-middle">
+                          <Badge tone={statusBadgeTone(status)}>
+                            {t(`batches.pipeline.${status}`)}
+                          </Badge>
+                        </td>
+                        <td className="truncate px-3 py-3 align-middle text-[13px] text-muted">
+                          {product?.name ?? t("common.emDash")}
+                        </td>
+                        <td className="truncate px-3 py-3 align-middle text-[13px] text-muted">
+                          {supplier?.name ?? t("common.emDash")}
+                        </td>
+                        <td className="px-3 py-3 align-middle text-[13px] tabular-nums text-muted">
+                          {formatDate(
+                            batch.orderDate || batch.createdAt,
+                            locale,
+                          )}
+                        </td>
+                        <td className="px-3 py-3 align-middle text-[13px] tabular-nums text-muted">
+                          {batch.arrivalDate
+                            ? formatDate(batch.arrivalDate, locale)
+                            : batch.expectedArrivalDate
+                              ? formatDate(batch.expectedArrivalDate, locale)
+                              : t("common.emDash")}
+                        </td>
+                        <td className="px-3 py-3 text-right align-middle text-[13px] tabular-nums font-medium">
+                          {formatEuro(econ.landedCostPerUnit, locale)}
+                        </td>
+                        <td className="px-4 py-3 align-middle">
+                          <div className="flex justify-end gap-0.5">
+                            <Link
+                              href={`/batches/${batch.id}?edit=1`}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] text-muted transition-colors hover:bg-surface-soft hover:text-foreground"
+                              title={t("common.edit")}
+                              aria-label={t("common.edit")}
+                            >
+                              <Pencil size={15} strokeWidth={1.75} aria-hidden />
+                            </Link>
+                            <button
+                              type="button"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] text-muted transition-colors hover:bg-danger/10 hover:text-danger"
+                              title={t("common.delete")}
+                              aria-label={t("common.delete")}
+                              onClick={() => {
+                                if (
+                                  window.confirm(t("batches.deleteConfirm"))
+                                ) {
+                                  deleteBatch(batch.id);
+                                }
+                              }}
+                            >
+                              <Trash2 size={15} strokeWidth={1.75} aria-hidden />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
         </>
       )}

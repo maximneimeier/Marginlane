@@ -434,7 +434,9 @@ export function resolveBatchEconomicsInput(
     (batch.applySkonto !== false && skontoPercent > 0);
 
   const remainingQuantity = Math.max(
-    batchInput.quantity - salesAggregate.soldQuantity,
+    (batch.receivedQuantity != null && batch.receivedQuantity >= 0
+      ? batch.receivedQuantity
+      : batchInput.quantity) - salesAggregate.soldQuantity,
     0,
   );
   const targetMarginPercent = catalogProduct?.targetMarginPercent ?? null;

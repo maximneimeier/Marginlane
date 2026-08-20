@@ -23,6 +23,7 @@ import type {
   PersonnelTeam,
   ProductComponent,
   ProductDocument,
+  ProductSupplier,
   Sale,
   Supplier,
 } from "../src/lib/types";
@@ -463,6 +464,42 @@ const LINKS: ProductComponent[] = [
   },
 ];
 
+/** Explizite Quellen: Lounge auch alternativ bei Yiwu (anderer Listen-EK). */
+const PRODUCT_SUPPLIERS: ProductSupplier[] = [
+  {
+    id: "ps_demo_lounge_vinh",
+    productId: "prd_demo_lounge",
+    supplierId: "sup_demo_vinh",
+    unitPurchasePrice: null,
+    preferred: true,
+    notes: "Hauptquelle HCMC",
+  },
+  {
+    id: "ps_demo_lounge_yiwu",
+    productId: "prd_demo_lounge",
+    supplierId: "sup_demo_yiwu",
+    unitPurchasePrice: 118,
+    preferred: false,
+    notes: "Alternative Quelle Yiwu — Listen-EK",
+  },
+  {
+    id: "ps_demo_bike_ningbo",
+    productId: "prd_demo_bike",
+    supplierId: "sup_demo_ningbo",
+    unitPurchasePrice: null,
+    preferred: true,
+    notes: "",
+  },
+  {
+    id: "ps_demo_xmas_yiwu",
+    productId: "prd_demo_xmas",
+    supplierId: "sup_demo_yiwu",
+    unitPurchasePrice: null,
+    preferred: true,
+    notes: "",
+  },
+];
+
 const LOGISTICS_BLOCKS: LogisticsBuildingBlock[] = [
   {
     id: "lbb_demo_pickup",
@@ -804,6 +841,10 @@ const BATCHES: Batch[] = [
     ],
     orderDate: "2026-08-10",
     arrivalDate: null,
+    expectedArrivalDate: null,
+    poNumber: "",
+    notes: "",
+    receivedQuantity: null,
     soldDate: null,
     applySkonto: null,
     fxRateOverride: null,
@@ -842,6 +883,10 @@ const BATCHES: Batch[] = [
     ],
     orderDate: "2026-07-20",
     arrivalDate: "2026-09-05",
+    expectedArrivalDate: null,
+    poNumber: "",
+    notes: "",
+    receivedQuantity: null,
     soldDate: null,
     applySkonto: null,
     fxRateOverride: null,
@@ -880,6 +925,10 @@ const BATCHES: Batch[] = [
     ],
     orderDate: "2026-05-15",
     arrivalDate: "2026-07-01",
+    expectedArrivalDate: null,
+    poNumber: "",
+    notes: "",
+    receivedQuantity: null,
     soldDate: null,
     applySkonto: null,
     fxRateOverride: null,
@@ -918,6 +967,10 @@ const BATCHES: Batch[] = [
     ],
     orderDate: "2026-03-01",
     arrivalDate: "2026-04-20",
+    expectedArrivalDate: null,
+    poNumber: "",
+    notes: "",
+    receivedQuantity: null,
     soldDate: "2026-06-12",
     applySkonto: null,
     fxRateOverride: null,
@@ -1479,6 +1532,12 @@ async function buildDemoData(current: AppData): Promise<{
       ),
       LINKS,
     ),
+    productSuppliers: upsertById(
+      (current.productSuppliers ?? []).filter(
+        (ps) => !removedIds.includes(ps.productId),
+      ),
+      PRODUCT_SUPPLIERS,
+    ),
     dealers: upsertById(current.dealers, DEALERS),
     logisticsBuildingBlocks: upsertById(
       current.logisticsBuildingBlocks ?? [],
@@ -1542,6 +1601,9 @@ async function main() {
     );
     console.log(
       `  BOM-Links:   ${LINKS.length} (gesamt ${saved.productComponents.length})`,
+    );
+    console.log(
+      `  Produkt↔LF:  ${PRODUCT_SUPPLIERS.length} (gesamt ${(saved.productSuppliers ?? []).length})`,
     );
     console.log(`  Händler:     ${DEALERS.length} (gesamt ${saved.dealers.length})`);
     console.log(

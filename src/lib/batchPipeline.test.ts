@@ -26,8 +26,12 @@ function batch(partial: Partial<Batch> & Pick<Batch, "id">): Batch {
     sales: [],
     createdAt: "2026-01-01T00:00:00.000Z",
     orderDate: "2026-01-01",
+    expectedArrivalDate: null,
     arrivalDate: null,
     soldDate: null,
+    poNumber: "",
+    notes: "",
+    receivedQuantity: null,
     applySkonto: null,
     fxRateOverride: null,
     duty: {
@@ -57,6 +61,27 @@ describe("batchPipeline", () => {
     ).toBe("arrived");
     expect(
       getBatchPipelineStatus(batch({ id: "4", arrivalDate: "2026-08-10" }), today, 10),
+    ).toBe("sold");
+  });
+
+  it("uses ETA and received quantity", () => {
+    expect(
+      getBatchPipelineStatus(
+        batch({ id: "eta", expectedArrivalDate: "2026-09-01", arrivalDate: null }),
+        today,
+      ),
+    ).toBe("in_transit");
+    expect(
+      getBatchPipelineStatus(
+        batch({
+          id: "short",
+          arrivalDate: "2026-08-10",
+          quantity: 10,
+          receivedQuantity: 6,
+        }),
+        today,
+        6,
+      ),
     ).toBe("sold");
   });
 

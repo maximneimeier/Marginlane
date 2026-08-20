@@ -231,6 +231,15 @@ export function validateAppData(raw: unknown): ValidationIssue[] {
         message: "Batch purchase price must be ≥ 0",
       });
     }
+    if (
+      b.receivedQuantity != null &&
+      !isNonNegNumber(b.receivedQuantity)
+    ) {
+      issues.push({
+        path: `${base}.receivedQuantity`,
+        message: "Batch received quantity must be ≥ 0",
+      });
+    }
     for (const item of b.costItems ?? []) {
       if (!isNonNegNumber(item.amount)) {
         issues.push({

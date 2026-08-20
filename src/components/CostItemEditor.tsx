@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronDown, ChevronUp } from "lucide-react";
 import type { CostAllocation, CostItem, CostPhase } from "@/lib/types";
 import { COST_TYPE_PRESETS } from "@/lib/types";
 import { createId } from "@/lib/format";
@@ -76,6 +77,17 @@ export function CostItemEditor({
     onChange(items.filter((item) => item.id !== id));
   }
 
+  function move(id: string, direction: -1 | 1) {
+    const index = items.findIndex((item) => item.id === id);
+    if (index < 0) return;
+    const target = index + direction;
+    if (target < 0 || target >= items.length) return;
+    const next = [...items];
+    const [row] = next.splice(index, 1);
+    next.splice(target, 0, row);
+    onChange(next);
+  }
+
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -115,11 +127,35 @@ export function CostItemEditor({
         </p>
       ) : (
         <ul className="space-y-3">
-          {items.map((item) => (
+          {items.map((item, index) => (
             <li
               key={item.id}
               className="grid gap-3 rounded-md border border-line bg-white p-3 sm:grid-cols-12"
             >
+              <div className="flex items-start sm:col-span-1">
+                <div className="flex flex-col gap-0.5 pt-5">
+                  <button
+                    type="button"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-[6px] text-muted hover:bg-surface-soft hover:text-foreground disabled:opacity-30"
+                    disabled={index === 0}
+                    onClick={() => move(item.id, -1)}
+                    aria-label={t("costEditor.moveUp")}
+                    title={t("costEditor.moveUp")}
+                  >
+                    <ChevronUp size={14} strokeWidth={2} aria-hidden />
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-[6px] text-muted hover:bg-surface-soft hover:text-foreground disabled:opacity-30"
+                    disabled={index === items.length - 1}
+                    onClick={() => move(item.id, 1)}
+                    aria-label={t("costEditor.moveDown")}
+                    title={t("costEditor.moveDown")}
+                  >
+                    <ChevronDown size={14} strokeWidth={2} aria-hidden />
+                  </button>
+                </div>
+              </div>
               <div className="sm:col-span-3">
                 <Field label={t("costEditor.type")}>
                   <Select
@@ -147,7 +183,7 @@ export function CostItemEditor({
                   </Select>
                 </Field>
               </div>
-              <div className="sm:col-span-3">
+              <div className="sm:col-span-2">
                 <Field label={t("costEditor.label")}>
                   <TextInput
                     value={item.label}

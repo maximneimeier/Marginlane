@@ -530,6 +530,24 @@ export type ProductComponent = {
 };
 
 /**
+ * Beschaffungsquellen: dasselbe Katalogprodukt kann von mehreren Lieferanten
+ * bezogen werden; ein Lieferant kann mehrere Produkte liefern.
+ */
+export type ProductSupplier = {
+  id: string;
+  productId: string;
+  supplierId: string;
+  /**
+   * Optionaler Listen-EK für dieses Produkt beim Lieferanten.
+   * `null` = EK aus BOM-Komponenten dieses Lieferanten bzw. Gesamt-BOM.
+   */
+  unitPurchasePrice: number | null;
+  /** Bevorzugte Quelle in Dropdowns */
+  preferred: boolean;
+  notes: string;
+};
+
+/**
  * @deprecated Einzelnes SalesData-Objekt (vor Multi-Sale).
  * Wird bei Migration in Sale[] umgewandelt.
  */
@@ -639,10 +657,21 @@ export type Batch = {
   createdAt: string;
   /** Bestellung / PO (ISO). Fallback: createdAt */
   orderDate: string | null;
-  /** Wareneingang / Ankunft (ISO). Fallback: orderDate */
+  /** Geplante Ankunft / ETA (ISO). Ohne Ist-Ankunft → Status „unterwegs“ */
+  expectedArrivalDate: string | null;
+  /** Wareneingang / Ist-Ankunft (ISO). ≤ heute → im Lager */
   arrivalDate: string | null;
   /** Verkaufsdatum für Umsatz-Zuordnung (ISO). Fallback: createdAt */
   soldDate: string | null;
+  /** Bestell-/PO-Nummer (Freitext) */
+  poNumber: string;
+  /** Interne Notiz zur Charge */
+  notes: string;
+  /**
+   * Tatsächlich gelieferte Menge in pricingUnit.
+   * `null` = Bestellmenge (`quantity`) annehmen.
+   */
+  receivedQuantity: number | null;
   /**
    * Skonto in Unit Economics anwenden.
    * `null` = automatisch wenn skontoPercent > 0.
@@ -840,6 +869,8 @@ export type AppData = {
   components: Component[];
   /** BOM: Produkt ↔ Komponente (n:m) */
   productComponents: ProductComponent[];
+  /** Beschaffungsquellen: Produkt ↔ Lieferant (n:m) */
+  productSuppliers: ProductSupplier[];
   dealers: Dealer[];
   batches: Batch[];
   /** Wiederverwendbare Logistik-Kostenbausteine */
@@ -1127,6 +1158,7 @@ export const EMPTY_DATA: AppData = {
   catalogProducts: [],
   components: [],
   productComponents: [],
+  productSuppliers: [],
   dealers: [],
   batches: [],
   logisticsBuildingBlocks: [],

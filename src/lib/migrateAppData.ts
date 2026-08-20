@@ -34,6 +34,7 @@ import type {
   Product,
   ProductComponent,
   ProductDocument,
+  ProductSupplier,
   Sale,
   SalesData,
   SalesPlanCell,
@@ -338,6 +339,10 @@ export function migrateAppData(raw: unknown): AppData {
             typeof (b as Batch).orderDate === "string"
               ? (b as Batch).orderDate
               : null,
+          expectedArrivalDate:
+            typeof (b as Batch).expectedArrivalDate === "string"
+              ? (b as Batch).expectedArrivalDate
+              : null,
           arrivalDate:
             typeof (b as Batch).arrivalDate === "string"
               ? (b as Batch).arrivalDate
@@ -345,6 +350,16 @@ export function migrateAppData(raw: unknown): AppData {
           soldDate:
             typeof (b as Batch).soldDate === "string"
               ? (b as Batch).soldDate
+              : null,
+          poNumber:
+            typeof (b as Batch).poNumber === "string"
+              ? (b as Batch).poNumber
+              : "",
+          notes:
+            typeof (b as Batch).notes === "string" ? (b as Batch).notes : "",
+          receivedQuantity:
+            typeof (b as Batch).receivedQuantity === "number"
+              ? (b as Batch).receivedQuantity
               : null,
           applySkonto:
             typeof (b as Batch).applySkonto === "boolean"
@@ -646,6 +661,7 @@ export function migrateAppData(raw: unknown): AppData {
     catalogProducts,
     components,
     productComponents,
+    productSuppliers: migrateProductSuppliers(input, productComponents, components),
     dealers,
     batches,
     logisticsBuildingBlocks,
@@ -801,6 +817,64 @@ export function emptyProductDocument(): ProductDocument {
     url: "",
     notes: "",
   };
+}
+
+export function normalizeProductSupplier(
+  raw: Partial<ProductSupplier>,
+): ProductSupplier {
+  return {
+    id: typeof raw.id === "string" && raw.id ? raw.id : createId("ps"),
+    productId: typeof raw.productId === "string" ? raw.productId : "",
+    supplierId: typeof raw.supplierId === "string" ? raw.supplierId : "",
+    unitPurchasePrice:
+      typeof raw.unitPurchasePrice === "number" ? raw.unitPurchasePrice : null,
+    preferred: Boolean(raw.preferred),
+    notes: typeof raw.notes === "string" ? raw.notes : "",
+  };
+}
+
+/**
+ * ProductSupplier-Links laden; wenn leer, aus BOM-Komponenten ableiten
+ * (ein Lieferant kann mehrere Produkte, ein Produkt mehrere Lieferanten).
+ */
+export function migrateProductSuppliers(
+  input: Partial<AppData> | Record<string, unknown>,
+  productComponents: ProductComponent[],
+  components: Component[],
+): ProductSupplier[] {
+  const raw = Array.isArray(
+    (input as { productSuppliers?: unknown }).productSuppliers,
+  )
+    ? ((input as { productSuppliers: unknown[] }).productSuppliers as Array<
+        Partial<ProductSupplier>
+      >)
+    : [];
+
+  const existing = raw
+    .map((ps) => normalizeProductSupplier(ps))
+    .filter((ps) => ps.productId && ps.supplierId);
+
+  if (existing.length > 0) return existing;
+
+  const byComponent = new Map(components.map((c) => [c.id, c]));
+  const seen = new Set<string>();
+  const derived: ProductSupplier[] = [];
+  for (const pc of productComponents) {
+    const comp = byComponent.get(pc.componentId);
+    if (!comp?.supplierId || !pc.productId) continue;
+    const key = `${pc.productId}::${comp.supplierId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    derived.push({
+      id: createId("ps"),
+      productId: pc.productId,
+      supplierId: comp.supplierId,
+      unitPurchasePrice: null,
+      preferred: derived.filter((d) => d.productId === pc.productId).length === 0,
+      notes: "",
+    });
+  }
+  return derived;
 }
 
 export function normalizeProductDocuments(raw: unknown): ProductDocument[] {

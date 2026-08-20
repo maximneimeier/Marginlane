@@ -27,23 +27,35 @@ export function batchRemainingQuantity(data: AppData, batch: Batch): number {
   return calculateResolvedEconomics(data, batch).remainingQuantity;
 }
 
+export function batchStockQuantity(batch: Batch): number {
+  if (batch.receivedQuantity != null && batch.receivedQuantity >= 0) {
+    return batch.receivedQuantity;
+  }
+  return batch.quantity;
+}
+
 /**
  * Lebenszyklus der Charge:
- * — bestellt: noch kein Ankunftsdatum
- * — unterwegs: Ankunft in der Zukunft
- * — angekommen: Ankunft ≤ heute und Restbestand > 0
- * — verkauft: Ankunft ≤ heute und Restbestand = 0
+ * — bestellt: keine Ist-Ankunft und keine ETA
+ * — unterwegs: ETA gesetzt oder (Legacy) Ankunft in der Zukunft
+ * — angekommen: Ist-Ankunft ≤ heute und Restbestand > 0
+ * — verkauft: Ist-Ankunft ≤ heute und Restbestand = 0
  */
 export function getBatchPipelineStatus(
   batch: Batch,
   today: string = todayIsoDate(),
   soldQuantity = 0,
 ): BatchPipelineStatus {
-  const arrival = batch.arrivalDate?.slice(0, 10) || null;
-  if (!arrival) return "ordered";
-  if (arrival > today) return "in_transit";
-  if (batch.quantity > 0 && soldQuantity >= batch.quantity) return "sold";
-  return "arrived";
+  const actual = batch.arrivalDate?.slice(0, 10) || null;
+  const eta = batch.expectedArrivalDate?.slice(0, 10) || null;
+  const stockQty = batchStockQuantity(batch);
+
+  if (actual && actual <= today) {
+    if (stockQty > 0 && soldQuantity >= stockQty) return "sold";
+    return "arrived";
+  }
+  if ((actual && actual > today) || eta) return "in_transit";
+  return "ordered";
 }
 
 export function getBatchPipelineStatusForData(
@@ -119,7 +131,7 @@ export function setBatchExpectedArrival(
 ): Batch {
   return {
     ...batch,
-    arrivalDate: arrivalDate.slice(0, 10) || null,
+    expectedArrivalDate: arrivalDate.slice(0, 10) || null,
   };
 }
 

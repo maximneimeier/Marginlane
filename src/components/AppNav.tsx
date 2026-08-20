@@ -175,12 +175,6 @@ const COSTERRA_NAV_GROUPS: NavGroup[] = [
         icon: Scale,
         secondary: true,
       },
-      {
-        href: "/dealers",
-        key: "nav.dealers",
-        icon: Store,
-        secondary: true,
-      },
     ],
   },
   {
@@ -193,6 +187,7 @@ const COSTERRA_NAV_GROUPS: NavGroup[] = [
       { href: "/suppliers", key: "nav.suppliers", icon: Users },
       { href: "/products", key: "nav.products", icon: Package },
       { href: "/components", key: "nav.components", icon: Grid2x2 },
+      { href: "/dealers", key: "nav.dealers", icon: Store },
       { href: "/logistics", key: "nav.logistics", icon: Truck },
     ],
   },
@@ -328,7 +323,6 @@ export function AppNav() {
   const pathname = usePathname();
   const { prefs } = usePrefs();
   const { t } = useI18n();
-  const isCosterra = prefs.activeModule === "batches";
   const groups = useMemo(
     () => visibleGroups(prefs.activeModule),
     [prefs.activeModule],
@@ -407,18 +401,6 @@ export function AppNav() {
           </Link>
         ) : null}
       </div>
-
-      {isCosterra ? (
-        <div className="px-2 pb-2">
-          <Link
-            href="/batches/new"
-            className="inline-flex w-full items-center justify-center gap-1.5 rounded-[8px] bg-accent px-2.5 py-2 text-[13px] font-medium text-white transition-opacity hover:opacity-90"
-          >
-            <Plus size={14} strokeWidth={2.25} aria-hidden />
-            {t("nav.newBatch")}
-          </Link>
-        </div>
-      ) : null}
 
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-2 pb-3 pt-1">
         {groups.map((group) => {
