@@ -42,7 +42,7 @@ describe("resolveCommercial", () => {
     expect(resolved.sources.currency).toBe("supplier");
   });
 
-  it("allows batch override", () => {
+  it("allows batch currency override", () => {
     const resolved = resolveCommercial(supplier, null, {
       currency: "EUR",
       paymentDays: null,
@@ -53,6 +53,41 @@ describe("resolveCommercial", () => {
     });
     expect(resolved.currency).toBe("EUR");
     expect(resolved.sources.currency).toBe("batch");
+  });
+
+  it("does not inherit Incoterm or skonto from supplier", () => {
+    const withSkonto: Supplier = {
+      ...supplier,
+      skontoPercent: 2,
+      skontoDays: 14,
+      incoterm: "CIF",
+    };
+    const resolved = resolveCommercial(withSkonto, null, {
+      currency: null,
+      paymentDays: null,
+      paymentUnit: null,
+      skontoPercent: null,
+      skontoDays: null,
+      incoterm: null,
+    });
+    expect(resolved.incoterm).toBe("");
+    expect(resolved.sources.incoterm).toBe("none");
+    expect(resolved.skontoPercent).toBe(0);
+    expect(resolved.sources.skontoPercent).toBe("none");
+  });
+
+  it("uses batch Incoterm and skonto explicitly", () => {
+    const resolved = resolveCommercial(supplier, null, {
+      currency: null,
+      paymentDays: null,
+      paymentUnit: null,
+      skontoPercent: 3,
+      skontoDays: 10,
+      incoterm: "EXW",
+    });
+    expect(resolved.incoterm).toBe("EXW");
+    expect(resolved.skontoPercent).toBe(3);
+    expect(resolved.sources.incoterm).toBe("batch");
   });
 });
 

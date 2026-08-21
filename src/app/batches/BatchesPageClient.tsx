@@ -32,25 +32,76 @@ function statusBadgeTone(
   return "neutral";
 }
 
+function paymentDelayDays(paymentDays: number, paymentUnit: string): number {
+  const n = Math.max(paymentDays, 0);
+  return paymentUnit === "Wochen" ? n * 7 : n;
+}
+
+function addDaysIso(iso: string, days: number): string {
+  const d = new Date(`${iso.slice(0, 10)}T12:00:00`);
+  d.setDate(d.getDate() + days);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function ChargenPageInner() {
   const router = useRouter();
   const { ready, data, deleteBatch } = useStore();
   const { t, locale, pricingUnitLabel } = useI18n();
   const [filter, setFilter] = useState<BatchPipelineFilter>("all");
 
-  const visible = useMemo(() => {
-    const open = data.batches.filter(
-      (b) => getBatchPipelineStatusForData(data, b) !== "sold",
-    );
-    return filterBatchesByPipeline(open, filter, data);
-  }, [data, filter]);
+  const openBatches = useMemo(
+    () =>
+      data.batches.filter(
+        (b) => getBatchPipelineStatusForData(data, b) !== "sold",
+      ),
+    [data],
+  );
 
-  const counts = useMemo(() => {
-    const open = data.batches.filter(
-      (b) => getBatchPipelineStatusForData(data, b) !== "sold",
-    );
-    return countBatchesByPipelineStatus(open, data);
-  }, [data]);
+  const visible = useMemo(
+    () => filterBatchesByPipeline(openBatches, filter, data),
+    [openBatches, filter, data],
+  );
+
+  const counts = useMemo(
+    () => countBatchesByPipelineStatus(openBatches, data),
+    [openBatches, data],
+  );
+
+  const kpis = useMemo(() => {
+    let capitalTied = 0;
+    let stockValue = 0;
+    let nextDue: { date: string; amount: number; label: string } | null = null;
+
+    for (const batch of openBatches) {
+      const status = getBatchPipelineStatusForData(data, batch);
+      const econ = calculateResolvedEconomics(data, batch);
+      const total = econ.landedCostPerUnit * batch.quantity;
+
+      if (status === "ordered" || status === "in_transit") {
+        capitalTied += total;
+        const orderIso = (batch.orderDate || batch.createdAt || "").slice(0, 10);
+        if (orderIso) {
+          const due = addDaysIso(
+            orderIso,
+            paymentDelayDays(
+              econ.commercial.paymentDays,
+              econ.commercial.paymentUnit,
+            ),
+          );
+          if (!nextDue || due < nextDue.date) {
+            nextDue = { date: due, amount: total, label: batch.label };
+          }
+        }
+      } else if (status === "arrived") {
+        stockValue += total;
+      }
+    }
+
+    return { capitalTied, stockValue, nextDue, openCount: openBatches.length };
+  }, [openBatches, data]);
 
   if (!ready) return <p className="text-sm text-muted">{t("common.loading")}</p>;
 
@@ -78,6 +129,67 @@ function ChargenPageInner() {
         </Card>
       ) : (
         <>
+          <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Card className="!p-4">
+              <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
+                {t("batches.kpi.capital")}
+              </p>
+              <p className="mt-1 text-lg tabular-nums font-semibold text-foreground">
+                {formatEuro(kpis.capitalTied, locale)}
+              </p>
+              <p className="mt-0.5 text-[12px] text-muted">
+                {t("batches.kpi.capitalHint")}
+              </p>
+            </Card>
+            <Card className="!p-4">
+              <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
+                {t("batches.kpi.stock")}
+              </p>
+              <p className="mt-1 text-lg tabular-nums font-semibold text-foreground">
+                {formatEuro(kpis.stockValue, locale)}
+              </p>
+              <p className="mt-0.5 text-[12px] text-muted">
+                {t("batches.kpi.stockHint")}
+              </p>
+            </Card>
+            <Card className="!p-4">
+              <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
+                {t("batches.kpi.nextDue")}
+              </p>
+              {kpis.nextDue ? (
+                <>
+                  <p className="mt-1 text-lg tabular-nums font-semibold text-foreground">
+                    {formatDate(kpis.nextDue.date, locale)}
+                  </p>
+                  <p className="mt-0.5 truncate text-[12px] text-muted">
+                    {formatEuro(kpis.nextDue.amount, locale)} ·{" "}
+                    {kpis.nextDue.label}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="mt-1 text-lg text-muted">{t("common.emDash")}</p>
+                  <p className="mt-0.5 text-[12px] text-muted">
+                    {t("batches.kpi.nextDueEmpty")}
+                  </p>
+                </>
+              )}
+            </Card>
+            <Card className="!p-4">
+              <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
+                {t("batches.kpi.open")}
+              </p>
+              <p className="mt-1 text-lg tabular-nums font-semibold text-foreground">
+                {formatNumber(kpis.openCount, locale)}
+              </p>
+              <p className="mt-0.5 text-[12px] text-muted">
+                <Link href="/compare" className="text-accent hover:underline">
+                  {t("batches.kpi.compareLink")}
+                </Link>
+              </p>
+            </Card>
+          </div>
+
           <div className="mb-4 flex flex-wrap gap-1.5">
             {FILTERS.map((key) => {
               const count =
@@ -104,28 +216,28 @@ function ChargenPageInner() {
           </div>
 
           <div className="overflow-x-auto rounded-[12px] border border-line bg-white shadow-[var(--shadow-sm)]">
-            <table className="w-full min-w-[780px] table-fixed border-collapse text-left">
+            <table className="w-full min-w-[720px] table-fixed border-collapse text-left">
               <colgroup>
-                <col className="w-[20%]" />
-                <col className="w-[11%]" />
-                <col className="w-[14%]" />
-                <col className="w-[13%]" />
-                <col className="w-[11%]" />
-                <col className="w-[11%]" />
-                <col className="w-[10%]" />
+                <col className="w-[24%]" />
+                <col className="w-[12%]" />
+                <col className="w-[22%]" />
+                <col className="w-[16%]" />
+                <col className="w-[16%]" />
                 <col className="w-[10%]" />
               </colgroup>
               <thead>
                 <tr className="border-b border-line bg-surface-faint text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
-                  <th className="px-4 py-2.5 font-medium">{t("batches.col.batch")}</th>
-                  <th className="px-3 py-2.5 font-medium">{t("batches.col.status")}</th>
-                  <th className="px-3 py-2.5 font-medium">{t("batches.col.product")}</th>
-                  <th className="px-3 py-2.5 font-medium">{t("batches.col.supplier")}</th>
-                  <th className="px-3 py-2.5 font-medium">
-                    {t("batches.col.ordered")}
+                  <th className="px-4 py-2.5 font-medium">
+                    {t("batches.col.batch")}
                   </th>
                   <th className="px-3 py-2.5 font-medium">
-                    {t("batches.col.arrival")}
+                    {t("batches.col.status")}
+                  </th>
+                  <th className="px-3 py-2.5 font-medium">
+                    {t("batches.col.productSupplier")}
+                  </th>
+                  <th className="px-3 py-2.5 font-medium">
+                    {t("batches.col.dates")}
                   </th>
                   <th className="px-3 py-2.5 text-right font-medium">
                     {t("batches.col.landed")}
@@ -137,7 +249,7 @@ function ChargenPageInner() {
                 {visible.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={6}
                       className="px-4 py-8 text-center text-[13px] text-muted"
                     >
                       {t("batches.pipeline.emptyFilter")}
@@ -153,6 +265,8 @@ function ChargenPageInner() {
                     );
                     const econ = calculateResolvedEconomics(data, batch);
                     const status = getBatchPipelineStatusForData(data, batch);
+                    const landedTotal =
+                      econ.landedCostPerUnit * batch.quantity;
 
                     return (
                       <tr
@@ -185,27 +299,51 @@ function ChargenPageInner() {
                             {t(`batches.pipeline.${status}`)}
                           </Badge>
                         </td>
-                        <td className="truncate px-3 py-3 align-middle text-[13px] text-muted">
-                          {product?.name ?? t("common.emDash")}
+                        <td className="px-3 py-3 align-middle">
+                          <p className="truncate text-[13px] text-foreground">
+                            {product?.name ?? t("common.emDash")}
+                          </p>
+                          <p className="truncate text-[12px] text-muted-soft">
+                            {supplier?.name ?? t("common.emDash")}
+                          </p>
                         </td>
-                        <td className="truncate px-3 py-3 align-middle text-[13px] text-muted">
-                          {supplier?.name ?? t("common.emDash")}
+                        <td className="px-3 py-3 align-middle text-[12px] tabular-nums text-muted">
+                          <p>
+                            <span className="text-muted-soft">
+                              {t("batches.col.ordered")}:{" "}
+                            </span>
+                            {formatDate(
+                              batch.orderDate || batch.createdAt,
+                              locale,
+                            )}
+                          </p>
+                          <p>
+                            <span className="text-muted-soft">
+                              {t("batches.col.arrival")}:{" "}
+                            </span>
+                            {batch.arrivalDate
+                              ? formatDate(batch.arrivalDate, locale)
+                              : batch.expectedArrivalDate
+                                ? formatDate(
+                                    batch.expectedArrivalDate,
+                                    locale,
+                                  )
+                                : t("common.emDash")}
+                          </p>
                         </td>
-                        <td className="px-3 py-3 align-middle text-[13px] tabular-nums text-muted">
-                          {formatDate(
-                            batch.orderDate || batch.createdAt,
-                            locale,
-                          )}
-                        </td>
-                        <td className="px-3 py-3 align-middle text-[13px] tabular-nums text-muted">
-                          {batch.arrivalDate
-                            ? formatDate(batch.arrivalDate, locale)
-                            : batch.expectedArrivalDate
-                              ? formatDate(batch.expectedArrivalDate, locale)
-                              : t("common.emDash")}
-                        </td>
-                        <td className="px-3 py-3 text-right align-middle text-[13px] tabular-nums font-medium">
-                          {formatEuro(econ.landedCostPerUnit, locale)}
+                        <td className="px-3 py-3 text-right align-middle">
+                          <p className="text-[13px] tabular-nums font-medium text-foreground">
+                            {formatEuro(econ.landedCostPerUnit, locale)}
+                            <span className="ml-1 text-[11px] font-normal text-muted-soft">
+                              / {pricingUnitLabel(product?.pricingUnit ?? "pcs")}
+                            </span>
+                          </p>
+                          <p className="text-[12px] tabular-nums text-muted">
+                            {formatEuro(landedTotal, locale)}{" "}
+                            <span className="text-muted-soft">
+                              {t("batchNew.batchTotalShort")}
+                            </span>
+                          </p>
                         </td>
                         <td className="px-4 py-3 align-middle">
                           <div className="flex justify-end gap-0.5">
@@ -215,7 +353,11 @@ function ChargenPageInner() {
                               title={t("common.edit")}
                               aria-label={t("common.edit")}
                             >
-                              <Pencil size={15} strokeWidth={1.75} aria-hidden />
+                              <Pencil
+                                size={15}
+                                strokeWidth={1.75}
+                                aria-hidden
+                              />
                             </Link>
                             <button
                               type="button"
@@ -230,7 +372,11 @@ function ChargenPageInner() {
                                 }
                               }}
                             >
-                              <Trash2 size={15} strokeWidth={1.75} aria-hidden />
+                              <Trash2
+                                size={15}
+                                strokeWidth={1.75}
+                                aria-hidden
+                              />
                             </button>
                           </div>
                         </td>

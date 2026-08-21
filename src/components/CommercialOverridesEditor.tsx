@@ -19,9 +19,14 @@ type Props = {
   /** Anzeigename der Parent-Ebene (Lieferant bzw. Lieferant/Produkt) */
   parentLabel: string;
   onChange: (next: CommercialOverrides) => void;
+  /**
+   * Charge-Kontext: Incoterm und Skonto nicht vom Lieferanten erben —
+   * jedes Mal neu setzen (leer = kein Incoterm / kein Skonto).
+   */
+  chargeScoped?: boolean;
 };
 
-function hasAnyOverride(value: CommercialOverrides): boolean {
+function hasAnyOverride(value: CommercialOverrides) {
   return (
     value.currency !== null ||
     value.paymentDays !== null ||
@@ -38,6 +43,7 @@ export function CommercialOverridesEditor({
   resolved,
   parentLabel,
   onChange,
+  chargeScoped = false,
 }: Props) {
   const { t } = useI18n();
 
@@ -53,7 +59,9 @@ export function CommercialOverridesEditor({
             {t("commercial.title")}
           </h3>
           <p className="mt-0.5 text-[12px] text-muted">
-            {t("commercial.hint", { parent: parentLabel })}
+            {chargeScoped
+              ? t("commercial.hintCharge", { parent: parentLabel })
+              : t("commercial.hint", { parent: parentLabel })}
           </p>
         </div>
         {hasAnyOverride(value) ? (
@@ -66,7 +74,9 @@ export function CommercialOverridesEditor({
           </Button>
         ) : (
           <span className="rounded-[6px] bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
-            {t("commercial.allInherited")}
+            {chargeScoped
+              ? t("commercial.paymentInherited")
+              : t("commercial.allInherited")}
           </span>
         )}
       </div>
@@ -77,6 +87,9 @@ export function CommercialOverridesEditor({
         </span>{" "}
         {resolved.paymentTerms}
         {resolved.incoterm ? ` · ${resolved.incoterm}` : ""}
+        {resolved.skontoPercent > 0
+          ? ` · ${resolved.skontoPercent}% / ${resolved.skontoDays}d`
+          : ""}
         {resolved.currency ? ` · ${resolved.currency}` : ""}
       </p>
 
@@ -114,12 +127,14 @@ export function CommercialOverridesEditor({
         <Field
           label={t("commercial.incoterm")}
           hint={
-            value.incoterm === null
-              ? t("commercial.inheritsValue", {
-                  value: inherited.incoterm,
-                  parent: parentLabel,
-                })
-              : t("commercial.overridden")
+            chargeScoped
+              ? t("commercial.incotermChargeHint")
+              : value.incoterm === null
+                ? t("commercial.inheritsValue", {
+                    value: inherited.incoterm || "—",
+                    parent: parentLabel,
+                  })
+                : t("commercial.overridden")
           }
         >
           <Select
@@ -131,7 +146,11 @@ export function CommercialOverridesEditor({
             }
           >
             <option value="">
-              {t("commercial.inheritOption", { value: inherited.incoterm })}
+              {chargeScoped
+                ? t("commercial.incotermChoose")
+                : t("commercial.inheritOption", {
+                    value: inherited.incoterm || "—",
+                  })}
             </option>
             {INCOTERMS.map((term) => (
               <option key={term} value={term}>
@@ -197,15 +216,17 @@ export function CommercialOverridesEditor({
         <Field
           label={t("commercial.skonto")}
           hint={
-            value.skontoPercent === null && value.skontoDays === null
-              ? t("commercial.inheritsValue", {
-                  value:
-                    inherited.skontoPercent > 0
-                      ? `${inherited.skontoPercent}% / ${inherited.skontoDays}d`
-                      : t("commercial.noSkonto"),
-                  parent: parentLabel,
-                })
-              : t("commercial.overridden")
+            chargeScoped
+              ? t("commercial.skontoChargeHint")
+              : value.skontoPercent === null && value.skontoDays === null
+                ? t("commercial.inheritsValue", {
+                    value:
+                      inherited.skontoPercent > 0
+                        ? `${inherited.skontoPercent}% / ${inherited.skontoDays}d`
+                        : t("commercial.noSkonto"),
+                    parent: parentLabel,
+                  })
+                : t("commercial.overridden")
           }
           className="sm:col-span-2"
         >
@@ -214,7 +235,9 @@ export function CommercialOverridesEditor({
               type="number"
               step="0.1"
               min="0"
-              placeholder={String(inherited.skontoPercent)}
+              placeholder={
+                chargeScoped ? "0" : String(inherited.skontoPercent)
+              }
               value={value.skontoPercent ?? ""}
               onChange={(e) => {
                 const raw = e.target.value;
@@ -224,7 +247,7 @@ export function CommercialOverridesEditor({
                 }
                 patch({
                   skontoPercent: Number(raw) || 0,
-                  skontoDays: value.skontoDays ?? inherited.skontoDays,
+                  skontoDays: value.skontoDays ?? (chargeScoped ? 0 : inherited.skontoDays),
                 });
               }}
               className="!w-auto min-w-[7rem] flex-1 basis-0"
@@ -232,7 +255,9 @@ export function CommercialOverridesEditor({
             <TextInput
               type="number"
               min="0"
-              placeholder={String(inherited.skontoDays)}
+              placeholder={
+                chargeScoped ? t("commercial.skontoDaysPlaceholder") : String(inherited.skontoDays)
+              }
               value={value.skontoDays ?? ""}
               onChange={(e) => {
                 const raw = e.target.value;
@@ -243,7 +268,8 @@ export function CommercialOverridesEditor({
                 patch({
                   skontoDays: Number(raw) || 0,
                   skontoPercent:
-                    value.skontoPercent ?? inherited.skontoPercent,
+                    value.skontoPercent ??
+                    (chargeScoped ? 0 : inherited.skontoPercent),
                 });
               }}
               className="!w-[8rem] shrink-0"

@@ -92,17 +92,19 @@ export function resolveCommercial(
     product?.paymentUnit,
     fallback.paymentUnit,
   );
-  const skontoPercent = pick(
-    batch?.skontoPercent,
-    product?.skontoPercent,
-    fallback.skontoPercent,
-  );
-  const skontoDays = pick(
-    batch?.skontoDays,
-    product?.skontoDays,
-    fallback.skontoDays,
-  );
-  const incoterm = pick(batch?.incoterm, product?.incoterm, fallback.incoterm);
+  // Incoterm + Skonto sind Charge-spezifisch — nie vom Lieferanten/Produkt erben.
+  const skontoPercent =
+    batch?.skontoPercent !== null && batch?.skontoPercent !== undefined
+      ? ({ value: batch.skontoPercent, source: "batch" } as const)
+      : ({ value: 0, source: "none" } as const);
+  const skontoDays =
+    batch?.skontoDays !== null && batch?.skontoDays !== undefined
+      ? ({ value: batch.skontoDays, source: "batch" } as const)
+      : ({ value: 0, source: "none" } as const);
+  const incoterm =
+    batch?.incoterm !== null && batch?.incoterm !== undefined
+      ? ({ value: batch.incoterm, source: "batch" } as const)
+      : ({ value: "", source: "none" } as const);
 
   const terms: CommercialTerms = {
     currency: currency.value,

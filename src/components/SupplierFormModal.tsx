@@ -5,7 +5,6 @@ import type { PaymentUnit, Supplier, SupplierStatus } from "@/lib/types";
 import {
   COUNTRIES,
   CURRENCIES,
-  INCOTERMS,
   LEGAL_FORMS,
   formatPaymentTerms,
 } from "@/lib/types";
@@ -109,7 +108,6 @@ export function SupplierFormModal({
     if (!draft.paymentDays || draft.paymentDays <= 0) {
       next.paymentDays = t("common.required");
     }
-    if (!draft.incoterm) next.incoterm = t("common.required");
     setErrors(next);
     return Object.keys(next).length === 0;
   }
@@ -252,18 +250,6 @@ export function SupplierFormModal({
                 ))}
               </Select>
             </Field>
-            <Field label={t("supplierModal.incoterm")} required>
-              <Select
-                value={draft.incoterm}
-                onChange={(e) => patch({ incoterm: e.target.value })}
-              >
-                {INCOTERMS.map((term) => (
-                  <option key={term} value={term}>
-                    {term}
-                  </option>
-                ))}
-              </Select>
-            </Field>
             <Field label={t("supplierModal.paymentDays")} required>
               <div className="flex gap-2">
                 <TextInput
@@ -285,35 +271,6 @@ export function SupplierFormModal({
                   <option value="Tage">{t("paymentUnit.Tage")}</option>
                   <option value="Wochen">{t("paymentUnit.Wochen")}</option>
                 </Select>
-              </div>
-            </Field>
-            <Field
-              label={t("supplierModal.skonto")}
-              hint={t("supplierModal.skontoHint")}
-            >
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <TextInput
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    value={draft.skontoPercent || ""}
-                    onChange={(e) =>
-                      patch({ skontoPercent: Number(e.target.value) || 0 })
-                    }
-                    placeholder={t("supplierModal.skontoPercentPlaceholder")}
-                  />
-                </div>
-                <TextInput
-                  type="number"
-                  min="0"
-                  value={draft.skontoDays || ""}
-                  onChange={(e) =>
-                    patch({ skontoDays: Number(e.target.value) || 0 })
-                  }
-                  placeholder={t("supplierModal.skontoDaysPlaceholder")}
-                  className="w-[110px]"
-                />
               </div>
             </Field>
           </div>
