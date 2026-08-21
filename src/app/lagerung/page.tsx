@@ -1,11 +1,6 @@
-import LagerungPageClient from "./LagerungPageClient";
+import { redirect } from "next/navigation";
 
-type PageProps = {
-  params: Promise<Record<string, never>>;
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
-
-export default async function LagerungPage({ params, searchParams }: PageProps) {
-  await Promise.all([params, searchParams]);
-  return <LagerungPageClient />;
+/** Legacy German route → English root */
+export default function LagerungRedirect() {
+  redirect("/inventory");
 }

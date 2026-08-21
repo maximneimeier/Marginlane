@@ -3,6 +3,7 @@
 import { Fragment, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import { Pencil, Trash2 } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
 import type {
   CompanySettings,
@@ -689,22 +690,34 @@ export function OverviewOverheadPanel({
                             <td className="hidden px-4 py-3 text-right tabular-nums font-medium md:table-cell">
                               {formatEuro(item.periodAmount, locale)}
                             </td>
-                            <td className="px-2 py-3">
+                            <td className="px-2 py-3 align-middle">
                               <div className="flex justify-end gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
-                                <Button
-                                  variant="ghost"
-                                  className="!h-7 !px-2 text-[12px]"
+                                <button
+                                  type="button"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] text-muted transition-colors hover:bg-surface-soft hover:text-foreground"
+                                  title={t("common.edit")}
+                                  aria-label={t("common.edit")}
                                   onClick={() => setDraft(item)}
                                 >
-                                  {t("common.edit")}
-                                </Button>
-                                <Button
-                                  variant="danger"
-                                  className="!h-7 !px-2 text-[12px]"
+                                  <Pencil
+                                    size={15}
+                                    strokeWidth={1.75}
+                                    aria-hidden
+                                  />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] text-muted transition-colors hover:bg-danger/10 hover:text-danger"
+                                  title={t("common.delete")}
+                                  aria-label={t("common.delete")}
                                   onClick={() => setDeleteTarget(item)}
                                 >
-                                  {t("common.delete")}
-                                </Button>
+                                  <Trash2
+                                    size={15}
+                                    strokeWidth={1.75}
+                                    aria-hidden
+                                  />
+                                </button>
                               </div>
                             </td>
                           </tr>

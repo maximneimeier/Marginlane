@@ -153,12 +153,11 @@ const COSTERRA_NAV_GROUPS: NavGroup[] = [
         href: "/batches",
         key: "nav.batches",
         icon: Layers,
-        primary: true,
         step: 1,
       },
       {
-        href: "/lagerung",
-        key: "nav.lagerungCosts",
+        href: "/inventory",
+        key: "nav.inventory",
         icon: PackageOpen,
         step: 2,
       },
@@ -166,7 +165,6 @@ const COSTERRA_NAV_GROUPS: NavGroup[] = [
         href: "/verkauf",
         key: "nav.abverkauf",
         icon: TrendingUp,
-        primary: true,
         step: 3,
       },
       {
@@ -282,22 +280,19 @@ function readOpenState(): Partial<Record<NavGroupId, boolean>> {
 function NavLinkRow({ link, pathname }: { link: NavLink; pathname: string }) {
   const { t } = useI18n();
   const active = isActive(pathname, link.href);
-  const primary = Boolean(link.primary);
-  const secondary = Boolean(link.secondary);
+  const stepped = link.step != null;
+  const primary = Boolean(link.primary) || stepped;
+  const secondary = Boolean(link.secondary) && !stepped;
 
   return (
     <Link
       href={link.href}
-      className={`group flex items-center gap-2 rounded-[8px] px-2 text-[13px] transition-colors ${
-        primary ? "py-2" : "py-[6px]"
-      } ${
+      className={`group flex items-center gap-2 rounded-[8px] px-2 py-[6px] text-[13px] transition-colors ${
         active
           ? "bg-white font-medium text-foreground shadow-[var(--shadow-sm)]"
-          : primary
-            ? "font-medium text-foreground hover:bg-white/70"
-            : secondary
-              ? "text-muted-soft hover:bg-white/70 hover:text-foreground"
-              : "text-muted hover:bg-white/70 hover:text-foreground"
+          : secondary
+            ? "text-muted-soft hover:bg-white/70 hover:text-foreground"
+            : "font-medium text-foreground hover:bg-white/70"
       }`}
     >
       {link.step != null ? (
@@ -305,7 +300,7 @@ function NavLinkRow({ link, pathname }: { link: NavLink; pathname: string }) {
           className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] text-[10px] font-semibold tabular-nums ${
             active
               ? "bg-accent-soft text-accent"
-              : "bg-surface-soft text-muted-soft"
+              : "bg-surface-soft text-muted"
           }`}
           aria-hidden
         >

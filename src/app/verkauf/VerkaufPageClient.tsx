@@ -106,7 +106,7 @@ export default function VerkaufPageClient() {
         <Card>
           <p className="text-[13px] text-muted">{t("verkauf.page.empty")}</p>
           <Link
-            href="/lagerung"
+            href="/inventory"
             className="mt-4 inline-flex h-8 items-center rounded-[8px] bg-foreground px-3 text-[13px] font-medium text-white hover:bg-ink-soft"
           >
             {t("verkauf.page.toStock")}
