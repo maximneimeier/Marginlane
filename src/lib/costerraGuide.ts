@@ -3,6 +3,7 @@ import { getBatchContribution } from "./batchContribution";
 import { batchOverheadShare } from "./batchContribution";
 import { defaultOverviewRange } from "./overview";
 import { calculateResolvedEconomics } from "./resolve";
+import type { CosterraMode } from "./costerraMode";
 
 export type CosterraGuideStepId =
   | "master"
@@ -24,6 +25,7 @@ export type CosterraGuideStep = {
 export function buildCosterraGuide(
   data: AppData,
   batch?: Batch | null,
+  mode: CosterraMode = "wholesale",
 ): CosterraGuideStep[] {
   const hasMaster =
     data.suppliers.length > 0 &&
@@ -68,13 +70,21 @@ export function buildCosterraGuide(
           ? "/dealers"
           : "/suppliers";
 
-  return [
+  const core: CosterraGuideStep[] = [
     { id: "master", done: hasMaster, href: masterHref },
     { id: "batch", done: hasBatch, href: batchHref },
     { id: "material", done: material, href: batchHref },
     { id: "logistics", done: logistics, href: batchHref },
     { id: "sales", done: sales, href: batchHref },
     { id: "margins", done: margins, href: batchHref },
+  ];
+
+  if (mode === "wholesale") {
+    return core;
+  }
+
+  return [
+    ...core,
     {
       id: "personnel",
       done: personnel,

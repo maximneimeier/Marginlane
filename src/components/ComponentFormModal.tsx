@@ -1,7 +1,12 @@
 "use client";
 
 import { useLayoutEffect, useEffect, useMemo, useState } from "react";
-import type { AppData, Component, ProductComponent } from "@/lib/types";
+import type {
+  AppData,
+  Component,
+  ProductComponent,
+  ProductionCostBasis,
+} from "@/lib/types";
 import { CURRENCIES } from "@/lib/types";
 import {
   emptyComponent as createEmptyComponent,
@@ -328,6 +333,35 @@ export function ComponentFormModal({
                 }
                 placeholder="0.00"
               />
+            </Field>
+
+            <Field
+              label={t("componentModal.costBasis")}
+              hint={t("componentModal.costBasisHint")}
+            >
+              <Select
+                value={draft?.costBasisOverride ?? ""}
+                onChange={(e) => {
+                  if (!draft) return;
+                  const raw = e.target.value;
+                  const costBasisOverride: ProductionCostBasis | null =
+                    raw === "list" ||
+                    raw === "last_landed" ||
+                    raw === "fifo_stock"
+                      ? raw
+                      : null;
+                  setDraft({ ...draft, costBasisOverride });
+                }}
+              >
+                <option value="">{t("componentModal.costBasisInherit")}</option>
+                <option value="list">{t("costBasis.list")}</option>
+                <option value="last_landed">
+                  {t("costBasis.last_landed")}
+                </option>
+                <option value="fifo_stock">
+                  {t("costBasis.fifo_stock")}
+                </option>
+              </Select>
             </Field>
 
             <Field label={t("products.col.hsCode")}>

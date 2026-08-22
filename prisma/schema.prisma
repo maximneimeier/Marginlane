@@ -13,7 +13,7 @@ datasource db {
 model Workspace {
   id        String   @id @default(cuid())
   name      String
-  /// "invest" | "batches" — Produkt-/Modul-Zugehörigkeit
+  /// "invest" | "batches" | "batches_wholesale" — Produkt-/Modul-Zugehörigkeit
   module    String
   /// Kompletter App-Stand nur für dieses Projekt
   data      Json

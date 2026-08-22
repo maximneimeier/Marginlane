@@ -8,6 +8,8 @@ import {
   type CosterraGuideStepId,
 } from "@/lib/costerraGuide";
 import type { AppData, Batch } from "@/lib/types";
+import { usePrefs } from "@/context/PreferencesContext";
+import { costerraModeFromModule } from "@/lib/costerraMode";
 import { useI18n } from "@/hooks/useI18n";
 import type { MessageKey } from "@/lib/i18n";
 import { Card } from "@/components/ui";
@@ -33,7 +35,12 @@ export function CosterraGuidePanel({
   compact?: boolean;
 }) {
   const { t } = useI18n();
-  const steps = buildCosterraGuide(data, batch);
+  const { prefs } = usePrefs();
+  const steps = buildCosterraGuide(
+    data,
+    batch,
+    costerraModeFromModule(prefs.activeModule),
+  );
   const { done, total } = costerraGuideProgress(steps);
   const next = steps.find((s) => !s.done);
 

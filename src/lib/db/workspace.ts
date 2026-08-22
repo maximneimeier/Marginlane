@@ -4,7 +4,7 @@ import { migrateAppData } from "@/lib/migrateAppData";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 
-export type WorkspaceModule = "invest" | "batches";
+export type WorkspaceModule = "invest" | "batches" | "batches_wholesale";
 
 export type WorkspaceMeta = {
   id: string;
@@ -35,7 +35,11 @@ function asAppData(value: unknown): AppData {
 }
 
 function isAppModule(value: string): value is WorkspaceModule {
-  return value === "invest" || value === "batches";
+  return (
+    value === "invest" ||
+    value === "batches" ||
+    value === "batches_wholesale"
+  );
 }
 
 function arrayLen(value: unknown): number {
@@ -126,7 +130,7 @@ export async function listWorkspaces(module: WorkspaceModule): Promise<Workspace
   return rows.map(toMeta);
 }
 
-/** Stellt sicher, dass Demo-Projekte für Investa und Costerra existieren — jeweils eigene Daten. */
+/** Stellt sicher, dass Demo-Projekte je Produkt existieren — jeweils eigene Daten. */
 async function ensureSeedProjects() {
   const seeds: {
     id: string;
@@ -134,7 +138,12 @@ async function ensureSeedProjects() {
     module: WorkspaceModule;
   }[] = [
     { id: "default", name: "Athenik Demo", module: "invest" },
-    { id: "default-batches", name: "Athenik Demo", module: "batches" },
+    { id: "default-batches", name: "Athenik Demo Fertigung", module: "batches" },
+    {
+      id: "default-batches-wholesale",
+      name: "Athenik Demo Handel",
+      module: "batches_wholesale",
+    },
   ];
 
   for (const seed of seeds) {
@@ -172,7 +181,13 @@ export async function createWorkspace(
   name: string,
   module: WorkspaceModule,
 ): Promise<WorkspaceRecord> {
-  const trimmed = name.trim() || (module === "invest" ? "Investa-Projekt" : "Costerra-Projekt");
+  const trimmed =
+    name.trim() ||
+    (module === "invest"
+      ? "Investa-Projekt"
+      : module === "batches_wholesale"
+        ? "Costerra-Handel-Projekt"
+        : "Costerra-Fertigung-Projekt");
   const empty = emptyAppDataJson();
   const row = await prisma.workspace.create({
     data: {

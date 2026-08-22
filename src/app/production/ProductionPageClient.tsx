@@ -12,6 +12,9 @@ import { formatEuro, formatNumber } from "@/lib/format";
 import { useI18n } from "@/hooks/useI18n";
 import type { ProductionRunStatus } from "@/lib/types";
 import { Badge, Button, Card, PageHeader } from "@/components/ui";
+import { CosterraWholesaleRedirect } from "@/components/CosterraWholesaleRedirect";
+import { usePrefs } from "@/context/PreferencesContext";
+import { isCosterraWholesale } from "@/lib/costerraMode";
 
 type StatusFilter = "all" | ProductionRunStatus;
 
@@ -24,6 +27,17 @@ function tone(
 }
 
 export default function ProductionPageClient() {
+  const { ready: prefsReady, prefs } = usePrefs();
+  if (!prefsReady) {
+    return <p className="px-4 py-8 text-sm text-muted">…</p>;
+  }
+  if (isCosterraWholesale(prefs)) {
+    return <CosterraWholesaleRedirect />;
+  }
+  return <ProductionPageInner />;
+}
+
+function ProductionPageInner() {
   const router = useRouter();
   const {
     ready,

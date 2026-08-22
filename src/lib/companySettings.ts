@@ -7,12 +7,17 @@ import {
   type PersonnelDefaultKind,
   type PersonnelDefaultLine,
   type PersonnelDefaultUnit,
+  type ProductionCostBasis,
   type TaxRegime,
   type UsTaxJurisdiction,
   type VatFilingCadence,
   type VatRate,
 } from "./types";
-import { EMPTY_COMPANY_SETTINGS, VAT_FILING_CADENCES } from "./types";
+import {
+  EMPTY_COMPANY_SETTINGS,
+  PRODUCTION_COST_BASES,
+  VAT_FILING_CADENCES,
+} from "./types";
 import { createId } from "./format";
 import { normalizeFxRateHistory, normalizeFxRates } from "./fx";
 import {
@@ -551,7 +556,33 @@ export function normalizeCompanySettings(
     ),
     fxRates: normalizeFxRates(raw.fxRates, currency),
     fxRateHistory: normalizeFxRateHistory(raw.fxRateHistory, currency),
+    productionCostBasis: normalizeProductionCostBasis(
+      (raw as { productionCostBasis?: unknown }).productionCostBasis,
+    ),
   };
+}
+
+export function isProductionCostBasis(
+  value: unknown,
+): value is ProductionCostBasis {
+  return (
+    typeof value === "string" &&
+    (PRODUCTION_COST_BASES as readonly string[]).includes(value)
+  );
+}
+
+export function normalizeProductionCostBasis(
+  raw: unknown,
+  fallback: ProductionCostBasis = "list",
+): ProductionCostBasis {
+  return isProductionCostBasis(raw) ? raw : fallback;
+}
+
+export function normalizeProductionCostBasisOverride(
+  raw: unknown,
+): ProductionCostBasis | null {
+  if (raw === null || raw === undefined || raw === "") return null;
+  return isProductionCostBasis(raw) ? raw : null;
 }
 
 export type PersonnelCostDefaults = {

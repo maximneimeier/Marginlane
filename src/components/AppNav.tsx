@@ -27,6 +27,13 @@ import { MODULE_PROJECTS, usePrefs, type AppModule } from "@/context/Preferences
 import { useI18n } from "@/hooks/useI18n";
 import type { MessageKey } from "@/lib/i18n";
 import { FEATURES } from "@/lib/features";
+import {
+  costerraModeFromModule,
+  isCosterraAppModule,
+  type CosterraMode,
+} from "@/lib/costerraMode";
+
+const COSTERRA_MODULES: AppModule[] = ["batches", "batches_wholesale"];
 
 type NavLink = {
   href: string;
@@ -34,6 +41,8 @@ type NavLink = {
   icon: LucideIcon;
   feature?: keyof typeof FEATURES;
   modules?: AppModule[];
+  /** Nur in diesen Costerra-Modi (bei Costerra-Modulen) */
+  costerraModes?: CosterraMode[];
   /** Stärkere Darstellung — Hauptarbeitsplatz */
   primary?: boolean;
   /** Nummerierter Schritt in der Wertschöpfung */
@@ -148,7 +157,7 @@ const COSTERRA_NAV_GROUPS: NavGroup[] = [
     labelKey: "nav.group.wertschoepfung",
     collapsible: false,
     defaultOpen: true,
-    modules: ["batches"],
+    modules: COSTERRA_MODULES,
     links: [
       {
         href: "/batches",
@@ -167,6 +176,7 @@ const COSTERRA_NAV_GROUPS: NavGroup[] = [
         key: "nav.production",
         icon: Factory,
         step: 3,
+        costerraModes: ["manufacturing"],
       },
       {
         href: "/verkauf",
@@ -187,11 +197,16 @@ const COSTERRA_NAV_GROUPS: NavGroup[] = [
     labelKey: "nav.group.stammdaten",
     collapsible: true,
     defaultOpen: false,
-    modules: ["batches"],
+    modules: COSTERRA_MODULES,
     links: [
       { href: "/suppliers", key: "nav.suppliers", icon: Users },
       { href: "/products", key: "nav.products", icon: Package },
-      { href: "/components", key: "nav.components", icon: Grid2x2 },
+      {
+        href: "/components",
+        key: "nav.components",
+        icon: Grid2x2,
+        costerraModes: ["manufacturing"],
+      },
       { href: "/dealers", key: "nav.dealers", icon: Store },
       { href: "/logistics", key: "nav.logistics", icon: Truck },
     ],
@@ -201,7 +216,7 @@ const COSTERRA_NAV_GROUPS: NavGroup[] = [
     labelKey: "nav.group.konsolidiert",
     collapsible: true,
     defaultOpen: false,
-    modules: ["batches"],
+    modules: COSTERRA_MODULES,
     links: [
       { href: "/overview", key: "nav.overview", icon: LayoutDashboard },
       {
@@ -209,7 +224,7 @@ const COSTERRA_NAV_GROUPS: NavGroup[] = [
         key: "nav.overheadSimple",
         icon: Receipt,
         feature: "overheadTopLevelNav",
-        modules: ["batches"],
+        modules: COSTERRA_MODULES,
       },
       {
         href: "/overhead/personnel",
@@ -243,20 +258,44 @@ function NavItemIcon({
   );
 }
 
-function visibleLinks(links: NavLink[], module: AppModule): NavLink[] {
-  return links.filter((link) => {
+function visibleLinks(
+  links: NavLink[],
+  module: AppModule,
+  costerraMode: CosterraMode,
+): NavLink[] {
+  const filtered = links.filter((link) => {
     if (link.feature && !FEATURES[link.feature]) return false;
     if (link.modules && !link.modules.includes(module)) return false;
+    if (
+      isCosterraAppModule(module) &&
+      link.costerraModes &&
+      !link.costerraModes.includes(costerraMode)
+    ) {
+      return false;
+    }
     return true;
+  });
+
+  // Wertschöpfungs-Schritte nach Filter neu nummerieren (z. B. ohne Produktion)
+  let step = 1;
+  return filtered.map((link) => {
+    if (link.step == null) return link;
+    return { ...link, step: step++ };
   });
 }
 
-function visibleGroups(module: AppModule | null): NavGroup[] {
-  const active = module ?? "batches";
+function visibleGroups(
+  module: AppModule | null,
+  costerraMode: CosterraMode,
+): NavGroup[] {
+  const active = module ?? "batches_wholesale";
   const source = active === "invest" ? INVEST_NAV_GROUPS : COSTERRA_NAV_GROUPS;
   return source
     .filter((g) => g.modules.includes(active))
-    .map((g) => ({ ...g, links: visibleLinks(g.links, active) }))
+    .map((g) => ({
+      ...g,
+      links: visibleLinks(g.links, active, costerraMode),
+    }))
     .filter((g) => g.links.length > 0);
 }
 
@@ -328,7 +367,11 @@ export function AppNav() {
   const { prefs } = usePrefs();
   const { t } = useI18n();
   const groups = useMemo(
-    () => visibleGroups(prefs.activeModule),
+    () =>
+      visibleGroups(
+        prefs.activeModule,
+        costerraModeFromModule(prefs.activeModule),
+      ),
     [prefs.activeModule],
   );
 
@@ -382,9 +425,11 @@ export function AppNav() {
   const moduleLabel =
     prefs.activeModule === "invest"
       ? t("moduleChooser.invest.title")
-      : prefs.activeModule === "batches"
-        ? t("moduleChooser.batches.title")
-        : t("moduleChooser.navHint");
+      : prefs.activeModule === "batches_wholesale"
+        ? t("moduleChooser.batchesWholesale.title")
+        : prefs.activeModule === "batches"
+          ? t("moduleChooser.batchesManufacturing.title")
+          : t("moduleChooser.navHint");
 
   const projectsHref =
     prefs.activeModule != null ? MODULE_PROJECTS[prefs.activeModule] : "/";
@@ -482,9 +527,12 @@ export function MobileNav() {
   const pathname = usePathname();
   const { prefs } = usePrefs();
   const { t } = useI18n();
-  const isCosterra = prefs.activeModule === "batches";
+  const isCosterra = isCosterraAppModule(prefs.activeModule);
   const flatLinks = useMemo(() => {
-    const groups = visibleGroups(prefs.activeModule);
+    const groups = visibleGroups(
+      prefs.activeModule,
+      costerraModeFromModule(prefs.activeModule),
+    );
     return groups.flatMap((g) => g.links).filter((l) => !l.secondary);
   }, [prefs.activeModule]);
 

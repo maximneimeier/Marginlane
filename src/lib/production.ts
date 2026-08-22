@@ -19,11 +19,16 @@ import type {
   ProductComponent,
   ProductRoutingStep,
   ProductionConsumption,
+  ProductionCostBasis,
   ProductionRun,
   ProductionRunInput,
   Sale,
 } from "./types";
 import { emptyBatchDuty } from "./types";
+import {
+  normalizeProductionCostBasis,
+  normalizeProductionCostBasisOverride,
+} from "./companySettings";
 
 function clampScrap(rate: number): number {
   if (!Number.isFinite(rate) || rate < 0) return 0;
@@ -66,6 +71,8 @@ export type ProductionCostEstimate = {
     quantityNeeded: number;
     unitCost: number;
     lineTotal: number;
+    /** Effektive Preisregel der Vorkalkulation */
+    costBasis: ProductionCostBasis;
   }>;
 };
 
@@ -153,6 +160,181 @@ export function productOnHandQuantity(
   return sum;
 }
 
+/** Effektive Preisregel: Komponenten-Override → Firmen-Default → Stamm-EK */
+export function resolveEffectiveProductionCostBasis(
+  data: Pick<AppData, "companySettings">,
+  component: Component | undefined,
+): ProductionCostBasis {
+  const override = normalizeProductionCostBasisOverride(
+    component?.costBasisOverride,
+  );
+  if (override) return override;
+  return normalizeProductionCostBasis(
+    data.companySettings?.productionCostBasis,
+  );
+}
+
+function listUnitCostNative(
+  component: Component,
+  link: ProductComponent | undefined,
+  orderQty: number,
+  override: number | null,
+): number {
+  return effectiveUnitPrice(component, link, orderQty, override);
+}
+
+function listUnitCostBase(
+  data: AppData,
+  component: Component | undefined,
+  link: ProductComponent | undefined,
+  quantityNeeded: number,
+  override: number | null,
+): number {
+  const baseCurrency =
+    data.companySettings?.baseCurrency || WORKSPACE_DEFAULT_CURRENCY;
+  const companyRates = data.companySettings?.fxRates;
+  if (!component) {
+    return override != null && Number.isFinite(override)
+      ? Math.max(override, 0)
+      : 0;
+  }
+  const nativeUnit = listUnitCostNative(
+    component,
+    link,
+    quantityNeeded,
+    override,
+  );
+  const supplier = data.suppliers.find((s) => s.id === component.supplierId);
+  const currency = resolveComponentCurrency(component, supplier).value;
+  return convertToBase(
+    nativeUnit,
+    currency,
+    baseCurrency,
+    companyRates,
+    null,
+  );
+}
+
+/** Neueste angekommene Charge → Landed Cost / Stück (Basiswährung). */
+export function lastLandedUnitCostBase(
+  data: AppData,
+  stockProductId: string,
+  today: string = todayIsoDate(),
+): number | null {
+  if (!stockProductId) return null;
+  const candidates = data.batches
+    .filter((b) => b.productId === stockProductId)
+    .filter((b) => {
+      const arrival = b.arrivalDate?.slice(0, 10) || null;
+      return Boolean(arrival && arrival <= today);
+    })
+    .sort((a, b) => {
+      const da = a.arrivalDate ?? a.createdAt;
+      const db = b.arrivalDate ?? b.createdAt;
+      return db.localeCompare(da);
+    });
+  const batch = candidates[0];
+  if (!batch) return null;
+  return calculateResolvedEconomics(data, batch).landedCostPerUnit;
+}
+
+function arrivedBatchesFifo(data: AppData, productId: string, today: string) {
+  return data.batches
+    .filter((b) => b.productId === productId)
+    .filter((b) => {
+      const arrival = b.arrivalDate?.slice(0, 10) || null;
+      return Boolean(arrival && arrival <= today);
+    })
+    .sort((a, b) => {
+      const da = a.arrivalDate ?? a.createdAt;
+      const db = b.arrivalDate ?? b.createdAt;
+      return da.localeCompare(db);
+    });
+}
+
+/**
+ * FIFO-gewichteter Landed Cost für die Vorkalkulation.
+ * Fehlmenge wird mit Stamm-EK (listFallback) bewertet.
+ */
+export function fifoStockUnitCostBase(
+  data: AppData,
+  stockProductId: string,
+  quantityNeeded: number,
+  listFallbackBase: number,
+  today: string = todayIsoDate(),
+): number {
+  const needed = Math.max(quantityNeeded, 0);
+  if (needed <= 0) return 0;
+
+  let remaining = needed;
+  let value = 0;
+  let taken = 0;
+
+  for (const batch of arrivedBatchesFifo(data, stockProductId, today)) {
+    if (remaining <= 0) break;
+    const avail = remainingOnBatchLocal(data, batch);
+    if (avail <= 0) continue;
+    const take = Math.min(avail, remaining);
+    const landed = calculateResolvedEconomics(data, batch).landedCostPerUnit;
+    value += take * landed;
+    taken += take;
+    remaining -= take;
+  }
+
+  if (taken <= 0) return listFallbackBase;
+  if (remaining > 0) value += remaining * listFallbackBase;
+  return value / needed;
+}
+
+/**
+ * Material-Stückkosten für die Vorkalkulation (immer Basiswährung).
+ * Run-Override hat Vorrang; sonst Firmen-/Komponenten-Regel.
+ */
+export function resolveMaterialUnitCostForEstimate(
+  data: AppData,
+  component: Component | undefined,
+  link: ProductComponent | undefined,
+  quantityNeeded: number,
+  unitCostOverride: number | null,
+): { unitCost: number; costBasis: ProductionCostBasis } {
+  const costBasis = resolveEffectiveProductionCostBasis(data, component);
+  const listBase = listUnitCostBase(
+    data,
+    component,
+    link,
+    quantityNeeded,
+    unitCostOverride,
+  );
+
+  if (unitCostOverride != null && Number.isFinite(unitCostOverride)) {
+    return { unitCost: listBase, costBasis };
+  }
+
+  if (costBasis === "list") {
+    return { unitCost: listBase, costBasis };
+  }
+
+  const stockProductId = resolveComponentStockProductId(data, component);
+  if (!stockProductId) {
+    return { unitCost: listBase, costBasis };
+  }
+
+  if (costBasis === "last_landed") {
+    const landed = lastLandedUnitCostBase(data, stockProductId);
+    return { unitCost: landed ?? listBase, costBasis };
+  }
+
+  return {
+    unitCost: fifoStockUnitCostBase(
+      data,
+      stockProductId,
+      quantityNeeded,
+      listBase,
+    ),
+    costBasis,
+  };
+}
+
 /** BOM → editierbare Run-Inputs (Menge inkl. BOM-Ausschuss) */
 export function productionInputsFromBom(
   data: Pick<AppData, "productComponents">,
@@ -211,6 +393,8 @@ export function estimateRoutingCostPerUnit(
 /**
  * Kalkulation Stufe 1: Material aus Inputs (FX → Basis) + Fertigungskosten.
  * Ausschuss erhöht den Materialbedarf, nicht die Gutmenge.
+ * Material-EK folgt `productionCostBasis` (bzw. Komponenten-Override);
+ * Abbuchung beim Abschluss bleibt unabhängig davon FIFO-Landed.
  */
 export function estimateProductionRun(
   data: AppData,
@@ -219,9 +403,6 @@ export function estimateProductionRun(
     "outputProductId" | "outputQuantity" | "scrapRate" | "inputs" | "costItems"
   >,
 ): ProductionCostEstimate {
-  const baseCurrency =
-    data.companySettings?.baseCurrency || WORKSPACE_DEFAULT_CURRENCY;
-  const companyRates = data.companySettings?.fxRates;
   const outputQuantity = Math.max(run.outputQuantity, 0);
   const scrap = clampScrap(run.scrapRate);
   const demandFactor = scrap >= 1 ? 1 : 1 / (1 - scrap);
@@ -239,28 +420,12 @@ export function estimateProductionRun(
     const link = bomLinks.find((pc) => pc.componentId === input.componentId);
     const qtyPer = Math.max(input.quantityPerOutput, 0);
     const quantityNeeded = outputQuantity * qtyPer * demandFactor;
-    const nativeUnit = component
-      ? effectiveUnitPrice(
-          component,
-          link,
-          quantityNeeded,
-          input.unitCostOverride,
-        )
-      : input.unitCostOverride != null
-        ? Math.max(input.unitCostOverride, 0)
-        : 0;
-    const supplier = data.suppliers.find(
-      (s) => s.id === (component?.supplierId ?? ""),
-    );
-    const currency = component
-      ? resolveComponentCurrency(component, supplier).value
-      : baseCurrency;
-    const unitCost = convertToBase(
-      nativeUnit,
-      currency,
-      baseCurrency,
-      companyRates,
-      null,
+    const { unitCost, costBasis } = resolveMaterialUnitCostForEstimate(
+      data,
+      component,
+      link,
+      quantityNeeded,
+      input.unitCostOverride,
     );
     const lineTotal = unitCost * quantityNeeded;
     materialTotal += lineTotal;
@@ -270,6 +435,7 @@ export function estimateProductionRun(
       quantityNeeded,
       unitCost,
       lineTotal,
+      costBasis,
     });
   }
 
@@ -566,8 +732,9 @@ export type CompleteProductionResult = {
 
 /**
  * Schließt einen geplanten Run ab: FIFO-Abbuchung vom Komponentenlager,
- * Fertigware-Charge im Lager. Material-EK aus tatsächlichen Landed Costs
- * der verbrauchten Chargen (untracked Inputs bleiben Stammdaten-EK).
+ * Fertigware-Charge im Lager. Material-EK der Abbuchung immer aus tatsächlichen
+ * Landed Costs der verbrauchten Chargen — unabhängig von `productionCostBasis`
+ * (die nur die Vorkalkulation steuert). Untracked Inputs: Stammdaten-EK.
  */
 export function completeProductionRun(
   data: AppData,

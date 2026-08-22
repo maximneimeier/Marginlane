@@ -24,8 +24,22 @@ import {
 } from "@/lib/production";
 import type { CostItem, ProductionRunInput } from "@/lib/types";
 import { PRODUCTION_COST_PHASES } from "@/lib/types";
+import { CosterraWholesaleRedirect } from "@/components/CosterraWholesaleRedirect";
+import { usePrefs } from "@/context/PreferencesContext";
+import { isCosterraWholesale } from "@/lib/costerraMode";
 
 export default function NewProductionPageClient() {
+  const { ready: prefsReady, prefs } = usePrefs();
+  if (!prefsReady) {
+    return <p className="px-4 py-8 text-sm text-muted">…</p>;
+  }
+  if (isCosterraWholesale(prefs)) {
+    return <CosterraWholesaleRedirect />;
+  }
+  return <NewProductionPageInner />;
+}
+
+function NewProductionPageInner() {
   const router = useRouter();
   const { ready, data, saveProductionRun } = useStore();
   const { t, locale, pricingUnitLabel } = useI18n();
@@ -227,6 +241,18 @@ export default function NewProductionPageClient() {
                 </h2>
                 <p className="text-[12px] text-muted">
                   {t("production.inputs.hint")}
+                </p>
+                <p className="mt-1 text-[12px] text-muted">
+                  {t("production.inputs.costBasisHint", {
+                    rule: t(
+                      data.companySettings.productionCostBasis === "last_landed"
+                        ? "costBasis.last_landed"
+                        : data.companySettings.productionCostBasis ===
+                            "fifo_stock"
+                          ? "costBasis.fifo_stock"
+                          : "costBasis.list",
+                    ),
+                  })}
                 </p>
               </div>
               <Button type="button" variant="ghost" onClick={addInput}>

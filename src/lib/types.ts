@@ -333,6 +333,14 @@ export type FxRateHistoryEntry = {
   note: string;
 };
 
+/** Preisbasis für Produktions-Vorkalkulation (nicht für Lagerabbuchung). */
+export const PRODUCTION_COST_BASES = [
+  "list",
+  "last_landed",
+  "fifo_stock",
+] as const;
+export type ProductionCostBasis = (typeof PRODUCTION_COST_BASES)[number];
+
 export type CompanySettings = {
   companyName: string;
   /** Workspace-Basiswährung (z. B. neue Gehälter) */
@@ -438,6 +446,11 @@ export type CompanySettings = {
   fxRates: Record<string, number>;
   /** Historische Kurstabellen (neueste zuerst empfohlen) */
   fxRateHistory: FxRateHistoryEntry[];
+  /**
+   * Vorkalkulation Material-EK in Produktionsläufen.
+   * Abbuchung beim Abschluss bleibt immer FIFO-Landed der verbrauchten Chargen.
+   */
+  productionCostBasis: ProductionCostBasis;
 };
 
 export const EMPTY_COMPANY_SETTINGS: CompanySettings = {
@@ -501,6 +514,7 @@ export const EMPTY_COMPANY_SETTINGS: CompanySettings = {
     HKD: 0.118,
   },
   fxRateHistory: [],
+  productionCostBasis: "list",
 };
 
 /**
@@ -538,6 +552,11 @@ export type Component = {
    * `null`/fehlend = kein Lagerbezug (nur Kalkulation).
    */
   stockProductId?: string | null;
+  /**
+   * Override der Firmen-Regel `productionCostBasis` für die Vorkalkulation.
+   * `null` = Firmen-Default.
+   */
+  costBasisOverride?: ProductionCostBasis | null;
 };
 
 /**

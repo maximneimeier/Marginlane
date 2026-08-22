@@ -19,6 +19,9 @@ import {
   TableRowActions,
   TextInput,
 } from "@/components/ui";
+import { CosterraWholesaleRedirect } from "@/components/CosterraWholesaleRedirect";
+import { usePrefs } from "@/context/PreferencesContext";
+import { isCosterraWholesale } from "@/lib/costerraMode";
 
 type SortKey =
   | "name"
@@ -29,6 +32,17 @@ type SortKey =
   | "totalQty";
 
 export default function ComponentsPage() {
+  const { ready: prefsReady, prefs } = usePrefs();
+  if (!prefsReady) {
+    return <p className="px-4 py-8 text-sm text-muted">…</p>;
+  }
+  if (isCosterraWholesale(prefs)) {
+    return <CosterraWholesaleRedirect to="/products" />;
+  }
+  return <ComponentsPageInner />;
+}
+
+function ComponentsPageInner() {
   const {
     ready,
     data,

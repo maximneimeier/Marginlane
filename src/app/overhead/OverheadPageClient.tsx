@@ -16,6 +16,7 @@ import { FEATURES } from "@/lib/features";
 import { useI18n } from "@/hooks/useI18n";
 import type { MessageKey } from "@/lib/i18n";
 import { usePrefs } from "@/context/PreferencesContext";
+import { isCosterraAppModule } from "@/lib/costerraMode";
 import { OverviewOverheadPanel } from "@/components/OverviewOverheadPanel";
 import { OverheadRunRateStrip } from "@/components/OverheadRunRateStrip";
 import {
@@ -37,7 +38,7 @@ export default function OverheadPageClient({ section }: Props) {
   const { t } = useI18n();
   const [preset, setPreset] = useState<DatePreset>("this_year");
   const [range, setRange] = useState<DateRange>(() => defaultOverviewRange());
-  const costerraSimple = prefs.activeModule === "batches";
+  const costerraSimple = isCosterraAppModule(prefs.activeModule);
 
   if (!ready) {
     return <p className="text-[13px] text-muted">{t("common.loading")}</p>;

@@ -8,7 +8,13 @@ import {
 export const runtime = "nodejs";
 
 function parseModule(value: string | null): WorkspaceModule | null {
-  if (value === "invest" || value === "batches") return value;
+  if (
+    value === "invest" ||
+    value === "batches" ||
+    value === "batches_wholesale"
+  ) {
+    return value;
+  }
   return null;
 }
 
@@ -18,7 +24,10 @@ export async function GET(request: Request) {
     const module = parseModule(searchParams.get("module"));
     if (!module) {
       return NextResponse.json(
-        { error: "Query param module=invest|batches required" },
+        {
+          error:
+            "Query param module=invest|batches|batches_wholesale required",
+        },
         { status: 400 },
       );
     }
@@ -41,7 +50,7 @@ export async function POST(request: Request) {
     );
     if (!module) {
       return NextResponse.json(
-        { error: "module must be invest or batches" },
+        { error: "module must be invest, batches or batches_wholesale" },
         { status: 400 },
       );
     }

@@ -358,4 +358,100 @@ describe("production stock stage 2", () => {
     // material: 5*4 + 3*5 = 35 → per unit 35/8
     expect(result!.batch.unitPurchasePrice).toBeCloseTo(35 / 8, 6);
   });
+
+  it("estimates with last_landed company rule", () => {
+    const data: AppData = {
+      ...base,
+      companySettings: {
+        ...base.companySettings,
+        productionCostBasis: "last_landed",
+      },
+    };
+    const estimate = estimateProductionRun(data, {
+      outputProductId: "p1",
+      outputQuantity: 8,
+      scrapRate: 0,
+      inputs: productionInputsFromBom(data, "p1"),
+      costItems: [],
+    });
+    expect(estimate.inputTotals[0].costBasis).toBe("last_landed");
+    expect(estimate.inputTotals[0].unitCost).toBe(5);
+    expect(estimate.materialTotal).toBe(40);
+  });
+
+  it("estimates with fifo_stock company rule", () => {
+    const data: AppData = {
+      ...base,
+      companySettings: {
+        ...base.companySettings,
+        productionCostBasis: "fifo_stock",
+      },
+    };
+    const estimate = estimateProductionRun(data, {
+      outputProductId: "p1",
+      outputQuantity: 8,
+      scrapRate: 0,
+      inputs: productionInputsFromBom(data, "p1"),
+      costItems: [],
+    });
+    expect(estimate.inputTotals[0].costBasis).toBe("fifo_stock");
+    expect(estimate.inputTotals[0].unitCost).toBeCloseTo(35 / 8, 6);
+    expect(estimate.materialTotal).toBeCloseTo(35, 6);
+  });
+
+  it("uses component costBasisOverride over company default", () => {
+    const data: AppData = {
+      ...base,
+      companySettings: {
+        ...base.companySettings,
+        productionCostBasis: "list",
+      },
+      components: [
+        component({
+          id: "c1",
+          name: "Gehäuse",
+          purchasePricePerUnit: 4,
+          stockProductId: "sp1",
+          costBasisOverride: "last_landed",
+        }),
+      ],
+    };
+    const estimate = estimateProductionRun(data, {
+      outputProductId: "p1",
+      outputQuantity: 2,
+      scrapRate: 0,
+      inputs: productionInputsFromBom(data, "p1"),
+      costItems: [],
+    });
+    expect(estimate.inputTotals[0].unitCost).toBe(5);
+  });
+
+  it("keeps booking FIFO landed even when estimate uses list", () => {
+    const data: AppData = {
+      ...base,
+      companySettings: {
+        ...base.companySettings,
+        productionCostBasis: "list",
+      },
+    };
+    const run = {
+      id: "prun",
+      label: "Montage",
+      outputProductId: "p1",
+      outputQuantity: 8,
+      scrapRate: 0,
+      inputs: productionInputsFromBom(data, "p1"),
+      costItems: [],
+      status: "planned" as const,
+      notes: "",
+      createdAt: "2026-08-01T00:00:00.000Z",
+      completedAt: null,
+      outputBatchId: null,
+      consumptions: [],
+    };
+    const estimate = estimateProductionRun(data, run);
+    expect(estimate.materialTotal).toBe(32); // 8 * Stamm 4
+    const result = completeProductionRun(data, run);
+    expect(result!.batch.unitPurchasePrice).toBeCloseTo(35 / 8, 6);
+  });
 });

@@ -63,7 +63,7 @@ const de = {
 
   "moduleChooser.title": "Deine Produkte",
   "moduleChooser.description":
-    "Zwei spezialisierte Apps unter Atheniks — wähle den Arbeitsbereich für heute.",
+    "Drei Arbeitsbereiche unter Atheniks — wähle FP&A oder Costerra für Großhandel bzw. Fertigung.",
   "moduleChooser.invest.eyebrow": "FP&A Planning",
   "moduleChooser.invest.title": "Investa",
   "moduleChooser.invest.description":
@@ -74,6 +74,16 @@ const de = {
   "moduleChooser.batches.description":
     "Chargen planen, Landed Cost kalkulieren und Finanzen konsolidieren.",
   "moduleChooser.batches.cta": "Projekte anzeigen",
+  "moduleChooser.batchesWholesale.eyebrow": "Costerra · Großhandel",
+  "moduleChooser.batchesWholesale.title": "Costerra Handel",
+  "moduleChooser.batchesWholesale.description":
+    "Einkauf, Landed Cost, Lager und Händlermarge — ohne Fertigung.",
+  "moduleChooser.batchesWholesale.cta": "Projekte anzeigen",
+  "moduleChooser.batchesManufacturing.eyebrow": "Costerra · Fertigung",
+  "moduleChooser.batchesManufacturing.title": "Costerra Fertigung",
+  "moduleChooser.batchesManufacturing.description":
+    "Chargen, BOM, Produktion und Abverkauf — volle Wertschöpfungskette.",
+  "moduleChooser.batchesManufacturing.cta": "Projekte anzeigen",
   "moduleChooser.switch": "Produkt wechseln",
   "moduleChooser.switchShort": "Produkte",
   "moduleChooser.navHint": "Produkt wählen",
@@ -115,6 +125,8 @@ const de = {
   "projects.deleteConfirm": "Projekt „{name}“ wirklich löschen?",
   "projects.defaultNameInvest": "Investa-Projekt",
   "projects.defaultNameBatches": "Costerra-Projekt",
+  "projects.defaultNameBatchesWholesale": "Costerra-Handel-Projekt",
+  "projects.defaultNameBatchesManufacturing": "Costerra-Fertigung-Projekt",
 
   "atheniksNav.main": "Hauptnavigation",
   "atheniksNav.language": "Sprache wechseln",
@@ -174,6 +186,9 @@ const de = {
   "productModal.componentPrice": "EK / Einheit",
   "productModal.componentQty": "Menge / Produkt",
   "productModal.componentScrap": "Ausschuss %",
+  "productModal.routingHint":
+    "Fertigungsschritte mit Zeiten und Stundensätzen — vorausgefüllt im Fertigungslauf.",
+  "productModal.addRoutingStep": "+ Schritt",
   "routing.rateType.labor": "Personal",
   "routing.rateType.machine": "Maschine",
   "productModal.computedPurchase": "Berechneter EK",
@@ -402,6 +417,10 @@ const de = {
   "componentModal.product": "Produkt",
   "componentModal.productPlaceholder": "Produkt wählen…",
   "componentModal.purchasePrice": "Einkaufspreis / Einheit",
+  "componentModal.costBasis": "Vorkalkulation EK",
+  "componentModal.costBasisHint":
+    "Optionaler Override der Firmenregel. Abbuchung bleibt FIFO.",
+  "componentModal.costBasisInherit": "Firmen-Default",
   "componentModal.qtyPerProduct": "Menge pro Produkteinheit",
   "componentModal.qtyPerProductHint":
     "Wie viele Einheiten dieser Komponente stecken in einer Verkaufseinheit?",
@@ -707,6 +726,12 @@ const de = {
   "company.field.companyName": "Firmenname",
   "company.field.companyNamePlaceholder": "z. B. Muster GmbH",
   "company.field.baseCurrency": "Basiswährung",
+  "company.field.productionCostBasis": "Vorkalkulation Material-EK",
+  "company.field.productionCostBasisHint":
+    "Nur für die Kalkulation im Fertigungslauf. Die Abbuchung beim Abschluss bleibt immer FIFO-Landed der verbrauchten Chargen.",
+  "costBasis.list": "Stamm-EK",
+  "costBasis.last_landed": "Letzter Charge-Landed",
+  "costBasis.fifo_stock": "FIFO aus Lager",
   "company.field.fxRates": "Wechselkurse",
   "company.field.fxRatesHint":
     "Einheiten Basiswährung pro 1 Einheit Fremdwährung (Planungswerte).",
@@ -1677,6 +1702,8 @@ const de = {
   "production.inputs.title": "Material / Inputs",
   "production.inputs.hint":
     "Aus der BOM vorausgefüllt. Ausschuss erhöht den Materialbedarf.",
+  "production.inputs.costBasisHint":
+    "Vorkalkulation: {rule}. Abbuchung beim Abschluss: immer FIFO-Landed.",
   "production.inputs.add": "Komponente",
   "production.inputs.empty":
     "Keine Inputs — am Produkt eine BOM pflegen oder hier ergänzen.",
@@ -2230,7 +2257,7 @@ const en: Record<MessageKey, string> = {
 
   "moduleChooser.title": "Your products",
   "moduleChooser.description":
-    "Two specialized apps under Atheniks — pick today’s workspace.",
+    "Three workspaces under Atheniks — choose FP&A or Costerra for wholesale or manufacturing.",
   "moduleChooser.invest.eyebrow": "FP&A Planning",
   "moduleChooser.invest.title": "Investa",
   "moduleChooser.invest.description":
@@ -2241,6 +2268,16 @@ const en: Record<MessageKey, string> = {
   "moduleChooser.batches.description":
     "Plan batches, calculate landed cost and consolidate finances.",
   "moduleChooser.batches.cta": "View projects",
+  "moduleChooser.batchesWholesale.eyebrow": "Costerra · Wholesale",
+  "moduleChooser.batchesWholesale.title": "Costerra Trade",
+  "moduleChooser.batchesWholesale.description":
+    "Purchasing, landed cost, warehouse and dealer margin — no manufacturing.",
+  "moduleChooser.batchesWholesale.cta": "View projects",
+  "moduleChooser.batchesManufacturing.eyebrow": "Costerra · Manufacturing",
+  "moduleChooser.batchesManufacturing.title": "Costerra Manufacturing",
+  "moduleChooser.batchesManufacturing.description":
+    "Batches, BOM, production and sell-through — full value chain.",
+  "moduleChooser.batchesManufacturing.cta": "View projects",
   "moduleChooser.switch": "Switch product",
   "moduleChooser.switchShort": "Products",
   "moduleChooser.navHint": "Choose product",
@@ -2282,6 +2319,8 @@ const en: Record<MessageKey, string> = {
   "projects.deleteConfirm": "Really delete project “{name}”?",
   "projects.defaultNameInvest": "Investa project",
   "projects.defaultNameBatches": "Costerra project",
+  "projects.defaultNameBatchesWholesale": "Costerra Trade project",
+  "projects.defaultNameBatchesManufacturing": "Costerra Manufacturing project",
 
   "atheniksNav.main": "Main navigation",
   "atheniksNav.language": "Change language",
@@ -2341,6 +2380,9 @@ const en: Record<MessageKey, string> = {
   "productModal.componentPrice": "Purchase / unit",
   "productModal.componentQty": "Qty / product",
   "productModal.componentScrap": "Scrap %",
+  "productModal.routingHint":
+    "Manufacturing steps with times and hourly rates — prefilled on production runs.",
+  "productModal.addRoutingStep": "+ Step",
   "routing.rateType.labor": "Labor",
   "routing.rateType.machine": "Machine",
   "productModal.computedPurchase": "Computed purchase cost",
@@ -2568,6 +2610,10 @@ const en: Record<MessageKey, string> = {
   "componentModal.product": "Product",
   "componentModal.productPlaceholder": "Select product…",
   "componentModal.purchasePrice": "Purchase price / unit",
+  "componentModal.costBasis": "Pre-calc cost basis",
+  "componentModal.costBasisHint":
+    "Optional override of the company rule. Booking stays FIFO.",
+  "componentModal.costBasisInherit": "Company default",
   "componentModal.qtyPerProduct": "Qty per product unit",
   "componentModal.qtyPerProductHint":
     "How many units of this component go into one sell unit?",
@@ -2869,6 +2915,12 @@ const en: Record<MessageKey, string> = {
   "company.field.companyName": "Company name",
   "company.field.companyNamePlaceholder": "e.g. Acme GmbH",
   "company.field.baseCurrency": "Base currency",
+  "company.field.productionCostBasis": "Pre-calc material cost basis",
+  "company.field.productionCostBasisHint":
+    "Only for production run estimates. Booking on complete always uses FIFO landed cost of consumed batches.",
+  "costBasis.list": "Master purchase price",
+  "costBasis.last_landed": "Latest batch landed",
+  "costBasis.fifo_stock": "FIFO from stock",
   "company.field.fxRates": "Exchange rates",
   "company.field.fxRatesHint":
     "Units of base currency per 1 unit of foreign currency (planning values).",
@@ -3842,6 +3894,8 @@ const en: Record<MessageKey, string> = {
   "production.inputs.title": "Material / inputs",
   "production.inputs.hint":
     "Prefilled from the BOM. Scrap increases material demand.",
+  "production.inputs.costBasisHint":
+    "Pre-calc: {rule}. Booking on complete: always FIFO landed.",
   "production.inputs.add": "Component",
   "production.inputs.empty":
     "No inputs — add a BOM on the product or add components here.",

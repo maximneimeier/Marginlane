@@ -9,6 +9,8 @@ import type {
   PricingUnit,
   ProductComponent,
   ProductDocument,
+  ProductRoutingStep,
+  RoutingRateType,
 } from "@/lib/types";
 import { CURRENCIES, MAX_PRODUCT_DOCUMENTS } from "@/lib/types";
 import { createId, formatEuro } from "@/lib/format";
@@ -17,8 +19,12 @@ import {
   emptyComponent,
   emptyProductComponent,
   emptyProductDocument,
+  emptyProductRoutingStep,
 } from "@/lib/migrateAppData";
+import { estimateRoutingCostPerUnit } from "@/lib/production";
 import { useI18n } from "@/hooks/useI18n";
+import { usePrefs } from "@/context/PreferencesContext";
+import { isCosterraWholesale } from "@/lib/costerraMode";
 import {
   Button,
   Field,
@@ -76,6 +82,8 @@ export function CatalogProductFormModal({
   onSave,
 }: Props) {
   const { t, pricingUnitLabel, pricingUnits, locale } = useI18n();
+  const { prefs } = usePrefs();
+  const wholesale = isCosterraWholesale(prefs);
   const [draft, setDraft] = useState<CatalogProduct | null>(() =>
     initial ? structuredClone(initial) : null,
   );
@@ -92,6 +100,7 @@ export function CatalogProductFormModal({
         structuredClone({
           ...initial,
           documents: initial.documents ?? [],
+          routingSteps: initial.routingSteps ?? [],
         }),
       );
       const links = (data.productComponents ?? []).filter(
@@ -161,6 +170,22 @@ export function CatalogProductFormModal({
         url: d.url.trim(),
         notes: d.notes.trim(),
       }));
+    const routingSteps = (draft.routingSteps ?? [])
+      .filter(
+        (s) =>
+          s.name.trim() ||
+          s.setupMinutes > 0 ||
+          s.runMinutesPerUnit > 0 ||
+          s.hourlyRate > 0,
+      )
+      .map((s, index) => ({
+        ...s,
+        name: s.name.trim() || t("productDetail.routingCol.step"),
+        sortOrder: index,
+        setupMinutes: Math.max(s.setupMinutes, 0),
+        runMinutesPerUnit: Math.max(s.runMinutesPerUnit, 0),
+        hourlyRate: Math.max(s.hourlyRate, 0),
+      }));
     const product: CatalogProduct = {
       ...draft,
       name: draft.name.trim(),
@@ -168,6 +193,7 @@ export function CatalogProductFormModal({
       category: draft.category.trim(),
       notes: draft.notes.trim(),
       documents,
+      routingSteps,
     };
     const kept = lines.filter(
       (l) => l.component.name.trim() || l.component.purchasePricePerUnit > 0,
@@ -225,6 +251,56 @@ export function CatalogProductFormModal({
       return {
         ...prev,
         documents: (prev.documents ?? []).filter((d) => d.id !== id),
+      };
+    });
+  }
+
+  function addRoutingStep() {
+    setDraft((prev) => {
+      if (!prev) return prev;
+      const steps = prev.routingSteps ?? [];
+      return {
+        ...prev,
+        routingSteps: [...steps, emptyProductRoutingStep(steps.length)],
+      };
+    });
+  }
+
+  function updateRoutingStep(id: string, patch: Partial<ProductRoutingStep>) {
+    setDraft((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        routingSteps: (prev.routingSteps ?? []).map((s) =>
+          s.id === id ? { ...s, ...patch } : s,
+        ),
+      };
+    });
+  }
+
+  function removeRoutingStep(id: string) {
+    setDraft((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        routingSteps: (prev.routingSteps ?? []).filter((s) => s.id !== id),
+      };
+    });
+  }
+
+  function moveRoutingStep(id: string, direction: -1 | 1) {
+    setDraft((prev) => {
+      if (!prev) return prev;
+      const steps = [...(prev.routingSteps ?? [])];
+      const index = steps.findIndex((s) => s.id === id);
+      const next = index + direction;
+      if (index < 0 || next < 0 || next >= steps.length) return prev;
+      const tmp = steps[index];
+      steps[index] = steps[next];
+      steps[next] = tmp;
+      return {
+        ...prev,
+        routingSteps: steps.map((s, i) => ({ ...s, sortOrder: i })),
       };
     });
   }
@@ -342,6 +418,8 @@ export function CatalogProductFormModal({
           </Field>
         </div>
 
+        {!wholesale ? (
+        <>
         <div className="rounded-[10px] border border-line p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
             <div>
@@ -472,6 +550,142 @@ export function CatalogProductFormModal({
             </span>
           </p>
         </div>
+
+        <div className="rounded-[10px] border border-line p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div>
+              <p className="text-[13px] font-medium text-foreground">
+                {t("productDetail.routingTitle")}
+              </p>
+              <p className="text-[12px] text-muted">
+                {t("productModal.routingHint")}
+              </p>
+            </div>
+            <Button type="button" variant="secondary" onClick={addRoutingStep}>
+              {t("productModal.addRoutingStep")}
+            </Button>
+          </div>
+
+          {(draft.routingSteps ?? []).length === 0 ? (
+            <p className="py-3 text-center text-[12px] text-muted">
+              {t("productDetail.routingEmptyHint")}
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {(draft.routingSteps ?? []).map((step, index) => (
+                <div
+                  key={step.id}
+                  className="grid gap-2 rounded-[8px] border border-line bg-white p-2 sm:grid-cols-[1.2fr_0.65fr_0.65fr_0.65fr_0.85fr_auto]"
+                >
+                  <TextInput
+                    value={step.name}
+                    onChange={(e) =>
+                      updateRoutingStep(step.id, { name: e.target.value })
+                    }
+                    placeholder={t("productDetail.routingCol.step")}
+                  />
+                  <TextInput
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    value={step.setupMinutes || ""}
+                    onChange={(e) =>
+                      updateRoutingStep(step.id, {
+                        setupMinutes: Number(e.target.value) || 0,
+                      })
+                    }
+                    placeholder={t("productDetail.routingCol.setup")}
+                    title={t("productDetail.routingCol.setup")}
+                  />
+                  <TextInput
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={step.runMinutesPerUnit || ""}
+                    onChange={(e) =>
+                      updateRoutingStep(step.id, {
+                        runMinutesPerUnit: Number(e.target.value) || 0,
+                      })
+                    }
+                    placeholder={t("productDetail.routingCol.run")}
+                    title={t("productDetail.routingCol.run")}
+                  />
+                  <TextInput
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={step.hourlyRate || ""}
+                    onChange={(e) =>
+                      updateRoutingStep(step.id, {
+                        hourlyRate: Number(e.target.value) || 0,
+                      })
+                    }
+                    placeholder={t("productDetail.routingCol.rate")}
+                    title={t("productDetail.routingCol.rate")}
+                  />
+                  <Select
+                    value={step.rateType}
+                    onChange={(e) =>
+                      updateRoutingStep(step.id, {
+                        rateType: e.target.value as RoutingRateType,
+                      })
+                    }
+                  >
+                    <option value="labor">{t("routing.rateType.labor")}</option>
+                    <option value="machine">
+                      {t("routing.rateType.machine")}
+                    </option>
+                  </Select>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-9 px-2"
+                      disabled={index === 0}
+                      onClick={() => moveRoutingStep(step.id, -1)}
+                    >
+                      ↑
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-9 px-2"
+                      disabled={
+                        index === (draft.routingSteps ?? []).length - 1
+                      }
+                      onClick={() => moveRoutingStep(step.id, 1)}
+                    >
+                      ↓
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="danger"
+                      className="h-9 px-2"
+                      onClick={() => removeRoutingStep(step.id)}
+                    >
+                      ×
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {(draft.routingSteps ?? []).length > 0 ? (
+            <p className="mt-3 text-[13px] font-medium tabular-nums text-foreground">
+              {t("productDetail.routingTotal")}:{" "}
+              {formatEuro(
+                estimateRoutingCostPerUnit(draft.routingSteps ?? [], 100),
+                locale,
+              )}
+              <span className="ml-1 text-[11px] font-normal text-muted-soft">
+                {t("productDetail.routingLotHint", { qty: "100" })}
+              </span>
+            </p>
+          ) : null}
+        </div>
+        </>
+        ) : null}
 
         <div className="rounded-[10px] border border-line p-3">
           <div className="mb-2 flex items-center justify-between gap-2">

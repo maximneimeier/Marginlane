@@ -2,18 +2,25 @@
 
 import { useRouter } from "next/navigation";
 import { type ReactNode } from "react";
-import { ArrowRight, Layers, LineChart } from "lucide-react";
+import { ArrowRight, Factory, Layers, LineChart } from "lucide-react";
 import {
   MODULE_PROJECTS,
   type AppModule,
+  usePrefs,
 } from "@/context/PreferencesContext";
 import { useI18n } from "@/hooks/useI18n";
 
 export default function ModuleChooserPageClient() {
   const { t } = useI18n();
   const router = useRouter();
+  const { setPrefs } = usePrefs();
 
   function choose(module: AppModule) {
+    setPrefs({
+      activeModule: module,
+      activeProjectId: null,
+      activeProjectName: null,
+    });
     router.push(MODULE_PROJECTS[module]);
   }
 
@@ -36,7 +43,7 @@ export default function ModuleChooserPageClient() {
         </p>
       </div>
 
-      <div className="mt-10 grid gap-4 sm:grid-cols-2">
+      <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <ProductCard
           eyebrow={t("moduleChooser.invest.eyebrow")}
           title={t("moduleChooser.invest.title")}
@@ -46,11 +53,19 @@ export default function ModuleChooserPageClient() {
           onClick={() => choose("invest")}
         />
         <ProductCard
-          eyebrow={t("moduleChooser.batches.eyebrow")}
-          title={t("moduleChooser.batches.title")}
-          description={t("moduleChooser.batches.description")}
-          cta={t("moduleChooser.batches.cta")}
+          eyebrow={t("moduleChooser.batchesWholesale.eyebrow")}
+          title={t("moduleChooser.batchesWholesale.title")}
+          description={t("moduleChooser.batchesWholesale.description")}
+          cta={t("moduleChooser.batchesWholesale.cta")}
           icon={<Layers size={22} strokeWidth={1.7} aria-hidden />}
+          onClick={() => choose("batches_wholesale")}
+        />
+        <ProductCard
+          eyebrow={t("moduleChooser.batchesManufacturing.eyebrow")}
+          title={t("moduleChooser.batchesManufacturing.title")}
+          description={t("moduleChooser.batchesManufacturing.description")}
+          cta={t("moduleChooser.batchesManufacturing.cta")}
+          icon={<Factory size={22} strokeWidth={1.7} aria-hidden />}
           onClick={() => choose("batches")}
         />
       </div>

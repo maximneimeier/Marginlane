@@ -16,6 +16,7 @@ import {
   usePrefs,
   type AppModule,
 } from "@/context/PreferencesContext";
+import { isCosterraAppModule } from "@/lib/costerraMode";
 import { useI18n } from "@/hooks/useI18n";
 import {
   Button,
@@ -56,7 +57,11 @@ type SortKey =
   | "createdAt";
 
 function isAppModule(value: string): value is AppModule {
-  return value === "invest" || value === "batches";
+  return (
+    value === "invest" ||
+    value === "batches" ||
+    value === "batches_wholesale"
+  );
 }
 
 export default function ProjectListPageClient() {
@@ -93,9 +98,11 @@ function ProjectListInner() {
   const productTitle =
     module === "invest"
       ? t("moduleChooser.invest.title")
-      : module === "batches"
-        ? t("moduleChooser.batches.title")
-        : "";
+      : module === "batches_wholesale"
+        ? t("moduleChooser.batchesWholesale.title")
+        : module === "batches"
+          ? t("moduleChooser.batchesManufacturing.title")
+          : "";
 
   const reload = useCallback(async () => {
     if (!module) return;
@@ -197,7 +204,9 @@ function ProjectListInner() {
             newName.trim() ||
             (module === "invest"
               ? t("projects.defaultNameInvest")
-              : t("projects.defaultNameBatches")),
+              : module === "batches_wholesale"
+                ? t("projects.defaultNameBatchesWholesale")
+                : t("projects.defaultNameBatchesManufacturing")),
         }),
       });
       if (!res.ok) throw new Error("create failed");
@@ -348,7 +357,7 @@ function ProjectListInner() {
                     dir={sortDir}
                     onClick={() => toggleSort("currency")}
                   />
-                  {module === "batches" ? (
+                  {isCosterraAppModule(module) ? (
                     <>
                       <SortTh
                         label={t("projects.col.batches")}
@@ -432,7 +441,7 @@ function ProjectListInner() {
                     <td className="px-4 py-3 text-muted">
                       {project.baseCurrency || t("common.emDash")}
                     </td>
-                    {module === "batches" ? (
+                    {isCosterraAppModule(module) ? (
                       <>
                         <td className="px-4 py-3 text-right tabular-nums text-muted">
                           {project.batchCount}

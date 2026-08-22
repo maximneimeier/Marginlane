@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useStore } from "@/context/StoreContext";
 import { usePrefs } from "@/context/PreferencesContext";
+import { isCosterraAppModule } from "@/lib/costerraMode";
 import {
   buildOverview,
   buildMarginTrend,
@@ -32,7 +33,7 @@ export default function OverviewPage() {
   const { ready, data } = useStore();
   const { prefs } = usePrefs();
   const { t, locale } = useI18n();
-  const isCosterra = prefs.activeModule === "batches";
+  const isCosterra = isCosterraAppModule(prefs.activeModule);
 
   const [preset, setPreset] = useState<DatePreset>("this_year");
   const [range, setRange] = useState<DateRange>(() => defaultOverviewRange());

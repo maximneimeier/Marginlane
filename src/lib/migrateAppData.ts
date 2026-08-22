@@ -18,7 +18,10 @@ import {
   normalizeCogsLineItem,
   normalizeCogsPlanCell,
 } from "./cogsPlan";
-import { normalizeCompanySettings } from "./companySettings";
+import {
+  normalizeCompanySettings,
+  normalizeProductionCostBasisOverride,
+} from "./companySettings";
 import {
   normalizeLogisticsBuildingBlock,
   normalizeLogisticsTemplate,
@@ -792,6 +795,9 @@ function normalizeComponentStamm(
       typeof c.stockProductId === "string" && c.stockProductId
         ? c.stockProductId
         : null,
+    costBasisOverride: normalizeProductionCostBasisOverride(
+      (c as { costBasisOverride?: unknown }).costBasisOverride,
+    ),
   };
 }
 
@@ -847,6 +853,7 @@ export function emptyComponent(supplierId = ""): Component {
     dutyRatePercent: 0,
     notes: "",
     stockProductId: null,
+    costBasisOverride: null,
   };
 }
 

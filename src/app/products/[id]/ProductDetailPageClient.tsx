@@ -31,6 +31,8 @@ import {
 import { resolveComponentCurrency } from "@/lib/resolve";
 import { useI18n } from "@/hooks/useI18n";
 import { CountryFlag } from "@/components/CountryFlag";
+import { usePrefs } from "@/context/PreferencesContext";
+import { isCosterraWholesale } from "@/lib/costerraMode";
 import {
   Badge,
   Button,
@@ -70,6 +72,8 @@ export default function ProductDetailPageClient({ id }: { id: string }) {
     upsertProductComponent,
     deleteProductComponent,
   } = useStore();
+  const { prefs } = usePrefs();
+  const wholesale = isCosterraWholesale(prefs);
   const { t, locale, lang, pricingUnitLabel, pricingUnits } = useI18n();
   const [editing, setEditing] = useState<EditSection>(null);
   const [masterDraft, setMasterDraft] = useState<CatalogProduct | null>(null);
@@ -806,6 +810,8 @@ export default function ProductDetailPageClient({ id }: { id: string }) {
         </Card>
       </div>
 
+      {!wholesale ? (
+      <>
       <Card className="overflow-hidden !p-0">
         <div className="border-b border-line px-4 py-3">
           <SectionHeader
@@ -1399,6 +1405,8 @@ export default function ProductDetailPageClient({ id }: { id: string }) {
           </div>
         )}
       </Card>
+      </>
+      ) : null}
 
       <Card>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

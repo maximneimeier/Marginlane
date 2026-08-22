@@ -28,6 +28,7 @@ import {
   emptyVatRate,
   isAllowedNumberDraft,
   normalizeCompanySettings,
+  normalizeProductionCostBasis,
   parseLocalizedNumber,
   combinedIncomeTaxPercent,
   resolveVatRatePercent,
@@ -46,7 +47,7 @@ import { formatNumber } from "@/lib/format";
 import { Button, Card, ConfirmDialog, Field, PageHeader, Select, TextInput } from "@/components/ui";
 import { PersonnelTeamsManager } from "@/components/PersonnelTeamsManager";
 import { PersonnelDefaultsEditor } from "@/components/PersonnelDefaultsEditor";
-import { usePrefs } from "@/context/PreferencesContext";
+import { usePrefs, type AppModule } from "@/context/PreferencesContext";
 import { useSearchParams } from "next/navigation";
 
 type CompanyTab =
@@ -67,8 +68,8 @@ const COMPANY_TABS: { id: CompanyTab; labelKey: MessageKey }[] = [
 ];
 
 /** Costerra: nur Allgemein. Investa: alle Tabs inkl. Bewertung. */
-function tabsForModule(module: "invest" | "batches" | null) {
-  if (module === "batches") {
+function tabsForModule(module: AppModule | null) {
+  if (module === "batches" || module === "batches_wholesale") {
     return COMPANY_TABS.filter((t) => t.id === "general");
   }
   return COMPANY_TABS;
@@ -961,6 +962,31 @@ function CompanyPageInner() {
                     {c}
                   </option>
                 ))}
+              </Select>
+            </Field>
+            <Field
+              label={t("company.field.productionCostBasis")}
+              hint={t("company.field.productionCostBasisHint")}
+            >
+              <Select
+                value={settings.productionCostBasis}
+                onChange={(e) =>
+                  patch({
+                    productionCostBasis: normalizeProductionCostBasis(
+                      e.target.value,
+                    ),
+                  })
+                }
+              >
+                <option value="list">
+                  {t("costBasis.list")}
+                </option>
+                <option value="last_landed">
+                  {t("costBasis.last_landed")}
+                </option>
+                <option value="fifo_stock">
+                  {t("costBasis.fifo_stock")}
+                </option>
               </Select>
             </Field>
             <Field
