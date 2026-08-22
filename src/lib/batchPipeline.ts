@@ -23,6 +23,18 @@ export function batchSoldQuantity(data: AppData, batch: Batch): number {
   return calculateResolvedEconomics(data, batch).salesAggregate.soldQuantity;
 }
 
+export function batchConsumedQuantity(batch: Batch): number {
+  return (batch.consumptions ?? []).reduce(
+    (sum, c) => sum + Math.max(c.quantity, 0),
+    0,
+  );
+}
+
+/** Verkauf + Produktionsverbrauch */
+export function batchOutgoingQuantity(data: AppData, batch: Batch): number {
+  return batchSoldQuantity(data, batch) + batchConsumedQuantity(batch);
+}
+
 export function batchRemainingQuantity(data: AppData, batch: Batch): number {
   return calculateResolvedEconomics(data, batch).remainingQuantity;
 }
@@ -63,7 +75,37 @@ export function getBatchPipelineStatusForData(
   batch: Batch,
   today: string = todayIsoDate(),
 ): BatchPipelineStatus {
-  return getBatchPipelineStatus(batch, today, batchSoldQuantity(data, batch));
+  return getBatchPipelineStatus(
+    batch,
+    today,
+    batchOutgoingQuantity(data, batch),
+  );
+}
+
+/** Katalogprodukt-Kategorie für Komponenten-Lagerartikel (Seed/UI). */
+export const PART_PRODUCT_CATEGORY = "Einzelteil";
+
+export function isPartProduct(
+  product: { category?: string } | undefined | null,
+): boolean {
+  const category = (product?.category || "").trim().toLowerCase();
+  return category === PART_PRODUCT_CATEGORY.toLowerCase();
+}
+
+/** Fertigware-Chargen (ohne Einzelteil-Lagerartikel). */
+export function isFinishedGoodsBatch(
+  data: Pick<AppData, "catalogProducts">,
+  batch: Batch,
+): boolean {
+  const product = data.catalogProducts.find((p) => p.id === batch.productId);
+  return !isPartProduct(product);
+}
+
+export function isPartBatch(
+  data: Pick<AppData, "catalogProducts">,
+  batch: Batch,
+): boolean {
+  return !isFinishedGoodsBatch(data, batch);
 }
 
 export function countBatchesByPipelineStatus(

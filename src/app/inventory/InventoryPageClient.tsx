@@ -6,10 +6,13 @@ import { useStore } from "@/context/StoreContext";
 import { calculateResolvedEconomics } from "@/lib/resolve";
 import {
   getBatchPipelineStatusForData,
+  isFinishedGoodsBatch,
+  isPartBatch,
   markBatchArrived,
   setBatchExpectedArrival,
   type BatchPipelineStatus,
 } from "@/lib/batchPipeline";
+import type { InventoryStockScope } from "@/lib/inventoryOverview";
 import { formatEuro, formatNumber } from "@/lib/format";
 import { useI18n } from "@/hooks/useI18n";
 import { InventoryOverviewPanel } from "@/components/InventoryOverviewPanel";
@@ -50,10 +53,17 @@ function toneForStatus(
   return "neutral";
 }
 
-function buildProductStock(data: AppData): ProductStockRow[] {
+function buildProductStock(
+  data: AppData,
+  scope: InventoryStockScope,
+): ProductStockRow[] {
   const map = new Map<string, ProductStockRow>();
 
   for (const batch of data.batches) {
+    if (scope === "parts" ? !isPartBatch(data, batch) : !isFinishedGoodsBatch(data, batch)) {
+      continue;
+    }
+
     const status = getBatchPipelineStatusForData(data, batch);
     if (status === "sold") continue;
 
@@ -107,6 +117,7 @@ function buildProductStock(data: AppData): ProductStockRow[] {
 export default function InventoryPageClient() {
   const { ready, data, upsertBatch } = useStore();
   const { t, locale, pricingUnitLabel } = useI18n();
+  const [scope, setScope] = useState<InventoryStockScope>("finished");
   const [tab, setTab] = useState<PageTab>("overview");
   const [filter, setFilter] = useState<StockFilter>("all");
   const [productSort, setProductSort] = useState<ProductSort>("value");
@@ -115,6 +126,11 @@ export default function InventoryPageClient() {
 
   const arrivalRows = useMemo(() => {
     return data.batches
+      .filter((batch) =>
+        scope === "parts"
+          ? isPartBatch(data, batch)
+          : isFinishedGoodsBatch(data, batch),
+      )
       .map((batch) => {
         const product = data.catalogProducts.find(
           (p) => p.id === batch.productId,
@@ -130,10 +146,10 @@ export default function InventoryPageClient() {
         const order = { ordered: 0, in_transit: 1, arrived: 2, sold: 3 };
         return order[a.status] - order[b.status];
       });
-  }, [data, filter]);
+  }, [data, filter, scope]);
 
   const productRows = useMemo(() => {
-    const rows = buildProductStock(data);
+    const rows = buildProductStock(data, scope);
     const dir = sortDir === "asc" ? 1 : -1;
     return rows.sort((a, b) => {
       if (productSort === "product") {
@@ -143,7 +159,7 @@ export default function InventoryPageClient() {
       if (byValue !== 0) return byValue;
       return a.name.localeCompare(b.name, locale);
     });
-  }, [data, productSort, sortDir, locale]);
+  }, [data, productSort, sortDir, locale, scope]);
 
   if (!ready) {
     return <p className="text-[13px] text-muted">{t("common.loading")}</p>;
@@ -158,6 +174,7 @@ export default function InventoryPageClient() {
     }
   }
 
+  const scopes: InventoryStockScope[] = ["finished", "parts"];
   const tabs: PageTab[] = ["overview", "stock", "arrivals"];
   const filters: StockFilter[] = ["all", "ordered", "in_transit", "arrived"];
 
@@ -175,6 +192,26 @@ export default function InventoryPageClient() {
           </Link>
         }
       />
+
+      <div className="flex flex-wrap gap-1.5">
+        {scopes.map((key) => {
+          const active = scope === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setScope(key)}
+              className={`inline-flex items-center rounded-[8px] border px-3 py-1.5 text-[13px] font-medium transition-colors ${
+                active
+                  ? "border-accent/40 bg-accent-soft/50 text-foreground"
+                  : "border-line bg-white text-muted hover:bg-surface-faint hover:text-foreground"
+              }`}
+            >
+              {t(`lagerung.scope.${key}`)}
+            </button>
+          );
+        })}
+      </div>
 
       <div className="flex flex-wrap gap-1.5 border-b border-line pb-3">
         {tabs.map((key) => {
@@ -196,7 +233,9 @@ export default function InventoryPageClient() {
         })}
       </div>
 
-      {tab === "overview" ? <InventoryOverviewPanel data={data} /> : null}
+      {tab === "overview" ? (
+        <InventoryOverviewPanel data={data} scope={scope} />
+      ) : null}
 
       {tab === "stock" ? (
         <>
@@ -211,7 +250,9 @@ export default function InventoryPageClient() {
                   : "border-line bg-white text-muted"
               }`}
             >
-              {t("lagerung.sort.product")}
+              {scope === "parts"
+                ? t("lagerung.sort.part")
+                : t("lagerung.sort.product")}
               {productSort === "product"
                 ? sortDir === "asc"
                   ? " ↑"
@@ -238,7 +279,11 @@ export default function InventoryPageClient() {
 
           {productRows.length === 0 ? (
             <Card>
-              <p className="text-[13px] text-muted">{t("lagerung.stock.empty")}</p>
+              <p className="text-[13px] text-muted">
+                {scope === "parts"
+                  ? t("lagerung.stock.emptyParts")
+                  : t("lagerung.stock.empty")}
+              </p>
               <Link
                 href="/batches"
                 className="mt-4 inline-flex h-8 items-center rounded-[8px] border border-line px-3 text-[13px] font-medium hover:bg-surface-faint"
@@ -265,7 +310,9 @@ export default function InventoryPageClient() {
                         className="text-left hover:text-foreground"
                         onClick={() => toggleSort("product")}
                       >
-                        {t("batches.col.product")}
+                        {scope === "parts"
+                          ? t("lagerung.col.part")
+                          : t("batches.col.product")}
                       </button>
                     </th>
                     <th className="px-3 py-2.5 text-right font-medium">
@@ -349,7 +396,9 @@ export default function InventoryPageClient() {
       {tab === "arrivals" ? (
         <>
           <p className="rounded-[8px] border border-line bg-surface-faint px-3 py-2 text-[12px] text-muted">
-            {t("inventory.arrivals.hint")}
+            {scope === "parts"
+              ? t("inventory.arrivals.hintParts")
+              : t("inventory.arrivals.hint")}
           </p>
           <div className="flex flex-wrap gap-1.5">
             {filters.map((key) => {
@@ -373,7 +422,11 @@ export default function InventoryPageClient() {
 
           {arrivalRows.length === 0 ? (
             <Card>
-              <p className="text-[13px] text-muted">{t("lagerung.stock.empty")}</p>
+              <p className="text-[13px] text-muted">
+                {scope === "parts"
+                  ? t("lagerung.stock.emptyParts")
+                  : t("lagerung.stock.empty")}
+              </p>
             </Card>
           ) : (
             <div className="overflow-x-auto rounded-[12px] border border-line bg-white shadow-[var(--shadow-sm)]">
@@ -396,7 +449,9 @@ export default function InventoryPageClient() {
                       {t("batches.col.status")}
                     </th>
                     <th className="px-3 py-2.5 font-medium">
-                      {t("batches.col.product")}
+                      {scope === "parts"
+                        ? t("lagerung.col.part")
+                        : t("batches.col.product")}
                     </th>
                     <th className="px-3 py-2.5 text-right font-medium">
                       {t("lagerung.col.onHand")}
@@ -504,12 +559,19 @@ export default function InventoryPageClient() {
                                 >
                                   {t("batches.pipeline.markArrived")}
                                 </Button>
-                              ) : (
+                              ) : scope === "finished" ? (
                                 <Link
                                   href={`/batches/${batch.id}?sell=1`}
                                   className="inline-flex h-7 shrink-0 items-center rounded-[8px] px-2 text-[12px] font-medium text-accent hover:underline"
                                 >
                                   {t("lagerung.action.sell")}
+                                </Link>
+                              ) : (
+                                <Link
+                                  href="/production"
+                                  className="inline-flex h-7 shrink-0 items-center rounded-[8px] px-2 text-[12px] font-medium text-accent hover:underline"
+                                >
+                                  {t("lagerung.action.toProduction")}
                                 </Link>
                               )}
                               <Link

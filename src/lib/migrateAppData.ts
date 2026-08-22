@@ -24,6 +24,7 @@ import {
   normalizeLogisticsTemplate,
 } from "./logistics";
 import { normalizePersonnelRole, normalizePersonnelTeam } from "./personnel";
+import { normalizeProductionRun } from "./production";
 import type {
   AppData,
   Batch,
@@ -35,6 +36,7 @@ import type {
   ProductComponent,
   ProductDocument,
   ProductSupplier,
+  ProductionRun,
   Sale,
   SalesData,
   SalesPlanCell,
@@ -273,6 +275,7 @@ export function migrateAppData(raw: unknown): AppData {
           countryOfOrigin: "",
           dutyRatePercent: 0,
           notes: "",
+          stockProductId: null,
         });
         productComponents.push({
           id: `pc_${cmpId}`,
@@ -372,8 +375,39 @@ export function migrateAppData(raw: unknown): AppData {
           duty: emptyBatchDuty(),
           quotes: [],
           activeQuoteId: null,
+          consumptions: (() => {
+            const raw = (b as Batch).consumptions;
+            if (!Array.isArray(raw)) return [];
+            return raw
+              .filter((c) => c && typeof c === "object")
+              .map((c) => ({
+                id: typeof c.id === "string" ? c.id : createId("bcon"),
+                productionRunId:
+                  typeof c.productionRunId === "string"
+                    ? c.productionRunId
+                    : "",
+                componentId:
+                  typeof c.componentId === "string" ? c.componentId : "",
+                quantity:
+                  typeof c.quantity === "number" ? Math.max(c.quantity, 0) : 0,
+                createdAt:
+                  typeof c.createdAt === "string"
+                    ? c.createdAt
+                    : new Date().toISOString(),
+              }));
+          })(),
         };
       })
+    : [];
+
+  const productionRuns: ProductionRun[] = Array.isArray(
+    (input as { productionRuns?: unknown }).productionRuns,
+  )
+    ? (
+        (input as { productionRuns: unknown[] }).productionRuns
+      ).map((raw) =>
+        normalizeProductionRun((raw ?? {}) as Partial<ProductionRun>),
+      )
     : [];
 
   const migratedOverhead = overheadItems.map((item) => {
@@ -664,6 +698,7 @@ export function migrateAppData(raw: unknown): AppData {
     productSuppliers: migrateProductSuppliers(input, productComponents, components),
     dealers,
     batches,
+    productionRuns,
     logisticsBuildingBlocks,
     logisticsTemplates,
     overheadItems: migratedOverhead,
@@ -745,6 +780,10 @@ function normalizeComponentStamm(
         ? Math.max(c.dutyRatePercent, 0)
         : 0,
     notes: typeof c.notes === "string" ? c.notes : "",
+    stockProductId:
+      typeof c.stockProductId === "string" && c.stockProductId
+        ? c.stockProductId
+        : null,
   };
 }
 
@@ -794,6 +833,7 @@ export function emptyComponent(supplierId = ""): Component {
     countryOfOrigin: "",
     dutyRatePercent: 0,
     notes: "",
+    stockProductId: null,
   };
 }
 

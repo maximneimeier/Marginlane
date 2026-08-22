@@ -175,6 +175,7 @@ export function ComponentFormModal({
       name: draft.name.trim(),
       sku: draft.sku.trim(),
       notes: draft.notes.trim(),
+      stockProductId: draft.stockProductId || null,
       currency: hasSupplier
         ? null
         : draft.currency || WORKSPACE_DEFAULT_CURRENCY,
@@ -517,6 +518,32 @@ export function ComponentFormModal({
                 <TextInput value={currencyResolved.value} disabled readOnly />
               </Field>
             ) : null}
+
+            <Field
+              label={t("componentModal.stockProduct")}
+              hint={t("componentModal.stockProductHint")}
+            >
+              <Select
+                value={draft?.stockProductId ?? ""}
+                onChange={(e) =>
+                  draft &&
+                  setDraft({
+                    ...draft,
+                    stockProductId: e.target.value || null,
+                  })
+                }
+              >
+                <option value="">{t("componentModal.stockProductNone")}</option>
+                {[...data.catalogProducts]
+                  .sort((a, b) => a.name.localeCompare(b.name, locale))
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                      {p.sku ? ` (${p.sku})` : ""}
+                    </option>
+                  ))}
+              </Select>
+            </Field>
 
             <Field
               label={t("componentModal.notes")}

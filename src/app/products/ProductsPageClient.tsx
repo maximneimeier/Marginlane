@@ -22,6 +22,49 @@ import {
   TextInput,
 } from "@/components/ui";
 
+type SortKey =
+  | "product"
+  | "sku"
+  | "category"
+  | "purchase"
+  | "listPrice"
+  | "unit"
+  | "status";
+type SortDir = "asc" | "desc";
+
+function SortTh({
+  label,
+  active,
+  dir,
+  onClick,
+  align,
+  className = "",
+}: {
+  label: string;
+  active: boolean;
+  dir: SortDir;
+  onClick: () => void;
+  align?: "right";
+  className?: string;
+}) {
+  return (
+    <th className={`px-4 py-2.5 font-medium ${className}`}>
+      <button
+        type="button"
+        onClick={onClick}
+        className={`inline-flex items-center gap-1 hover:text-foreground ${
+          align === "right" ? "w-full justify-end" : ""
+        } ${active ? "text-foreground" : ""}`}
+      >
+        {label}
+        <span className="text-[10px] text-muted-soft">
+          {active ? (dir === "asc" ? "↑" : "↓") : "↕"}
+        </span>
+      </button>
+    </th>
+  );
+}
+
 export default function ProductsPageClient() {
   const {
     ready,
@@ -35,6 +78,8 @@ export default function ProductsPageClient() {
   const { t, plural, locale, lang, pricingUnitLabel } = useI18n();
   const [query, setQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("product");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [draft, setDraft] = useState<CatalogProduct | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CatalogProduct | null>(
     null,
@@ -42,18 +87,70 @@ export default function ProductsPageClient() {
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return data.catalogProducts
-      .filter((p) => {
-        if (filterStatus && p.status !== filterStatus) return false;
-        if (!q) return true;
-        return (
-          p.name.toLowerCase().includes(q) ||
-          p.sku.toLowerCase().includes(q) ||
-          p.category.toLowerCase().includes(q)
+    const filtered = data.catalogProducts.filter((p) => {
+      if (filterStatus && p.status !== filterStatus) return false;
+      if (!q) return true;
+      return (
+        p.name.toLowerCase().includes(q) ||
+        p.sku.toLowerCase().includes(q) ||
+        p.category.toLowerCase().includes(q)
+      );
+    });
+
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      let cmp = 0;
+      if (sortKey === "product") {
+        cmp = a.name.localeCompare(b.name, lang);
+      } else if (sortKey === "sku") {
+        cmp = (a.sku || "").localeCompare(b.sku || "", lang);
+      } else if (sortKey === "category") {
+        cmp = (a.category || "").localeCompare(b.category || "", lang);
+      } else if (sortKey === "purchase") {
+        const pa = catalogProductUnitPurchaseCost(
+          a.id,
+          data.components,
+          data.productComponents ?? [],
         );
-      })
-      .sort((a, b) => a.name.localeCompare(b.name, lang));
-  }, [data.catalogProducts, query, filterStatus, lang]);
+        const pb = catalogProductUnitPurchaseCost(
+          b.id,
+          data.components,
+          data.productComponents ?? [],
+        );
+        cmp = pa - pb;
+      } else if (sortKey === "listPrice") {
+        const pa = a.listPrice ?? Number.NEGATIVE_INFINITY;
+        const pb = b.listPrice ?? Number.NEGATIVE_INFINITY;
+        cmp = pa - pb;
+      } else if (sortKey === "unit") {
+        cmp = a.pricingUnit.localeCompare(b.pricingUnit, lang);
+      } else {
+        cmp = a.status.localeCompare(b.status, lang);
+      }
+      if (cmp !== 0) return cmp * dir;
+      return a.name.localeCompare(b.name, lang) * dir;
+    });
+  }, [
+    data.catalogProducts,
+    data.components,
+    data.productComponents,
+    query,
+    filterStatus,
+    lang,
+    sortKey,
+    sortDir,
+  ]);
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir(
+        key === "purchase" || key === "listPrice" ? "desc" : "asc",
+      );
+    }
+  }
 
   function saveProduct(
     product: CatalogProduct,
@@ -151,27 +248,51 @@ export default function ProductsPageClient() {
             <table className="w-full min-w-[720px] text-left text-[13px]">
               <thead>
                 <tr className="border-b border-line bg-surface-faint text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
-                  <th className="px-4 py-2.5 font-medium">
-                    {t("products.col.product")}
-                  </th>
-                  <th className="px-4 py-2.5 font-medium">
-                    {t("products.col.sku")}
-                  </th>
-                  <th className="px-4 py-2.5 font-medium">
-                    {t("products.col.category")}
-                  </th>
-                  <th className="px-4 py-2.5 text-right font-medium">
-                    {t("products.col.purchase")}
-                  </th>
-                  <th className="px-4 py-2.5 text-right font-medium">
-                    {t("products.col.listPrice")}
-                  </th>
-                  <th className="hidden px-4 py-2.5 font-medium md:table-cell">
-                    {t("products.col.unit")}
-                  </th>
-                  <th className="px-4 py-2.5 font-medium">
-                    {t("products.col.status")}
-                  </th>
+                  <SortTh
+                    label={t("products.col.product")}
+                    active={sortKey === "product"}
+                    dir={sortDir}
+                    onClick={() => toggleSort("product")}
+                  />
+                  <SortTh
+                    label={t("products.col.sku")}
+                    active={sortKey === "sku"}
+                    dir={sortDir}
+                    onClick={() => toggleSort("sku")}
+                  />
+                  <SortTh
+                    label={t("products.col.category")}
+                    active={sortKey === "category"}
+                    dir={sortDir}
+                    onClick={() => toggleSort("category")}
+                  />
+                  <SortTh
+                    label={t("products.col.purchase")}
+                    active={sortKey === "purchase"}
+                    dir={sortDir}
+                    onClick={() => toggleSort("purchase")}
+                    align="right"
+                  />
+                  <SortTh
+                    label={t("products.col.listPrice")}
+                    active={sortKey === "listPrice"}
+                    dir={sortDir}
+                    onClick={() => toggleSort("listPrice")}
+                    align="right"
+                  />
+                  <SortTh
+                    label={t("products.col.unit")}
+                    active={sortKey === "unit"}
+                    dir={sortDir}
+                    onClick={() => toggleSort("unit")}
+                    className="hidden md:table-cell"
+                  />
+                  <SortTh
+                    label={t("products.col.status")}
+                    active={sortKey === "status"}
+                    dir={sortDir}
+                    onClick={() => toggleSort("status")}
+                  />
                   <th className="w-28 px-3 py-2.5" />
                 </tr>
               </thead>

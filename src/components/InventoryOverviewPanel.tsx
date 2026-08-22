@@ -4,10 +4,14 @@ import { useEffect, useId, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import type { ApexOptions } from "apexcharts";
 import type { AppData } from "@/lib/types";
-import { buildInventoryOverview } from "@/lib/inventoryOverview";
+import {
+  buildInventoryOverview,
+  buildInventoryStockTrend,
+  type InventoryStockScope,
+} from "@/lib/inventoryOverview";
 import { formatDate, formatEuro, formatNumber } from "@/lib/format";
 import { useI18n } from "@/hooks/useI18n";
-import { Card } from "@/components/ui";
+import { Card, Select } from "@/components/ui";
 
 const ReactApexChart = dynamic(() => import("react-apexcharts"), {
   ssr: false,
@@ -25,19 +29,46 @@ const COLORS = {
 
 type Props = {
   data: AppData;
+  scope: InventoryStockScope;
 };
 
-export function InventoryOverviewPanel({ data }: Props) {
+export function InventoryOverviewPanel({ data, scope }: Props) {
   const { t, locale } = useI18n();
   const reactId = useId().replace(/:/g, "");
   const [mounted, setMounted] = useState(false);
+  const [trendComponentId, setTrendComponentId] = useState("");
   useEffect(() => {
     setMounted(true);
     return () => setMounted(false);
   }, []);
 
-  const overview = useMemo(() => buildInventoryOverview(data), [data]);
-  const { kpis, productBars, pipelineMix, fidelity, stockTrend } = overview;
+  useEffect(() => {
+    setTrendComponentId("");
+  }, [scope]);
+
+  const overview = useMemo(
+    () => buildInventoryOverview(data, undefined, scope),
+    [data, scope],
+  );
+  const {
+    kpis,
+    productBars,
+    componentBars,
+    pipelineMix,
+    fidelity,
+    stockTrendComponents,
+  } = overview;
+
+  const stockTrend = useMemo(
+    () =>
+      buildInventoryStockTrend(
+        data,
+        scope === "parts" && trendComponentId ? trendComponentId : null,
+        undefined,
+        scope,
+      ),
+    [data, trendComponentId, scope],
+  );
 
   const productChart = useMemo(() => {
     const categories = productBars.map((r) => r.name);
@@ -76,6 +107,54 @@ export function InventoryOverviewPanel({ data }: Props) {
       hasData: values.some((v) => v > 0),
     };
   }, [productBars, locale, reactId, t]);
+
+  const componentChart = useMemo(() => {
+    const categories = componentBars.map((r) => r.name);
+    const free = componentBars.map((r) => Math.round(r.free * 100) / 100);
+    const reserved = componentBars.map(
+      (r) => Math.round(Math.min(r.reserved, r.onHand) * 100) / 100,
+    );
+    const options: ApexOptions = {
+      chart: {
+        id: `inv-parts-${reactId}`,
+        type: "bar",
+        stacked: true,
+        toolbar: { show: false },
+        fontFamily: "inherit",
+        animations: { enabled: false },
+      },
+      plotOptions: {
+        bar: { horizontal: true, borderRadius: 4, barHeight: "70%" },
+      },
+      colors: [COLORS.success, COLORS.warn],
+      dataLabels: { enabled: false },
+      xaxis: {
+        categories,
+        labels: {
+          formatter: (v) => formatNumber(Number(v), locale),
+          style: { colors: COLORS.muted, fontSize: "11px" },
+        },
+      },
+      yaxis: {
+        labels: { style: { colors: "#1c1d1f", fontSize: "12px" } },
+      },
+      legend: { position: "bottom", fontSize: "12px" },
+      grid: { borderColor: "#e8eaed", strokeDashArray: 3 },
+      tooltip: {
+        y: {
+          formatter: (v) => formatNumber(Number(v), locale),
+        },
+      },
+    };
+    return {
+      options,
+      series: [
+        { name: t("inventory.overview.chart.partsFree"), data: free },
+        { name: t("inventory.overview.chart.partsReserved"), data: reserved },
+      ],
+      hasData: componentBars.some((r) => r.onHand > 0 || r.reserved > 0),
+    };
+  }, [componentBars, locale, reactId, t]);
 
   const mixChart = useMemo(() => {
     const labels = [
@@ -230,26 +309,49 @@ export function InventoryOverviewPanel({ data }: Props) {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <h3 className="mb-1 text-[14px] font-semibold">
-            {t("inventory.overview.chart.productTitle")}
-          </h3>
-          <p className="mb-3 text-[12px] text-muted">
-            {t("inventory.overview.chart.productHint")}
-          </p>
-          {mounted && productChart.hasData ? (
-            <ReactApexChart
-              type="bar"
-              height={Math.max(220, productBars.length * 36 + 40)}
-              options={productChart.options}
-              series={productChart.series}
-            />
-          ) : (
-            <p className="py-10 text-center text-[13px] text-muted">
-              {t("inventory.overview.empty")}
+        {scope === "finished" ? (
+          <Card>
+            <h3 className="mb-1 text-[14px] font-semibold">
+              {t("inventory.overview.chart.productTitle")}
+            </h3>
+            <p className="mb-3 text-[12px] text-muted">
+              {t("inventory.overview.chart.productHint")}
             </p>
-          )}
-        </Card>
+            {mounted && productChart.hasData ? (
+              <ReactApexChart
+                type="bar"
+                height={Math.max(220, productBars.length * 36 + 40)}
+                options={productChart.options}
+                series={productChart.series}
+              />
+            ) : (
+              <p className="py-10 text-center text-[13px] text-muted">
+                {t("inventory.overview.empty")}
+              </p>
+            )}
+          </Card>
+        ) : (
+          <Card>
+            <h3 className="mb-1 text-[14px] font-semibold">
+              {t("inventory.overview.chart.partsTitle")}
+            </h3>
+            <p className="mb-3 text-[12px] text-muted">
+              {t("inventory.overview.chart.partsHint")}
+            </p>
+            {mounted && componentChart.hasData ? (
+              <ReactApexChart
+                type="bar"
+                height={Math.max(220, componentBars.length * 36 + 48)}
+                options={componentChart.options}
+                series={componentChart.series}
+              />
+            ) : (
+              <p className="py-10 text-center text-[13px] text-muted">
+                {t("inventory.overview.partsEmpty")}
+              </p>
+            )}
+          </Card>
+        )}
 
         <Card>
           <h3 className="mb-1 text-[14px] font-semibold">
@@ -276,6 +378,27 @@ export function InventoryOverviewPanel({ data }: Props) {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <h3 className="mb-1 text-[14px] font-semibold">
+            {t("inventory.overview.chart.mixTitle")}
+          </h3>
+          <p className="mb-3 text-[12px] text-muted">
+            {t("inventory.overview.chart.mixHint")}
+          </p>
+          {mounted && mixChart.hasData ? (
+            <ReactApexChart
+              type="donut"
+              height={280}
+              options={mixChart.options}
+              series={mixChart.series}
+            />
+          ) : (
+            <p className="py-10 text-center text-[13px] text-muted">
+              {t("inventory.overview.empty")}
+            </p>
+          )}
+        </Card>
+
+        <Card>
+          <h3 className="mb-1 text-[14px] font-semibold">
             {t("inventory.overview.chart.fidelityTitle")}
           </h3>
           <p className="mb-3 text-[12px] text-muted">
@@ -297,9 +420,13 @@ export function InventoryOverviewPanel({ data }: Props) {
                       {row.label}
                     </p>
                     <p className="text-[12px] text-muted">
-                      ETA {formatDate(row.eta, locale)}
+                      {t("inventory.overview.fidelityEta", {
+                        date: formatDate(row.eta, locale),
+                      })}
                       {row.actual
-                        ? ` · Ist ${formatDate(row.actual, locale)}`
+                        ? ` · ${t("inventory.overview.fidelityActual", {
+                            date: formatDate(row.actual, locale),
+                          })}`
                         : ""}
                     </p>
                   </div>
@@ -333,28 +460,53 @@ export function InventoryOverviewPanel({ data }: Props) {
             </ul>
           )}
         </Card>
-
-        <Card>
-          <h3 className="mb-1 text-[14px] font-semibold">
-            {t("inventory.overview.chart.trendTitle")}
-          </h3>
-          <p className="mb-3 text-[12px] text-muted">
-            {t("inventory.overview.chart.trendHint")}
-          </p>
-          {mounted && trendChart.hasData ? (
-            <ReactApexChart
-              type="area"
-              height={260}
-              options={trendChart.options}
-              series={trendChart.series}
-            />
-          ) : (
-            <p className="py-10 text-center text-[13px] text-muted">
-              {t("inventory.overview.trendEmpty")}
-            </p>
-          )}
-        </Card>
       </div>
+
+      <Card>
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-[14px] font-semibold">
+              {t("inventory.overview.chart.trendTitle")}
+            </h3>
+            <p className="mt-1 text-[12px] text-muted">
+              {scope === "parts"
+                ? t("inventory.overview.chart.trendHint")
+                : t("inventory.overview.chart.trendHintFinished")}
+            </p>
+          </div>
+          {scope === "parts" && stockTrendComponents.length > 0 ? (
+            <label className="flex shrink-0 flex-col gap-1 text-[12px] text-muted">
+              <span>{t("inventory.overview.chart.trendFilter")}</span>
+              <Select
+                value={trendComponentId}
+                onChange={(e) => setTrendComponentId(e.target.value)}
+                className="min-w-[200px]"
+              >
+                <option value="">
+                  {t("inventory.overview.chart.trendFilterAll")}
+                </option>
+                {stockTrendComponents.map((c) => (
+                  <option key={c.componentId} value={c.componentId}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          ) : null}
+        </div>
+        {mounted && trendChart.hasData ? (
+          <ReactApexChart
+            type="area"
+            height={260}
+            options={trendChart.options}
+            series={trendChart.series}
+          />
+        ) : (
+          <p className="py-10 text-center text-[13px] text-muted">
+            {t("inventory.overview.trendEmpty")}
+          </p>
+        )}
+      </Card>
     </div>
   );
 }

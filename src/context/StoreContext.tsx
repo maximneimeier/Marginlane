@@ -25,6 +25,7 @@ import type {
   PersonnelTeam,
   Product,
   ProductComponent,
+  ProductionRun,
   SalesPlanCell,
   SalesPlanRowMeta,
   SalesPlanScenario,
@@ -38,6 +39,7 @@ import type {
 import { EMPTY_COMPANY_SETTINGS, EMPTY_DATA } from "@/lib/types";
 import { normalizeCompanySettings } from "@/lib/companySettings";
 import { migrateAppData } from "@/lib/migrateAppData";
+import { completeProductionRun } from "@/lib/production";
 import {
   freezeKey,
   mergeSalesPlan,
@@ -86,6 +88,21 @@ type StoreContextValue = {
   linkedTemplateNamesForBuildingBlock: (blockId: string) => string[];
   upsertBatch: (batch: Batch) => void;
   deleteBatch: (id: string) => void;
+  upsertProductionRun: (run: ProductionRun) => void;
+  deleteProductionRun: (id: string) => void;
+  /** Schließt Run ab und legt Fertigware-Charge an (FIFO-Abbuchung) */
+  completeProductionRunInStore: (
+    runId: string,
+    options?: { allowShortfall?: boolean },
+  ) => boolean;
+  /**
+   * Speichert einen Run; bei `complete` sofort Fertigware-Charge anlegen.
+   * @returns outputBatchId wenn abgeschlossen, sonst null
+   */
+  saveProductionRun: (
+    run: ProductionRun,
+    options?: { complete?: boolean; allowShortfall?: boolean },
+  ) => string | null;
   upsertOverheadItem: (item: OverheadItem) => void;
   deleteOverheadItem: (id: string) => void;
   upsertOverheadActual: (actual: OverheadActual) => void;
@@ -567,6 +584,106 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [commit],
   );
 
+  const upsertProductionRun = useCallback(
+    (run: ProductionRun) => {
+      commit((prev) => {
+        const list = prev.productionRuns ?? [];
+        return {
+          ...prev,
+          productionRuns: list.some((r) => r.id === run.id)
+            ? list.map((r) => (r.id === run.id ? run : r))
+            : [...list, run],
+        };
+      });
+    },
+    [commit],
+  );
+
+  const deleteProductionRun = useCallback(
+    (id: string) => {
+      commit((prev) => ({
+        ...prev,
+        productionRuns: (prev.productionRuns ?? []).filter((r) => r.id !== id),
+      }));
+    },
+    [commit],
+  );
+
+  const completeProductionRunInStore = useCallback(
+    (runId: string, options?: { allowShortfall?: boolean }) => {
+      let ok = false;
+      commit((prev) => {
+        const run = (prev.productionRuns ?? []).find((r) => r.id === runId);
+        if (!run) return prev;
+        const result = completeProductionRun(prev, run, options);
+        if (!result) return prev;
+        ok = true;
+        const list = prev.productionRuns ?? [];
+        const byId = new Map(result.updatedBatches.map((b) => [b.id, b]));
+        let batches = prev.batches.map((b) => byId.get(b.id) ?? b);
+        if (!batches.some((b) => b.id === result.batch.id)) {
+          batches = [...batches, result.batch];
+        } else {
+          batches = batches.map((b) =>
+            b.id === result.batch.id ? result.batch : b,
+          );
+        }
+        return {
+          ...prev,
+          productionRuns: list.map((r) =>
+            r.id === result.run.id ? result.run : r,
+          ),
+          batches,
+        };
+      });
+      return ok;
+    },
+    [commit],
+  );
+
+  const saveProductionRun = useCallback(
+    (run: ProductionRun, options?: { complete?: boolean; allowShortfall?: boolean }) => {
+      let outputBatchId: string | null = null;
+      commit((prev) => {
+        let nextRun = run;
+        let nextBatches = prev.batches;
+        if (options?.complete) {
+          const result = completeProductionRun(prev, {
+            ...run,
+            consumptions: run.consumptions ?? [],
+          }, { allowShortfall: options.allowShortfall });
+          if (!result) {
+            // Speichern als Entwurf, wenn Abschluss wegen Bestand scheitert
+            const list = prev.productionRuns ?? [];
+            return {
+              ...prev,
+              productionRuns: list.some((r) => r.id === run.id)
+                ? list.map((r) => (r.id === run.id ? run : r))
+                : [...list, run],
+            };
+          }
+          nextRun = result.run;
+          outputBatchId = result.batch.id;
+          const byId = new Map(result.updatedBatches.map((b) => [b.id, b]));
+          nextBatches = prev.batches.map((b) => byId.get(b.id) ?? b);
+          if (!nextBatches.some((b) => b.id === result.batch.id)) {
+            nextBatches = [...nextBatches, result.batch];
+          }
+        }
+        const list = prev.productionRuns ?? [];
+        return {
+          ...prev,
+          productionRuns: list.some((r) => r.id === nextRun.id)
+            ? list.map((r) => (r.id === nextRun.id ? nextRun : r))
+            : [...list, nextRun],
+          batches: nextBatches,
+        };
+      });
+      return outputBatchId;
+    },
+    [commit],
+  );
+
   const upsertOverheadItem = useCallback(
     (item: OverheadItem) => {
       const now = new Date().toISOString();
@@ -917,6 +1034,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       linkedTemplateNamesForBuildingBlock,
       upsertBatch,
       deleteBatch,
+      upsertProductionRun,
+      deleteProductionRun,
+      completeProductionRunInStore,
+      saveProductionRun,
       upsertOverheadItem,
       deleteOverheadItem,
       upsertOverheadActual,
@@ -964,6 +1085,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       linkedTemplateNamesForBuildingBlock,
       upsertBatch,
       deleteBatch,
+      upsertProductionRun,
+      deleteProductionRun,
+      completeProductionRunInStore,
+      saveProductionRun,
       upsertOverheadItem,
       deleteOverheadItem,
       upsertOverheadActual,

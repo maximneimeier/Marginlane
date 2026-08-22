@@ -337,8 +337,9 @@ export function BatchProcurementEditor({
         fxRateOverride: initialBatch.fxRateOverride,
         duty: initialBatch.duty ?? emptyBatchDuty(),
         quotes: initialBatch.quotes ?? [],
-        activeQuoteId: initialBatch.activeQuoteId ?? null,
-        unitPurchasePrice: priceManual
+      activeQuoteId: null,
+      consumptions: initialBatch.consumptions ?? [],
+      unitPurchasePrice: priceManual
           ? unitPrice
           : purchaseFromSource > 0
             ? purchaseFromSource
@@ -360,6 +361,7 @@ export function BatchProcurementEditor({
       duty: emptyBatchDuty(),
       quotes: [],
       activeQuoteId: null,
+      consumptions: [],
       unitPurchasePrice: priceManual
         ? unitPrice
         : purchaseFromSource > 0

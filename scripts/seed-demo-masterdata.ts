@@ -260,6 +260,95 @@ const PRODUCTS: CatalogProduct[] = [
   },
 ];
 
+/** Lagerartikel für Komponenten (werden bestellt / eingelagert) */
+const PART_PRODUCTS: CatalogProduct[] = [
+  {
+    id: "prd_stock_led",
+    name: "LED-Frontlicht USB-C",
+    sku: "LRP-LED-001",
+    listPrice: null,
+    pricingUnit: "pcs",
+    currency: "USD",
+    status: "active",
+    category: "Einzelteil",
+    targetMarginPercent: null,
+    hsCode: "",
+    countryOfOrigin: "CN",
+    dutyRatePercent: 0,
+    notes: "Lagerartikel für Komponente LED",
+    documents: [],
+    createdAt: NOW,
+  },
+  {
+    id: "prd_stock_bell",
+    name: "Fahrradklingel Aluminium",
+    sku: "LRP-BELL-002",
+    listPrice: null,
+    pricingUnit: "pcs",
+    currency: "USD",
+    status: "active",
+    category: "Einzelteil",
+    targetMarginPercent: null,
+    hsCode: "",
+    countryOfOrigin: "CN",
+    dutyRatePercent: 0,
+    notes: "Lagerartikel für Komponente Klingel",
+    documents: [],
+    createdAt: NOW,
+  },
+  {
+    id: "prd_stock_ornament",
+    name: "Glaskugel-Ornament 6cm rot",
+    sku: "YST-ORN-RED6",
+    listPrice: null,
+    pricingUnit: "pcs",
+    currency: "USD",
+    status: "active",
+    category: "Einzelteil",
+    targetMarginPercent: null,
+    hsCode: "",
+    countryOfOrigin: "CN",
+    dutyRatePercent: 0,
+    notes: "Lagerartikel für Komponente Ornament",
+    documents: [],
+    createdAt: NOW,
+  },
+  {
+    id: "prd_stock_sofa",
+    name: "Lounge-Sofa Rattan",
+    sku: "VLF-SOFA-01",
+    listPrice: null,
+    pricingUnit: "pcs",
+    currency: "USD",
+    status: "active",
+    category: "Einzelteil",
+    targetMarginPercent: null,
+    hsCode: "",
+    countryOfOrigin: "VN",
+    dutyRatePercent: 0,
+    notes: "Lagerartikel für Komponente Sofa",
+    documents: [],
+    createdAt: NOW,
+  },
+  {
+    id: "prd_stock_table",
+    name: "Beistelltisch Holz",
+    sku: "VLF-TBL-01",
+    listPrice: null,
+    pricingUnit: "pcs",
+    currency: "USD",
+    status: "active",
+    category: "Einzelteil",
+    targetMarginPercent: null,
+    hsCode: "",
+    countryOfOrigin: "VN",
+    dutyRatePercent: 0,
+    notes: "Lagerartikel für Komponente Tisch",
+    documents: [],
+    createdAt: NOW,
+  },
+];
+
 const COMPONENTS: Component[] = [
   {
     id: "cmp_demo_led",
@@ -275,6 +364,7 @@ const COMPONENTS: Component[] = [
     countryOfOrigin: "",
     dutyRatePercent: 0,
     notes: "Wasserdicht IPX4",
+    stockProductId: "prd_stock_led",
   },
   {
     id: "cmp_demo_bell",
@@ -290,6 +380,7 @@ const COMPONENTS: Component[] = [
     countryOfOrigin: "",
     dutyRatePercent: 0,
     notes: "",
+    stockProductId: "prd_stock_bell",
   },
   {
     id: "cmp_demo_mount",
@@ -305,6 +396,7 @@ const COMPONENTS: Component[] = [
     countryOfOrigin: "",
     dutyRatePercent: 0,
     notes: "Passend zu LED und Klingel",
+    stockProductId: null,
   },
   {
     id: "cmp_demo_ornament",
@@ -320,6 +412,7 @@ const COMPONENTS: Component[] = [
     countryOfOrigin: "",
     dutyRatePercent: 0,
     notes: "12er-Bündel beim Lieferanten, EK ist Einzelpreis",
+    stockProductId: "prd_stock_ornament",
   },
   {
     id: "cmp_demo_ribbon",
@@ -335,6 +428,7 @@ const COMPONENTS: Component[] = [
     countryOfOrigin: "",
     dutyRatePercent: 0,
     notes: "Preis vorläufig geschätzt, Angebot ausstehend",
+    stockProductId: null,
   },
   {
     id: "cmp_demo_card",
@@ -350,6 +444,7 @@ const COMPONENTS: Component[] = [
     countryOfOrigin: "",
     dutyRatePercent: 0,
     notes: "Zweisprachig DE/EN",
+    stockProductId: null,
   },
   {
     id: "cmp_demo_sofa",
@@ -365,6 +460,7 @@ const COMPONENTS: Component[] = [
     countryOfOrigin: "",
     dutyRatePercent: 0,
     notes: "Hauptteil des Sets",
+    stockProductId: "prd_stock_sofa",
   },
   {
     id: "cmp_demo_table",
@@ -380,6 +476,7 @@ const COMPONENTS: Component[] = [
     countryOfOrigin: "",
     dutyRatePercent: 0,
     notes: "",
+    stockProductId: "prd_stock_table",
   },
   {
     id: "cmp_demo_cushion",
@@ -395,6 +492,7 @@ const COMPONENTS: Component[] = [
     countryOfOrigin: "",
     dutyRatePercent: 0,
     notes: "2 Stück pro Set",
+    stockProductId: null,
   },
 ];
 
@@ -810,175 +908,392 @@ const tplById = Object.fromEntries(
   LOGISTICS_TEMPLATES.map((t) => [t.id, t]),
 ) as Record<string, LogisticsTemplate>;
 
-const BATCHES: Batch[] = [
-  {
-    id: "bat_demo_lounge",
+type FgBatchSpec = {
+  id: string;
+  product: "lounge" | "bike" | "xmas";
+  label: string;
+  quantity: number;
+  orderDate: string;
+  /** null = bestellt (kein ETA) */
+  expectedArrivalDate: string | null;
+  /** null = noch nicht angekommen */
+  arrivalDate: string | null;
+  soldQuantity?: number;
+  soldDate?: string | null;
+  notes: string;
+  poNumber: string;
+};
+
+const FG_META = {
+  lounge: {
     productId: "prd_demo_lounge",
     supplierId: "sup_demo_vinh",
-    label: "Lounge Q3 — Container HCMC",
-    quantity: 40,
-    unitPurchasePrice: null,
-    currency: null,
-    paymentDays: null,
-    paymentUnit: null,
-    skontoPercent: null,
-    skontoDays: null,
-    incoterm: "FOB",
-    costItems: costItemsFromTemplate(
-      "lounge",
-      tplById.ltpl_demo_vn_sea,
-      LOGISTICS_BLOCKS,
-    ),
-    sales: [
-      sale({
-        id: "sale_demo_lounge_1",
-        dealerId: "dlr_demo_gartenwelt",
-        salePricePerUnit: null,
-        quantity: 0,
-        channel: "b2b",
-        costItems: null,
-      }),
-    ],
-    orderDate: "2026-08-10",
-    arrivalDate: null,
-    expectedArrivalDate: null,
-    poNumber: "",
-    notes: "",
-    receivedQuantity: null,
-    soldDate: null,
-    applySkonto: null,
-    fxRateOverride: null,
-    duty: { hsCode: "", countryOfOrigin: "", ratePercent: 0, fixedAmount: 0 },
-    quotes: [],
-    activeQuoteId: null,
-    createdAt: "2026-08-10T10:00:00.000Z",
+    dealerId: "dlr_demo_gartenwelt",
+    channel: "b2b" as const,
+    incoterm: "FOB" as const,
+    templateId: "ltpl_demo_vn_sea",
   },
-  {
-    id: "bat_demo_bike",
+  bike: {
     productId: "prd_demo_bike",
     supplierId: "sup_demo_ningbo",
-    label: "Bike-Acc Q3 — Ningbo",
-    quantity: 2000,
-    unitPurchasePrice: null,
-    currency: null,
-    paymentDays: null,
-    paymentUnit: null,
-    skontoPercent: null,
-    skontoDays: null,
-    incoterm: "FOB",
-    costItems: costItemsFromTemplate(
-      "bike",
-      tplById.ltpl_demo_cn_sea,
-      LOGISTICS_BLOCKS,
-    ),
-    sales: [
-      sale({
-        id: "sale_demo_bike_1",
-        dealerId: "dlr_demo_bikestop",
-        salePricePerUnit: null,
-        quantity: 0,
-        channel: "retail",
-        costItems: null,
-      }),
-    ],
-    orderDate: "2026-07-20",
-    arrivalDate: "2026-09-05",
-    expectedArrivalDate: null,
-    poNumber: "",
-    notes: "",
-    receivedQuantity: null,
-    soldDate: null,
-    applySkonto: null,
-    fxRateOverride: null,
-    duty: { hsCode: "", countryOfOrigin: "", ratePercent: 0, fixedAmount: 0 },
-    quotes: [],
-    activeQuoteId: null,
-    createdAt: "2026-07-20T10:00:00.000Z",
+    dealerId: "dlr_demo_bikestop",
+    channel: "retail" as const,
+    incoterm: "FOB" as const,
+    templateId: "ltpl_demo_cn_sea",
   },
-  {
-    id: "bat_demo_xmas",
+  xmas: {
     productId: "prd_demo_xmas",
     supplierId: "sup_demo_yiwu",
-    label: "Xmas-Set — CIF Yiwu",
-    quantity: 5000,
+    dealerId: "dlr_demo_saison",
+    channel: "marketplace" as const,
+    incoterm: "CIF" as const,
+    templateId: "ltpl_demo_cif",
+  },
+};
+
+function fgBatch(spec: FgBatchSpec): Batch {
+  const meta = FG_META[spec.product];
+  const soldQty = spec.soldQuantity ?? 0;
+  const arrived = Boolean(spec.arrivalDate);
+  return {
+    id: spec.id,
+    productId: meta.productId,
+    supplierId: meta.supplierId,
+    label: spec.label,
+    quantity: spec.quantity,
     unitPurchasePrice: null,
     currency: null,
     paymentDays: null,
     paymentUnit: null,
     skontoPercent: null,
     skontoDays: null,
-    incoterm: "CIF",
+    incoterm: meta.incoterm,
     costItems: costItemsFromTemplate(
-      "xmas",
-      tplById.ltpl_demo_cif,
+      spec.id.replace(/^bat_demo_/, ""),
+      tplById[meta.templateId],
       LOGISTICS_BLOCKS,
     ),
     sales: [
       sale({
-        id: "sale_demo_xmas_1",
-        dealerId: "dlr_demo_saison",
+        id: `${spec.id}_sale`,
+        dealerId: meta.dealerId,
         salePricePerUnit: null,
-        quantity: 1800,
-        channel: "marketplace",
+        quantity: soldQty,
+        channel: meta.channel,
         costItems: null,
       }),
     ],
-    orderDate: "2026-05-15",
-    arrivalDate: "2026-07-01",
-    expectedArrivalDate: null,
-    poNumber: "",
-    notes: "",
-    receivedQuantity: null,
-    soldDate: null,
+    orderDate: spec.orderDate,
+    arrivalDate: spec.arrivalDate,
+    expectedArrivalDate: spec.expectedArrivalDate,
+    poNumber: spec.poNumber,
+    notes: spec.notes,
+    receivedQuantity: arrived ? spec.quantity : null,
+    soldDate: spec.soldDate ?? null,
     applySkonto: null,
     fxRateOverride: null,
     duty: { hsCode: "", countryOfOrigin: "", ratePercent: 0, fixedAmount: 0 },
     quotes: [],
     activeQuoteId: null,
-    createdAt: "2026-05-15T10:00:00.000Z",
-  },
-  {
+    createdAt: `${spec.orderDate}T10:00:00.000Z`,
+  };
+}
+
+/**
+ * Fertigware-Pipeline (Stand 2026-08-22):
+ * je 4× bestellt / unterwegs / im Lager (+ 1 verkauft).
+ * Einzelteil-Chargen liegen separat in PART_BATCHES.
+ */
+const BATCHES: Batch[] = [
+  // —— Bestellt (kein ETA, keine Ist-Ankunft) ——
+  fgBatch({
+    id: "bat_demo_ord_lounge",
+    product: "lounge",
+    label: "Lounge — PO neu HCMC",
+    quantity: 30,
+    orderDate: "2026-08-18",
+    expectedArrivalDate: null,
+    arrivalDate: null,
+    poNumber: "PO-VN-2618",
+    notes: "Frisch bestellt, ETA noch offen",
+  }),
+  fgBatch({
+    id: "bat_demo_ord_bike",
+    product: "bike",
+    label: "Bike-Acc — Ningbo Nachorder",
+    quantity: 1500,
+    orderDate: "2026-08-19",
+    expectedArrivalDate: null,
+    arrivalDate: null,
+    poNumber: "PO-CN-2619",
+    notes: "Bestätigt, Abfahrtstermin ausstehend",
+  }),
+  fgBatch({
+    id: "bat_demo_ord_xmas",
+    product: "xmas",
+    label: "Xmas-Set — Nachorder Aug",
+    quantity: 2500,
+    orderDate: "2026-08-20",
+    expectedArrivalDate: null,
+    arrivalDate: null,
+    poNumber: "PO-YW-2620",
+    notes: "Saison-Nachorder",
+  }),
+  fgBatch({
+    id: "bat_demo_ord_bike_2",
+    product: "bike",
+    label: "Bike-Acc — Express-PO",
+    quantity: 800,
+    orderDate: "2026-08-21",
+    expectedArrivalDate: null,
+    arrivalDate: null,
+    poNumber: "PO-CN-2621",
+    notes: "Kleine Express-Charge",
+  }),
+
+  // —— Unterwegs (ETA gesetzt, noch keine Ist-Ankunft) ——
+  fgBatch({
+    id: "bat_demo_trn_lounge",
+    product: "lounge",
+    label: "Lounge — Container unterwegs",
+    quantity: 40,
+    orderDate: "2026-07-20",
+    expectedArrivalDate: "2026-09-05",
+    arrivalDate: null,
+    poNumber: "PO-VN-2607",
+    notes: "Seefracht, ETA Hamburg",
+  }),
+  fgBatch({
+    id: "bat_demo_trn_bike",
+    product: "bike",
+    label: "Bike-Acc — Ningbo Sea",
+    quantity: 2200,
+    orderDate: "2026-07-28",
+    expectedArrivalDate: "2026-09-12",
+    arrivalDate: null,
+    poNumber: "PO-CN-2607",
+    notes: "Unterwegs FOB Ningbo",
+  }),
+  fgBatch({
+    id: "bat_demo_trn_xmas",
+    product: "xmas",
+    label: "Xmas-Set — CIF Transit",
+    quantity: 4000,
+    orderDate: "2026-08-01",
+    expectedArrivalDate: "2026-09-18",
+    arrivalDate: null,
+    poNumber: "PO-YW-2608",
+    notes: "CIF, Ankunft geplant Sept",
+  }),
+  fgBatch({
+    id: "bat_demo_trn_lounge_2",
+    product: "lounge",
+    label: "Lounge — 2. Container",
+    quantity: 25,
+    orderDate: "2026-08-05",
+    expectedArrivalDate: "2026-09-25",
+    arrivalDate: null,
+    poNumber: "PO-VN-2608b",
+    notes: "Nachzieh-Container",
+  }),
+
+  // —— Im Lager (Ist-Ankunft ≤ heute) ——
+  fgBatch({
+    id: "bat_demo_arr_lounge",
+    product: "lounge",
+    label: "Lounge Q3 — Container HCMC",
+    quantity: 40,
+    orderDate: "2026-07-10",
+    expectedArrivalDate: "2026-08-15",
+    arrivalDate: "2026-08-18",
+    poNumber: "PO-VN-2608",
+    notes: "Eingetroffen",
+  }),
+  fgBatch({
+    id: "bat_demo_arr_bike",
+    product: "bike",
+    label: "Bike-Acc Q3 — Ningbo",
+    quantity: 2000,
+    orderDate: "2026-05-20",
+    expectedArrivalDate: "2026-06-10",
+    arrivalDate: "2026-06-12",
+    poNumber: "PO-CN-2605",
+    notes: "Im Lager",
+  }),
+  fgBatch({
+    id: "bat_demo_arr_xmas",
+    product: "xmas",
+    label: "Xmas-Set — Hauptsaison",
+    quantity: 5000,
+    orderDate: "2026-05-15",
+    expectedArrivalDate: "2026-06-28",
+    arrivalDate: "2026-07-01",
+    soldQuantity: 1800,
+    poNumber: "PO-YW-2605",
+    notes: "Teilverkauf angelaufen",
+  }),
+  fgBatch({
+    id: "bat_demo_arr_xmas_early",
+    product: "xmas",
+    label: "Xmas-Set — Vororder Mai",
+    quantity: 2000,
+    orderDate: "2026-03-20",
+    expectedArrivalDate: "2026-05-01",
+    arrivalDate: "2026-05-02",
+    soldQuantity: 400,
+    poNumber: "PO-YW-2603",
+    notes: "Frühe Saisonware",
+  }),
+
+  // —— Verkauft (nicht in offenen Filtern) ——
+  fgBatch({
     id: "bat_demo_lounge_sold",
-    productId: "prd_demo_lounge",
-    supplierId: "sup_demo_vinh",
+    product: "lounge",
     label: "Lounge Q2 — verkauft",
     quantity: 20,
-    unitPurchasePrice: null,
-    currency: null,
+    orderDate: "2026-03-01",
+    expectedArrivalDate: "2026-04-18",
+    arrivalDate: "2026-04-20",
+    soldQuantity: 20,
+    soldDate: "2026-06-12",
+    poNumber: "PO-VN-2603",
+    notes: "Abverkauft",
+  }),
+];
+
+function partBatch(partial: {
+  id: string;
+  productId: string;
+  supplierId: string;
+  label: string;
+  quantity: number;
+  unitPurchasePrice: number;
+  orderDate: string;
+  arrivalDate: string;
+  expectedArrivalDate?: string;
+}): Batch {
+  return {
+    id: partial.id,
+    productId: partial.productId,
+    supplierId: partial.supplierId,
+    label: partial.label,
+    quantity: partial.quantity,
+    unitPurchasePrice: partial.unitPurchasePrice,
+    currency: "USD",
     paymentDays: null,
     paymentUnit: null,
     skontoPercent: null,
     skontoDays: null,
     incoterm: "FOB",
-    costItems: costItemsFromTemplate(
-      "lounge",
-      tplById.ltpl_demo_vn_sea,
-      LOGISTICS_BLOCKS,
-    ),
+    costItems: [],
     sales: [
       sale({
-        id: "sale_demo_lounge_sold_1",
-        dealerId: "dlr_demo_gartenwelt",
-        salePricePerUnit: null,
-        quantity: 20,
-        channel: "b2b",
-        costItems: null,
+        id: `${partial.id}_sale`,
+        dealerId: null,
+        salePricePerUnit: 0,
+        quantity: 0,
+        channel: "",
+        costItems: [],
       }),
     ],
-    orderDate: "2026-03-01",
-    arrivalDate: "2026-04-20",
-    expectedArrivalDate: null,
-    poNumber: "",
-    notes: "",
-    receivedQuantity: null,
-    soldDate: "2026-06-12",
-    applySkonto: null,
+    orderDate: partial.orderDate,
+    arrivalDate: partial.arrivalDate,
+    expectedArrivalDate: partial.expectedArrivalDate ?? partial.arrivalDate,
+    poNumber: partial.id.replace("bat_part_", "PO-PART-").toUpperCase(),
+    notes: "Einzelteil-Wareneingang",
+    receivedQuantity: partial.quantity,
+    soldDate: null,
+    applySkonto: false,
     fxRateOverride: null,
     duty: { hsCode: "", countryOfOrigin: "", ratePercent: 0, fixedAmount: 0 },
     quotes: [],
     activeQuoteId: null,
-    createdAt: "2026-03-01T10:00:00.000Z",
-  },
+    createdAt: `${partial.orderDate}T10:00:00.000Z`,
+  };
+}
+
+/** Bestellungen / Wareneingänge der Einzelteile */
+const PART_BATCHES: Batch[] = [
+  partBatch({
+    id: "bat_part_led_1",
+    productId: "prd_stock_led",
+    supplierId: "sup_demo_ningbo",
+    label: "LED — Ningbo Apr",
+    quantity: 3000,
+    unitPurchasePrice: 1.85,
+    orderDate: "2026-03-15",
+    arrivalDate: "2026-04-10",
+  }),
+  partBatch({
+    id: "bat_part_led_2",
+    productId: "prd_stock_led",
+    supplierId: "sup_demo_ningbo",
+    label: "LED — Ningbo Jun",
+    quantity: 2500,
+    unitPurchasePrice: 1.8,
+    orderDate: "2026-05-20",
+    arrivalDate: "2026-06-18",
+  }),
+  partBatch({
+    id: "bat_part_bell_1",
+    productId: "prd_stock_bell",
+    supplierId: "sup_demo_ningbo",
+    label: "Klingel — Ningbo Mai",
+    quantity: 4000,
+    unitPurchasePrice: 0.65,
+    orderDate: "2026-04-01",
+    arrivalDate: "2026-05-05",
+  }),
+  partBatch({
+    id: "bat_part_ornament_1",
+    productId: "prd_stock_ornament",
+    supplierId: "sup_demo_yiwu",
+    label: "Ornament — Yiwu Mär",
+    quantity: 12000,
+    unitPurchasePrice: 0.32,
+    orderDate: "2026-02-20",
+    arrivalDate: "2026-03-28",
+  }),
+  partBatch({
+    id: "bat_part_ornament_2",
+    productId: "prd_stock_ornament",
+    supplierId: "sup_demo_yiwu",
+    label: "Ornament — Yiwu Jun",
+    quantity: 15000,
+    unitPurchasePrice: 0.3,
+    orderDate: "2026-05-10",
+    arrivalDate: "2026-06-22",
+  }),
+  partBatch({
+    id: "bat_part_sofa_1",
+    productId: "prd_stock_sofa",
+    supplierId: "sup_demo_vinh",
+    label: "Sofa — Vinh Apr",
+    quantity: 80,
+    unitPurchasePrice: 95,
+    orderDate: "2026-03-01",
+    arrivalDate: "2026-04-22",
+  }),
+  partBatch({
+    id: "bat_part_sofa_2",
+    productId: "prd_stock_sofa",
+    supplierId: "sup_demo_vinh",
+    label: "Sofa — Vinh Jul",
+    quantity: 60,
+    unitPurchasePrice: 92,
+    orderDate: "2026-06-01",
+    arrivalDate: "2026-07-15",
+  }),
+  partBatch({
+    id: "bat_part_table_1",
+    productId: "prd_stock_table",
+    supplierId: "sup_demo_vinh",
+    label: "Tisch — Vinh Mai",
+    quantity: 100,
+    unitPurchasePrice: 48,
+    orderDate: "2026-04-05",
+    arrivalDate: "2026-05-20",
+  }),
 ];
 
 const OVERHEAD: OverheadItem[] = [
@@ -1512,13 +1827,15 @@ function upsertProductsBySku(
   return { products: [...byId.values()], removedIds };
 }
 
+const seedFgBatchIds = new Set(BATCHES.map((b) => b.id));
+
 async function buildDemoData(current: AppData): Promise<{
   next: AppData;
   removedIds: string[];
 }> {
   const { products, removedIds } = upsertProductsBySku(
     current.catalogProducts,
-    PRODUCTS,
+    [...PRODUCTS, ...PART_PRODUCTS],
   );
 
   const next: AppData = {
@@ -1548,8 +1865,15 @@ async function buildDemoData(current: AppData): Promise<{
       LOGISTICS_TEMPLATES,
     ),
     batches: upsertById(
-      current.batches.filter((b) => !removedIds.includes(b.productId)),
-      BATCHES,
+      current.batches.filter((b) => {
+        if (removedIds.includes(b.productId)) return false;
+        // Veraltete Demo-Fertigware-IDs entfernen (Pipeline-Seed ersetzt sie)
+        if (b.id.startsWith("bat_demo_") && !seedFgBatchIds.has(b.id)) {
+          return false;
+        }
+        return true;
+      }),
+      [...BATCHES, ...PART_BATCHES],
     ),
     overheadItems: upsertById(current.overheadItems ?? [], OVERHEAD),
     personnelTeams: upsertById(current.personnelTeams ?? [], PERSONNEL_TEAMS),

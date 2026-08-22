@@ -514,6 +514,11 @@ export type Component = {
   dutyRatePercent: number;
   /** Freitext, z. B. Verpackungseinheiten beim Lieferanten */
   notes: string;
+  /**
+   * Katalogprodukt, dessen Chargen den physischen Teilebestand halten.
+   * `null`/fehlend = kein Lagerbezug (nur Kalkulation).
+   */
+  stockProductId?: string | null;
 };
 
 /**
@@ -569,6 +574,15 @@ export type Sale = {
   channel: string;
   /** Provision, CAC, etc. — null = optional vom Händler erben */
   costItems: CostItem[] | null;
+};
+
+/** Nicht-Verkaufs-Abbuchung vom Chargenbestand (z. B. Produktion) */
+export type BatchConsumption = {
+  id: string;
+  productionRunId: string;
+  componentId: string;
+  quantity: number;
+  createdAt: string;
 };
 
 export type DealerStatus = "active" | "inactive";
@@ -654,6 +668,8 @@ export type Batch = {
   costItems: CostItem[];
   /** Mehrere Verkäufe an unterschiedliche Dealer/Preise */
   sales: Sale[];
+  /** Produktions-/sonstige Abbuchungen (nicht Umsatz) */
+  consumptions?: BatchConsumption[];
   createdAt: string;
   /** Bestellung / PO (ISO). Fallback: createdAt */
   orderDate: string | null;
@@ -698,6 +714,50 @@ export function emptyBatchDuty(): BatchDuty {
     fixedAmount: 0,
   };
 }
+
+/** Stufe 1: kalkulatorischer Fertigungslauf (ohne harten Bestandverbrauch) */
+export type ProductionRunStatus = "planned" | "done" | "cancelled";
+
+export type ProductionRunInput = {
+  id: string;
+  componentId: string;
+  /** Komponentenmenge pro Output-Einheit */
+  quantityPerOutput: number;
+  /** null = Stamm-EK / BOM-Override der Komponente */
+  unitCostOverride: number | null;
+};
+
+/** Gebuchte Input-Abbuchung nach Abschluss */
+export type ProductionConsumption = {
+  id: string;
+  componentId: string;
+  batchId: string;
+  quantity: number;
+};
+
+export type ProductionRun = {
+  id: string;
+  label: string;
+  outputProductId: string;
+  /** Geplante Gutmenge (nach Ausschuss) */
+  outputQuantity: number;
+  /** Ausschuss 0–1 — erhöht Materialbedarf, nicht die Gutmenge */
+  scrapRate: number;
+  inputs: ProductionRunInput[];
+  /** Fertigungskosten (Montage, Lohn, …) — typisch Phase einkauf */
+  costItems: CostItem[];
+  status: ProductionRunStatus;
+  notes: string;
+  createdAt: string;
+  completedAt: string | null;
+  /** Nach Abschluss: erzeugte Fertigware-Charge */
+  outputBatchId: string | null;
+  /** Nach Abschluss: FIFO-Abbuchungen vom Komponentenlager */
+  consumptions: ProductionConsumption[];
+};
+
+/** Phasen für Fertigungskosten am Production Run */
+export const PRODUCTION_COST_PHASES: CostPhase[] = ["einkauf"];
 
 /** Wiederkehrende Gemeinkosten-Position (Unternehmensoverhead) */
 export type OverheadPeriod = "monatlich" | "quartalsweise" | "jaehrlich";
@@ -873,6 +933,8 @@ export type AppData = {
   productSuppliers: ProductSupplier[];
   dealers: Dealer[];
   batches: Batch[];
+  /** Fertigungsläufe: BOM-Inputs + Fertigungskosten → Fertigware-Charge */
+  productionRuns: ProductionRun[];
   /** Wiederverwendbare Logistik-Kostenbausteine */
   logisticsBuildingBlocks: LogisticsBuildingBlock[];
   /** Zusammenstellungen von Bausteinen (Lanes / Vorlagen) */
@@ -1161,6 +1223,7 @@ export const EMPTY_DATA: AppData = {
   productSuppliers: [],
   dealers: [],
   batches: [],
+  productionRuns: [],
   logisticsBuildingBlocks: [],
   logisticsTemplates: [],
   overheadItems: [],

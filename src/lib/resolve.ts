@@ -438,7 +438,12 @@ export function resolveBatchEconomicsInput(
   const remainingQuantity = Math.max(
     (batch.receivedQuantity != null && batch.receivedQuantity >= 0
       ? batch.receivedQuantity
-      : batchInput.quantity) - salesAggregate.soldQuantity,
+      : batchInput.quantity) -
+      salesAggregate.soldQuantity -
+      (batch.consumptions ?? []).reduce(
+        (sum, c) => sum + Math.max(c.quantity, 0),
+        0,
+      ),
     0,
   );
   const targetMarginPercent = catalogProduct?.targetMarginPercent ?? null;

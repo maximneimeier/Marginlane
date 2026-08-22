@@ -7,6 +7,7 @@ import {
   BarChart3,
   Building2,
   ChevronRight,
+  Factory,
   Grid2x2,
   LayoutDashboard,
   Layers,
@@ -162,10 +163,16 @@ const COSTERRA_NAV_GROUPS: NavGroup[] = [
         step: 2,
       },
       {
+        href: "/production",
+        key: "nav.production",
+        icon: Factory,
+        step: 3,
+      },
+      {
         href: "/verkauf",
         key: "nav.abverkauf",
         icon: TrendingUp,
-        step: 3,
+        step: 4,
       },
       {
         href: "/compare",
@@ -283,6 +290,7 @@ function NavLinkRow({ link, pathname }: { link: NavLink; pathname: string }) {
   const stepped = link.step != null;
   const primary = Boolean(link.primary) || stepped;
   const secondary = Boolean(link.secondary) && !stepped;
+  const Icon = link.icon;
 
   return (
     <Link
@@ -297,14 +305,15 @@ function NavLinkRow({ link, pathname }: { link: NavLink; pathname: string }) {
     >
       {link.step != null ? (
         <span
-          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] text-[10px] font-semibold tabular-nums ${
+          className={`flex h-5 shrink-0 items-center gap-1 rounded-[5px] px-1 text-[10px] font-semibold tabular-nums ${
             active
               ? "bg-accent-soft text-accent"
               : "bg-surface-soft text-muted"
           }`}
           aria-hidden
         >
-          {link.step}
+          <span className="w-3 text-center">{link.step}</span>
+          <Icon size={12} strokeWidth={2} className="shrink-0" />
         </span>
       ) : (
         <NavItemIcon icon={link.icon} active={active} primary={primary} />
@@ -439,6 +448,15 @@ export function AppNav() {
                       pathname={pathname}
                     />
                   ))}
+                  {group.cta ? (
+                    <Link
+                      href={group.cta.href}
+                      className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-[8px] bg-accent px-2.5 py-2 text-[13px] font-medium text-white transition-opacity hover:opacity-90"
+                    >
+                      <Plus size={14} strokeWidth={2.25} aria-hidden />
+                      {t(group.cta.key)}
+                    </Link>
+                  ) : null}
                   {secondaryLinks.length > 0 ? (
                     <div className="mt-1.5 space-y-0.5 border-t border-line/80 pt-1.5">
                       {secondaryLinks.map((link) => (
@@ -449,15 +467,6 @@ export function AppNav() {
                         />
                       ))}
                     </div>
-                  ) : null}
-                  {group.cta ? (
-                    <Link
-                      href={group.cta.href}
-                      className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-[8px] bg-accent px-2.5 py-2 text-[13px] font-medium text-white transition-opacity hover:opacity-90"
-                    >
-                      <Plus size={14} strokeWidth={2.25} aria-hidden />
-                      {t(group.cta.key)}
-                    </Link>
                   ) : null}
                 </div>
               ) : null}
