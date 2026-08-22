@@ -10,6 +10,8 @@ import type {
   PricingUnit,
   ProductComponent,
   ProductDocument,
+  ProductRoutingStep,
+  RoutingRateType,
 } from "@/lib/types";
 import type { MessageKey } from "@/lib/i18n";
 import { CURRENCIES, MAX_PRODUCT_DOCUMENTS } from "@/lib/types";
@@ -20,7 +22,12 @@ import {
   emptyComponent,
   emptyProductComponent,
   emptyProductDocument,
+  emptyProductRoutingStep,
 } from "@/lib/migrateAppData";
+import {
+  bomQuantityWithScrap,
+  estimateRoutingCostPerUnit,
+} from "@/lib/production";
 import { resolveComponentCurrency } from "@/lib/resolve";
 import { useI18n } from "@/hooks/useI18n";
 import { CountryFlag } from "@/components/CountryFlag";
@@ -35,7 +42,7 @@ import {
   TextInput,
 } from "@/components/ui";
 
-type EditSection = "master" | "documents" | "bom" | null;
+type EditSection = "master" | "documents" | "bom" | "routing" | null;
 
 type BomLine = {
   component: Component;
@@ -47,9 +54,12 @@ type BomSortKey =
   | "sku"
   | "supplier"
   | "qty"
+  | "scrap"
   | "unitPrice"
   | "lineTotal"
   | "share";
+
+const ROUTING_LOT_SIZE = 100;
 
 export default function ProductDetailPageClient({ id }: { id: string }) {
   const {
@@ -65,6 +75,7 @@ export default function ProductDetailPageClient({ id }: { id: string }) {
   const [masterDraft, setMasterDraft] = useState<CatalogProduct | null>(null);
   const [docsDraft, setDocsDraft] = useState<ProductDocument[]>([]);
   const [bomDraft, setBomDraft] = useState<BomLine[]>([]);
+  const [routingDraft, setRoutingDraft] = useState<ProductRoutingStep[]>([]);
   const [bomSort, setBomSort] = useState<{
     key: BomSortKey;
     dir: "asc" | "desc";
@@ -82,12 +93,21 @@ export default function ProductDetailPageClient({ id }: { id: string }) {
         const component = data.components.find((c) => c.id === link.componentId);
         if (!component) return null;
         const unitPrice = effectiveComponentUnitPrice(component, link);
-        const lineTotal = unitPrice * Math.max(link.quantityPerProductUnit, 0);
+        const demandQty = bomQuantityWithScrap(link);
+        const lineTotal = unitPrice * demandQty;
         const supplier = data.suppliers.find(
           (s) => s.id === component.supplierId,
         );
         const currency = resolveComponentCurrency(component, supplier);
-        return { link, component, supplier, unitPrice, lineTotal, currency };
+        return {
+          link,
+          component,
+          supplier,
+          unitPrice,
+          demandQty,
+          lineTotal,
+          currency,
+        };
       })
       .filter((row): row is NonNullable<typeof row> => row != null);
   }, [product, data.productComponents, data.components, data.suppliers]);
@@ -116,6 +136,8 @@ export default function ProductDetailPageClient({ id }: { id: string }) {
             (a.link.quantityPerProductUnit - b.link.quantityPerProductUnit) *
             dir
           );
+        case "scrap":
+          return ((a.link.scrapRate ?? 0) - (b.link.scrapRate ?? 0)) * dir;
         case "unitPrice":
           return (a.unitPrice - b.unitPrice) * dir;
         case "share":
@@ -127,6 +149,18 @@ export default function ProductDetailPageClient({ id }: { id: string }) {
     });
     return rows;
   }, [bomRows, bomSort, lang]);
+
+  const routingSteps = useMemo(() => {
+    if (!product) return [];
+    return [...(product.routingSteps ?? [])].sort(
+      (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, lang),
+    );
+  }, [product, lang]);
+
+  const routingUnitCost = useMemo(
+    () => estimateRoutingCostPerUnit(routingSteps, ROUTING_LOT_SIZE),
+    [routingSteps],
+  );
 
   const purchaseTotal = product
     ? catalogProductUnitPurchaseCost(
@@ -164,6 +198,7 @@ export default function ProductDetailPageClient({ id }: { id: string }) {
     setMasterDraft(null);
     setDocsDraft([]);
     setBomDraft([]);
+    setRoutingDraft([]);
   }
 
   function startMasterEdit() {
@@ -220,6 +255,7 @@ export default function ProductDetailPageClient({ id }: { id: string }) {
       category: masterDraft.category.trim(),
       notes: masterDraft.notes.trim(),
       documents: product?.documents ?? [],
+      routingSteps: masterDraft.routingSteps ?? product?.routingSteps ?? [],
     });
     cancelEdit();
   }
@@ -253,6 +289,7 @@ export default function ProductDetailPageClient({ id }: { id: string }) {
       productId: product.id,
       componentId: l.component.id,
       quantityPerProductUnit: Math.max(l.link.quantityPerProductUnit, 0),
+      scrapRate: Math.min(Math.max(l.link.scrapRate ?? 0, 0), 0.95),
     }));
 
     for (const c of components) {
@@ -269,6 +306,65 @@ export default function ProductDetailPageClient({ id }: { id: string }) {
       upsertProductComponent(link);
     }
     cancelEdit();
+  }
+
+  function startRoutingEdit() {
+    if (!product) return;
+    cancelEdit();
+    setRoutingDraft(
+      structuredClone(
+        [...(product.routingSteps ?? [])].sort(
+          (a, b) =>
+            a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, lang),
+        ),
+      ),
+    );
+    setEditing("routing");
+  }
+
+  function saveRouting() {
+    if (!product) return;
+    const steps = routingDraft
+      .map((s) => ({ ...s, name: s.name.trim() }))
+      .filter(
+        (s) =>
+          s.name ||
+          s.setupMinutes > 0 ||
+          s.runMinutesPerUnit > 0 ||
+          s.hourlyRate > 0,
+      )
+      .map((s, index) => ({
+        ...s,
+        setupMinutes: Math.max(s.setupMinutes, 0),
+        runMinutesPerUnit: Math.max(s.runMinutesPerUnit, 0),
+        hourlyRate: Math.max(s.hourlyRate, 0),
+        rateType: (s.rateType === "machine" ? "machine" : "labor") as RoutingRateType,
+        sortOrder: index,
+      }));
+    upsertCatalogProduct({ ...product, routingSteps: steps });
+    cancelEdit();
+  }
+
+  function updateRoutingStep(
+    id: string,
+    patch: Partial<ProductRoutingStep>,
+  ) {
+    setRoutingDraft((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+    );
+  }
+
+  function moveRoutingStep(id: string, direction: -1 | 1) {
+    setRoutingDraft((prev) => {
+      const index = prev.findIndex((s) => s.id === id);
+      if (index < 0) return prev;
+      const nextIndex = index + direction;
+      if (nextIndex < 0 || nextIndex >= prev.length) return prev;
+      const next = [...prev];
+      const [item] = next.splice(index, 1);
+      next.splice(nextIndex, 0, item);
+      return next.map((s, i) => ({ ...s, sortOrder: i }));
+    });
   }
 
   if (!ready) {
@@ -741,7 +837,7 @@ export default function ProductDetailPageClient({ id }: { id: string }) {
                 {bomDraft.map((row) => (
                   <div
                     key={row.link.id}
-                    className="grid gap-2 rounded-[8px] border border-line bg-surface-faint p-2 sm:grid-cols-[1.2fr_1fr_0.7fr_0.7fr_auto]"
+                    className="grid gap-2 rounded-[8px] border border-line bg-surface-faint p-2 sm:grid-cols-[1.1fr_0.9fr_0.55fr_0.55fr_0.5fr_auto]"
                   >
                     <TextInput
                       value={row.component.name}
@@ -841,6 +937,36 @@ export default function ProductDetailPageClient({ id }: { id: string }) {
                       }
                       placeholder={t("productModal.componentQty")}
                     />
+                    <TextInput
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="95"
+                      value={
+                        Math.round((row.link.scrapRate ?? 0) * 1000) / 10 || ""
+                      }
+                      onChange={(e) =>
+                        setBomDraft((prev) =>
+                          prev.map((r) =>
+                            r.link.id === row.link.id
+                              ? {
+                                  ...r,
+                                  link: {
+                                    ...r.link,
+                                    scrapRate:
+                                      Math.min(
+                                        Math.max(Number(e.target.value) || 0, 0),
+                                        95,
+                                      ) / 100,
+                                  },
+                                }
+                              : r,
+                          ),
+                        )
+                      }
+                      placeholder={t("productModal.componentScrap" as MessageKey)}
+                      title={t("productModal.componentScrap" as MessageKey)}
+                    />
                     <Button
                       variant="danger"
                       className="h-9 px-2"
@@ -895,7 +1021,7 @@ export default function ProductDetailPageClient({ id }: { id: string }) {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-[13px]">
+            <table className="w-full min-w-[820px] text-left text-[13px]">
               <thead>
                 <tr className="border-b border-line bg-surface-faint text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
                   <BomSortTh
@@ -924,6 +1050,13 @@ export default function ProductDetailPageClient({ id }: { id: string }) {
                     onClick={() => toggleBomSort("qty")}
                   />
                   <BomSortTh
+                    label={t("productDetail.bomCol.scrap" as MessageKey)}
+                    active={bomSort.key === "scrap"}
+                    dir={bomSort.dir}
+                    align="right"
+                    onClick={() => toggleBomSort("scrap")}
+                  />
+                  <BomSortTh
                     label={t("productModal.componentPrice")}
                     active={bomSort.key === "unitPrice"}
                     dir={bomSort.dir}
@@ -947,54 +1080,68 @@ export default function ProductDetailPageClient({ id }: { id: string }) {
                 </tr>
               </thead>
               <tbody>
-                {sortedBomRows.map((row) => (
-                  <tr
-                    key={row.link.id}
-                    className="border-b border-line last:border-0 hover:bg-surface-faint"
-                  >
-                    <td className="px-4 py-3 font-medium text-foreground">
-                      {row.component.name}
-                    </td>
-                    <td className="px-4 py-3 tabular-nums text-muted">
-                      {row.component.sku || t("common.emDash")}
-                    </td>
-                    <td className="px-4 py-3 text-muted">
-                      {row.supplier ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          <CountryFlag code={row.supplier.country} />
-                          {row.supplier.name}
+                {sortedBomRows.map((row) => {
+                  const scrap = row.link.scrapRate ?? 0;
+                  return (
+                    <tr
+                      key={row.link.id}
+                      className="border-b border-line last:border-0 hover:bg-surface-faint"
+                    >
+                      <td className="px-4 py-3 font-medium text-foreground">
+                        {row.component.name}
+                      </td>
+                      <td className="px-4 py-3 tabular-nums text-muted">
+                        {row.component.sku || t("common.emDash")}
+                      </td>
+                      <td className="px-4 py-3 text-muted">
+                        {row.supplier ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <CountryFlag code={row.supplier.country} />
+                            {row.supplier.name}
+                          </span>
+                        ) : (
+                          t("productDetail.noSupplier")
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-muted">
+                        <div>{row.link.quantityPerProductUnit}</div>
+                        {scrap > 0 ? (
+                          <div className="text-[11px] text-muted-soft">
+                            {t("productDetail.bomCol.demand" as MessageKey)}:{" "}
+                            {Number(row.demandQty.toFixed(4))}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-muted">
+                        {scrap > 0
+                          ? formatPercent(scrap * 100, locale)
+                          : t("common.emDash")}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-muted">
+                        {formatEuro(row.unitPrice, locale)}
+                        <span className="ml-1 text-[11px] text-muted-soft">
+                          {row.currency.value}
                         </span>
-                      ) : (
-                        t("productDetail.noSupplier")
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-muted">
-                      {row.link.quantityPerProductUnit}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-muted">
-                      {formatEuro(row.unitPrice, locale)}
-                      <span className="ml-1 text-[11px] text-muted-soft">
-                        {row.currency.value}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums font-medium text-foreground">
-                      {formatEuro(row.lineTotal, locale)}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-muted">
-                      {purchaseTotal > 0
-                        ? formatPercent(
-                            (row.lineTotal / purchaseTotal) * 100,
-                            locale,
-                          )
-                        : t("common.emDash")}
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums font-medium text-foreground">
+                        {formatEuro(row.lineTotal, locale)}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-muted">
+                        {purchaseTotal > 0
+                          ? formatPercent(
+                              (row.lineTotal / purchaseTotal) * 100,
+                              locale,
+                            )
+                          : t("common.emDash")}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
               <tfoot>
                 <tr className="bg-surface-faint">
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="px-4 py-3 text-[13px] font-medium text-foreground"
                   >
                     {t("productDetail.bomTotal")}
@@ -1004,6 +1151,247 @@ export default function ProductDetailPageClient({ id }: { id: string }) {
                   </td>
                   <td className="px-4 py-3 text-right text-[12px] text-muted-soft">
                     / {pricingUnitLabel(product.pricingUnit)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      <Card className="overflow-hidden !p-0">
+        <div className="border-b border-line px-4 py-3">
+          <SectionHeader
+            title={t("productDetail.routingTitle" as MessageKey)}
+            hint={
+              (editing === "routing" ? routingDraft.length : routingSteps.length) ===
+              0
+                ? t("productDetail.routingEmptyHint" as MessageKey)
+                : t("productDetail.routingHint" as MessageKey, {
+                    count: String(
+                      editing === "routing"
+                        ? routingDraft.length
+                        : routingSteps.length,
+                    ),
+                  })
+            }
+            editing={editing === "routing"}
+            onEdit={startRoutingEdit}
+            onCancel={cancelEdit}
+            onSave={saveRouting}
+          />
+        </div>
+
+        {editing === "routing" ? (
+          <div className="space-y-3 p-4">
+            {routingDraft.length === 0 ? (
+              <p className="py-4 text-center text-[12px] text-muted">
+                {t("productDetail.routingEmptyHint" as MessageKey)}
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {routingDraft.map((step, index) => (
+                  <div
+                    key={step.id}
+                    className="grid gap-2 rounded-[8px] border border-line bg-surface-faint p-2 sm:grid-cols-[1.2fr_0.7fr_0.7fr_0.7fr_0.9fr_auto]"
+                  >
+                    <TextInput
+                      value={step.name}
+                      onChange={(e) =>
+                        updateRoutingStep(step.id, { name: e.target.value })
+                      }
+                      placeholder={t("productDetail.routingCol.step" as MessageKey)}
+                    />
+                    <TextInput
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      value={step.setupMinutes || ""}
+                      onChange={(e) =>
+                        updateRoutingStep(step.id, {
+                          setupMinutes: Number(e.target.value) || 0,
+                        })
+                      }
+                      placeholder={t("productDetail.routingCol.setup" as MessageKey)}
+                      title={t("productDetail.routingCol.setup" as MessageKey)}
+                    />
+                    <TextInput
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={step.runMinutesPerUnit || ""}
+                      onChange={(e) =>
+                        updateRoutingStep(step.id, {
+                          runMinutesPerUnit: Number(e.target.value) || 0,
+                        })
+                      }
+                      placeholder={t("productDetail.routingCol.run" as MessageKey)}
+                      title={t("productDetail.routingCol.run" as MessageKey)}
+                    />
+                    <TextInput
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={step.hourlyRate || ""}
+                      onChange={(e) =>
+                        updateRoutingStep(step.id, {
+                          hourlyRate: Number(e.target.value) || 0,
+                        })
+                      }
+                      placeholder={t("productDetail.routingCol.rate" as MessageKey)}
+                      title={t("productDetail.routingCol.rate" as MessageKey)}
+                    />
+                    <Select
+                      value={step.rateType}
+                      onChange={(e) =>
+                        updateRoutingStep(step.id, {
+                          rateType: e.target.value as RoutingRateType,
+                        })
+                      }
+                    >
+                      <option value="labor">
+                        {t("routing.rateType.labor" as MessageKey)}
+                      </option>
+                      <option value="machine">
+                        {t("routing.rateType.machine" as MessageKey)}
+                      </option>
+                    </Select>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="secondary"
+                        className="h-9 px-2"
+                        disabled={index === 0}
+                        onClick={() => moveRoutingStep(step.id, -1)}
+                        aria-label="↑"
+                      >
+                        ↑
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        className="h-9 px-2"
+                        disabled={index === routingDraft.length - 1}
+                        onClick={() => moveRoutingStep(step.id, 1)}
+                        aria-label="↓"
+                      >
+                        ↓
+                      </Button>
+                      <Button
+                        variant="danger"
+                        className="h-9 px-2"
+                        onClick={() =>
+                          setRoutingDraft((prev) =>
+                            prev.filter((s) => s.id !== step.id),
+                          )
+                        }
+                      >
+                        ×
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <Button
+              variant="secondary"
+              onClick={() =>
+                setRoutingDraft((prev) => [
+                  ...prev,
+                  emptyProductRoutingStep(prev.length),
+                ])
+              }
+            >
+              {t("productDetail.routingEmptyCta" as MessageKey)}
+            </Button>
+          </div>
+        ) : routingSteps.length === 0 ? (
+          <div className="px-4 py-10 text-center">
+            <p className="text-[13px] font-medium text-foreground">
+              {t("productDetail.routingEmptyTitle" as MessageKey)}
+            </p>
+            <p className="mx-auto mt-1 max-w-sm text-[12px] text-muted">
+              {t("productDetail.routingEmptyBody" as MessageKey)}
+            </p>
+            <Button className="mt-4" onClick={startRoutingEdit}>
+              {t("productDetail.routingEmptyCta" as MessageKey)}
+            </Button>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-[13px]">
+              <thead>
+                <tr className="border-b border-line bg-surface-faint text-[11px] font-medium uppercase tracking-[0.04em] text-muted-soft">
+                  <th className="px-4 py-2.5 text-left font-medium">
+                    {t("productDetail.routingCol.step" as MessageKey)}
+                  </th>
+                  <th className="px-4 py-2.5 text-right font-medium">
+                    {t("productDetail.routingCol.setup" as MessageKey)}
+                  </th>
+                  <th className="px-4 py-2.5 text-right font-medium">
+                    {t("productDetail.routingCol.run" as MessageKey)}
+                  </th>
+                  <th className="px-4 py-2.5 text-right font-medium">
+                    {t("productDetail.routingCol.rate" as MessageKey)}
+                  </th>
+                  <th className="px-4 py-2.5 text-left font-medium">
+                    {t("productDetail.routingCol.type" as MessageKey)}
+                  </th>
+                  <th className="px-4 py-2.5 text-right font-medium">
+                    {t("productDetail.routingCol.unitCost" as MessageKey)}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {routingSteps.map((step) => {
+                  const setupCost =
+                    (Math.max(step.setupMinutes, 0) / 60) * step.hourlyRate;
+                  const runPerUnit =
+                    (Math.max(step.runMinutesPerUnit, 0) / 60) *
+                    step.hourlyRate;
+                  const unitCost = runPerUnit + setupCost / ROUTING_LOT_SIZE;
+                  return (
+                    <tr
+                      key={step.id}
+                      className="border-b border-line last:border-0 hover:bg-surface-faint"
+                    >
+                      <td className="px-4 py-3 font-medium text-foreground">
+                        {step.name || t("common.emDash")}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-muted">
+                        {step.setupMinutes}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-muted">
+                        {step.runMinutesPerUnit}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-muted">
+                        {formatEuro(step.hourlyRate, locale)}
+                      </td>
+                      <td className="px-4 py-3 text-muted">
+                        {t(
+                          `routing.rateType.${step.rateType}` as MessageKey,
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums font-medium text-foreground">
+                        {formatEuro(unitCost, locale)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="bg-surface-faint">
+                  <td
+                    colSpan={5}
+                    className="px-4 py-3 text-[13px] font-medium text-foreground"
+                  >
+                    {t("productDetail.routingTotal" as MessageKey)}
+                    <span className="ml-2 text-[11px] font-normal text-muted-soft">
+                      {t("productDetail.routingLotHint" as MessageKey, {
+                        lot: String(ROUTING_LOT_SIZE),
+                      })}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right text-[15px] font-semibold tabular-nums tracking-tight text-foreground">
+                    {formatEuro(routingUnitCost, locale)}
                   </td>
                 </tr>
               </tfoot>

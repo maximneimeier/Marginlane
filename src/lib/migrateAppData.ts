@@ -24,7 +24,7 @@ import {
   normalizeLogisticsTemplate,
 } from "./logistics";
 import { normalizePersonnelRole, normalizePersonnelTeam } from "./personnel";
-import { normalizeProductionRun } from "./production";
+import { normalizeProductionRun, bomQuantityWithScrap } from "./production";
 import type {
   AppData,
   Batch,
@@ -35,8 +35,10 @@ import type {
   Product,
   ProductComponent,
   ProductDocument,
+  ProductRoutingStep,
   ProductSupplier,
   ProductionRun,
+  RoutingRateType,
   Sale,
   SalesData,
   SalesPlanCell,
@@ -146,6 +148,9 @@ export function migrateAppData(raw: unknown): AppData {
           documents: normalizeProductDocuments(
             (p as { documents?: unknown }).documents,
           ),
+          routingSteps: normalizeProductRoutingSteps(
+            (p as { routingSteps?: unknown }).routingSteps,
+          ),
           createdAt: p.createdAt || new Date().toISOString(),
         };
       })
@@ -204,6 +209,7 @@ export function migrateAppData(raw: unknown): AppData {
             typeof c.quantityPerProductUnit === "number"
               ? c.quantityPerProductUnit
               : 1,
+          scrapRate: 0,
           purchasePriceOverride: null,
         });
       }
@@ -254,6 +260,7 @@ export function migrateAppData(raw: unknown): AppData {
             dutyRatePercent: 0,
             notes: "",
             documents: [],
+            routingSteps: [],
             createdAt: legacy.createdAt || new Date().toISOString(),
           });
         }
@@ -282,6 +289,7 @@ export function migrateAppData(raw: unknown): AppData {
           productId: catalogId,
           componentId: cmpId,
           quantityPerProductUnit: 1,
+          scrapRate: 0,
           purchasePriceOverride: null,
         });
       }
@@ -794,6 +802,10 @@ function normalizeProductComponent(
     pc.purchasePriceOverride === null || pc.purchasePriceOverride === undefined
       ? null
       : Number(pc.purchasePriceOverride);
+  const scrapRaw =
+    typeof pc.scrapRate === "number" && Number.isFinite(pc.scrapRate)
+      ? pc.scrapRate
+      : 0;
   return {
     id: pc.id || createId("pc"),
     productId: pc.productId || "",
@@ -802,6 +814,7 @@ function normalizeProductComponent(
       typeof pc.quantityPerProductUnit === "number"
         ? pc.quantityPerProductUnit
         : 1,
+    scrapRate: Math.min(Math.max(scrapRaw, 0), 0.95),
     purchasePriceOverride:
       override != null && Number.isFinite(override) ? override : null,
   };
@@ -846,6 +859,7 @@ export function emptyProductComponent(
     productId,
     componentId,
     quantityPerProductUnit: 1,
+    scrapRate: 0,
     purchasePriceOverride: null,
   };
 }
@@ -933,6 +947,53 @@ export function normalizeProductDocuments(raw: unknown): ProductDocument[] {
   return out;
 }
 
+export function emptyProductRoutingStep(
+  sortOrder = 0,
+): ProductRoutingStep {
+  return {
+    id: createId("prs"),
+    name: "",
+    sortOrder,
+    setupMinutes: 0,
+    runMinutesPerUnit: 0,
+    hourlyRate: 0,
+    rateType: "labor",
+  };
+}
+
+export function normalizeProductRoutingSteps(raw: unknown): ProductRoutingStep[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item, index) => {
+      const s = (item ?? {}) as Partial<ProductRoutingStep>;
+      const rateType: RoutingRateType =
+        s.rateType === "machine" ? "machine" : "labor";
+      return {
+        id: typeof s.id === "string" && s.id ? s.id : createId("prs"),
+        name: typeof s.name === "string" ? s.name : "",
+        sortOrder:
+          typeof s.sortOrder === "number" && Number.isFinite(s.sortOrder)
+            ? s.sortOrder
+            : index,
+        setupMinutes:
+          typeof s.setupMinutes === "number" && Number.isFinite(s.setupMinutes)
+            ? Math.max(s.setupMinutes, 0)
+            : 0,
+        runMinutesPerUnit:
+          typeof s.runMinutesPerUnit === "number" &&
+          Number.isFinite(s.runMinutesPerUnit)
+            ? Math.max(s.runMinutesPerUnit, 0)
+            : 0,
+        hourlyRate:
+          typeof s.hourlyRate === "number" && Number.isFinite(s.hourlyRate)
+            ? Math.max(s.hourlyRate, 0)
+            : 0,
+        rateType,
+      };
+    })
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+}
+
 import { resolvePurchasePrice } from "./calc";
 
 /** Effektiver EK/Einheit für eine BOM-Zeile (inkl. Staffeln bei orderQty) */
@@ -966,7 +1027,7 @@ export function catalogProductUnitPurchaseCost(
     .reduce((sum, pc) => {
       const component = byId.get(pc.componentId);
       if (!component) return sum;
-      const qtyPer = Math.max(pc.quantityPerProductUnit, 0);
+      const qtyPer = bomQuantityWithScrap(pc);
       const orderQty = Math.max(productQuantity, 0) * qtyPer;
       return (
         sum + effectiveComponentUnitPrice(component, pc, orderQty) * qtyPer

@@ -17,12 +17,32 @@ import type {
   Component,
   CostItem,
   ProductComponent,
+  ProductRoutingStep,
   ProductionConsumption,
   ProductionRun,
   ProductionRunInput,
   Sale,
 } from "./types";
 import { emptyBatchDuty } from "./types";
+
+function clampScrap(rate: number): number {
+  if (!Number.isFinite(rate) || rate < 0) return 0;
+  if (rate > 0.95) return 0.95;
+  return rate;
+}
+
+/** Ausschuss 0–0.95 an der BOM-Position */
+export function clampBomScrapRate(rate: number): number {
+  return clampScrap(rate);
+}
+
+/** BOM-Menge inkl. Positions-Ausschuss */
+export function bomQuantityWithScrap(pc: ProductComponent): number {
+  return (
+    Math.max(pc.quantityPerProductUnit, 0) *
+    (1 + clampBomScrapRate(pc.scrapRate ?? 0))
+  );
+}
 
 export type ProductionCostEstimate = {
   /** Gutmenge */
@@ -72,12 +92,6 @@ export type ProductionStockCheck = {
   /** Alle Inputs ohne Lagerartikel */
   allUntracked: boolean;
 };
-
-function clampScrap(rate: number): number {
-  if (!Number.isFinite(rate) || rate < 0) return 0;
-  if (rate > 0.95) return 0.95;
-  return rate;
-}
 
 function emptySale(quantity = 0): Sale {
   return {
@@ -139,7 +153,7 @@ export function productOnHandQuantity(
   return sum;
 }
 
-/** BOM → editierbare Run-Inputs */
+/** BOM → editierbare Run-Inputs (Menge inkl. BOM-Ausschuss) */
 export function productionInputsFromBom(
   data: Pick<AppData, "productComponents">,
   productId: string,
@@ -149,9 +163,49 @@ export function productionInputsFromBom(
     .map((pc) => ({
       id: createId("pri"),
       componentId: pc.componentId,
-      quantityPerOutput: Math.max(pc.quantityPerProductUnit, 0),
+      quantityPerOutput: bomQuantityWithScrap(pc),
       unitCostOverride: null,
     }));
+}
+
+/**
+ * Arbeitsplan → Fertigungskosten-Zeilen für ein Los.
+ * Rüstkosten werden auf die Output-Menge umgelegt (per_unit).
+ */
+export function manufacturingCostItemsFromRouting(
+  steps: ProductRoutingStep[],
+  outputQuantity: number,
+): CostItem[] {
+  const n = Math.max(outputQuantity, 1);
+  const ordered = [...steps].sort(
+    (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),
+  );
+  return ordered
+    .filter((s) => s.name.trim() || s.setupMinutes > 0 || s.runMinutesPerUnit > 0)
+    .map((step) => {
+      const setupCost = (Math.max(step.setupMinutes, 0) / 60) * step.hourlyRate;
+      const runPerUnit =
+        (Math.max(step.runMinutesPerUnit, 0) / 60) * step.hourlyRate;
+      return {
+        id: createId("ci"),
+        type: step.rateType === "machine" ? "machine" : "labor",
+        label: step.name.trim() || "Schritt",
+        amount: runPerUnit + setupCost / n,
+        allocation: "per_unit" as const,
+        phase: "einkauf" as const,
+      };
+    });
+}
+
+/** Fertigung €/Stück bei gegebener Losgröße (Rüst umgelegt) */
+export function estimateRoutingCostPerUnit(
+  steps: ProductRoutingStep[],
+  outputQuantity: number,
+): number {
+  return manufacturingCostItemsFromRouting(steps, outputQuantity).reduce(
+    (sum, item) => sum + Math.max(item.amount, 0),
+    0,
+  );
 }
 
 /**

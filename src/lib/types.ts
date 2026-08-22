@@ -161,7 +161,26 @@ export type CatalogProduct = {
   notes: string;
   /** Bis zu {@link MAX_PRODUCT_DOCUMENTS} Dokument-Referenzen */
   documents: ProductDocument[];
+  /** Arbeitsplan light: Fertigungsschritte für dieses Produkt */
+  routingSteps?: ProductRoutingStep[];
   createdAt: string;
+};
+
+/** Stundensatz-Art im Arbeitsplan */
+export type RoutingRateType = "labor" | "machine";
+
+/** Fertigungsschritt am Katalogprodukt (Arbeitsplan light) */
+export type ProductRoutingStep = {
+  id: string;
+  name: string;
+  sortOrder: number;
+  /** Rüstzeit in Minuten je Los */
+  setupMinutes: number;
+  /** Bearbeitungszeit in Minuten je Output-Einheit */
+  runMinutesPerUnit: number;
+  /** Stundensatz in Produktwährung */
+  hourlyRate: number;
+  rateType: RoutingRateType;
 };
 
 /**
@@ -530,6 +549,11 @@ export type ProductComponent = {
   productId: string;
   componentId: string;
   quantityPerProductUnit: number;
+  /**
+   * Ausschuss/Schwund 0–1 je BOM-Position.
+   * Bedarf = Menge × (1 + scrapRate).
+   */
+  scrapRate?: number;
   /** null = Standard-EK der Component */
   purchasePriceOverride: number | null;
 };

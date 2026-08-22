@@ -19,6 +19,7 @@ import {
   checkProductionStock,
   emptyProductionRun,
   estimateProductionRun,
+  manufacturingCostItemsFromRouting,
   productionInputsFromBom,
 } from "@/lib/production";
 import type { CostItem, ProductionRunInput } from "@/lib/types";
@@ -38,6 +39,7 @@ export default function NewProductionPageClient() {
   const [notes, setNotes] = useState("");
   const [completeOnSave, setCompleteOnSave] = useState(true);
   const [saveError, setSaveError] = useState("");
+  const [costsFromRouting, setCostsFromRouting] = useState(false);
 
   const products = useMemo(
     () =>
@@ -48,14 +50,36 @@ export default function NewProductionPageClient() {
   );
 
   const product = data.catalogProducts.find((p) => p.id === productId);
+  const routingSteps = product?.routingSteps ?? [];
 
   useEffect(() => {
     if (!productId) {
       setInputs([]);
+      setCostItems([]);
+      setCostsFromRouting(false);
       return;
     }
     setInputs(productionInputsFromBom(data, productId));
-  }, [productId, data.productComponents]);
+    const steps =
+      data.catalogProducts.find((p) => p.id === productId)?.routingSteps ?? [];
+    if (steps.length > 0) {
+      setCostItems(manufacturingCostItemsFromRouting(steps, outputQuantity));
+      setCostsFromRouting(true);
+    } else {
+      setCostItems([]);
+      setCostsFromRouting(false);
+    }
+    // outputQuantity absichtlich nicht in deps — Losgröße aktualisiert Rüst-Umlage separat
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productId, data.productComponents, data.catalogProducts]);
+
+  useEffect(() => {
+    if (!costsFromRouting || !productId) return;
+    const steps =
+      data.catalogProducts.find((p) => p.id === productId)?.routingSteps ?? [];
+    if (steps.length === 0) return;
+    setCostItems(manufacturingCostItemsFromRouting(steps, outputQuantity));
+  }, [outputQuantity, costsFromRouting, productId, data.catalogProducts]);
 
   const draft = useMemo(
     () =>
@@ -287,9 +311,19 @@ export default function NewProductionPageClient() {
           </Card>
 
           <Card className="p-4">
+            {costsFromRouting && routingSteps.length > 0 ? (
+              <p className="mb-3 text-[12px] text-muted">
+                {t("production.costs.fromRouting", {
+                  count: String(routingSteps.length),
+                })}
+              </p>
+            ) : null}
             <CostItemEditor
               items={costItems}
-              onChange={setCostItems}
+              onChange={(next) => {
+                setCostsFromRouting(false);
+                setCostItems(next);
+              }}
               allowedPhases={PRODUCTION_COST_PHASES}
               title={t("production.costs.title")}
               unitLabel={pricingUnitLabel(product?.pricingUnit ?? "pcs")}

@@ -44,6 +44,7 @@ export function emptyCatalogProduct(): CatalogProduct {
     dutyRatePercent: 0,
     notes: "",
     documents: [],
+    routingSteps: [],
     createdAt: new Date().toISOString(),
   };
 }
@@ -180,6 +181,7 @@ export function CatalogProductFormModal({
       productId: product.id,
       componentId: l.component.id,
       quantityPerProductUnit: Math.max(l.link.quantityPerProductUnit, 0),
+      scrapRate: Math.min(Math.max(l.link.scrapRate ?? 0, 0), 0.95),
     }));
     onSave(product, components, links);
     onClose();
@@ -364,7 +366,7 @@ export function CatalogProductFormModal({
               {lines.map((row) => (
                 <div
                   key={row.link.id}
-                  className="grid gap-2 rounded-[8px] border border-line bg-white p-2 sm:grid-cols-[1.2fr_1fr_0.7fr_0.7fr_auto]"
+                  className="grid gap-2 rounded-[8px] border border-line bg-white p-2 sm:grid-cols-[1.1fr_0.9fr_0.55fr_0.55fr_0.5fr_auto]"
                 >
                   <TextInput
                     value={row.component.name}
@@ -427,6 +429,27 @@ export function CatalogProductFormModal({
                       })
                     }
                     placeholder={t("productModal.componentQty")}
+                  />
+                  <TextInput
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="95"
+                    value={
+                      Math.round((row.link.scrapRate ?? 0) * 1000) / 10 || ""
+                    }
+                    onChange={(e) =>
+                      updateLine(row.link.id, {
+                        link: {
+                          scrapRate: Math.min(
+                            Math.max(Number(e.target.value) || 0, 0),
+                            95,
+                          ) / 100,
+                        },
+                      })
+                    }
+                    placeholder={t("productModal.componentScrap")}
+                    title={t("productModal.componentScrap")}
                   />
                   <Button
                     type="button"

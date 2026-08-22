@@ -3,6 +3,7 @@ import {
   checkProductionStock,
   completeProductionRun,
   estimateProductionRun,
+  manufacturingCostItemsFromRouting,
   productionInputsFromBom,
 } from "./production";
 import type { AppData, Batch, Component, ProductComponent } from "./types";
@@ -73,6 +74,7 @@ describe("production run costing", () => {
       productId: "p1",
       componentId: "c1",
       quantityPerProductUnit: 1,
+      scrapRate: 0,
       purchasePriceOverride: null,
     },
     {
@@ -80,6 +82,7 @@ describe("production run costing", () => {
       productId: "p1",
       componentId: "c2",
       quantityPerProductUnit: 2,
+      scrapRate: 0,
       purchasePriceOverride: null,
     },
   ];
@@ -109,10 +112,52 @@ describe("production run costing", () => {
     ],
   };
 
-  it("builds inputs from BOM", () => {
-    const inputs = productionInputsFromBom(data, "p1");
+  it("builds inputs from BOM including position scrap", () => {
+    const withScrap: AppData = {
+      ...data,
+      productComponents: [
+        {
+          id: "pc1",
+          productId: "p1",
+          componentId: "c1",
+          quantityPerProductUnit: 1,
+          scrapRate: 0.1,
+          purchasePriceOverride: null,
+        },
+        {
+          id: "pc2",
+          productId: "p1",
+          componentId: "c2",
+          quantityPerProductUnit: 2,
+          scrapRate: 0,
+          purchasePriceOverride: null,
+        },
+      ],
+    };
+    const inputs = productionInputsFromBom(withScrap, "p1");
     expect(inputs).toHaveLength(2);
-    expect(inputs.map((i) => i.quantityPerOutput)).toEqual([1, 2]);
+    expect(inputs.map((i) => i.quantityPerOutput)).toEqual([1.1, 2]);
+  });
+
+  it("maps routing steps to amortized manufacturing cost items", () => {
+    const items = manufacturingCostItemsFromRouting(
+      [
+        {
+          id: "r1",
+          name: "Montage",
+          sortOrder: 0,
+          setupMinutes: 60,
+          runMinutesPerUnit: 6,
+          hourlyRate: 30,
+          rateType: "labor",
+        },
+      ],
+      10,
+    );
+    // setup 30€ / 10 + run 3€ = 6€/unit
+    expect(items).toHaveLength(1);
+    expect(items[0].amount).toBe(6);
+    expect(items[0].allocation).toBe("per_unit");
   });
 
   it("estimates material + manufacturing per unit", () => {

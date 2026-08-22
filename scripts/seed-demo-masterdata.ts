@@ -256,6 +256,35 @@ const PRODUCTS: CatalogProduct[] = [
         "Wareneingangsprüfung",
       ],
     ),
+    routingSteps: [
+      {
+        id: "prs_bike_pick",
+        name: "Kommissionieren",
+        sortOrder: 0,
+        setupMinutes: 10,
+        runMinutesPerUnit: 1.5,
+        hourlyRate: 28,
+        rateType: "labor",
+      },
+      {
+        id: "prs_bike_assemble",
+        name: "Montage LED + Klingel",
+        sortOrder: 1,
+        setupMinutes: 20,
+        runMinutesPerUnit: 4,
+        hourlyRate: 32,
+        rateType: "labor",
+      },
+      {
+        id: "prs_bike_test",
+        name: "Endprüfung",
+        sortOrder: 2,
+        setupMinutes: 5,
+        runMinutesPerUnit: 1,
+        hourlyRate: 40,
+        rateType: "machine",
+      },
+    ],
     createdAt: NOW,
   },
 ];
@@ -502,6 +531,7 @@ const LINKS: ProductComponent[] = [
     productId: "prd_demo_lounge",
     componentId: "cmp_demo_sofa",
     quantityPerProductUnit: 1,
+    scrapRate: 0.02,
     purchasePriceOverride: null,
   },
   {
@@ -509,6 +539,7 @@ const LINKS: ProductComponent[] = [
     productId: "prd_demo_lounge",
     componentId: "cmp_demo_table",
     quantityPerProductUnit: 1,
+    scrapRate: 0.02,
     purchasePriceOverride: null,
   },
   {
@@ -516,6 +547,7 @@ const LINKS: ProductComponent[] = [
     productId: "prd_demo_lounge",
     componentId: "cmp_demo_cushion",
     quantityPerProductUnit: 2,
+    scrapRate: 0.05,
     purchasePriceOverride: null,
   },
   {
@@ -523,6 +555,7 @@ const LINKS: ProductComponent[] = [
     productId: "prd_demo_xmas",
     componentId: "cmp_demo_ornament",
     quantityPerProductUnit: 8,
+    scrapRate: 0.03,
     purchasePriceOverride: null,
   },
   {
@@ -530,6 +563,7 @@ const LINKS: ProductComponent[] = [
     productId: "prd_demo_xmas",
     componentId: "cmp_demo_ribbon",
     quantityPerProductUnit: 1,
+    scrapRate: 0.01,
     purchasePriceOverride: null,
   },
   {
@@ -537,6 +571,7 @@ const LINKS: ProductComponent[] = [
     productId: "prd_demo_xmas",
     componentId: "cmp_demo_card",
     quantityPerProductUnit: 1,
+    scrapRate: 0,
     purchasePriceOverride: null,
   },
   {
@@ -544,6 +579,7 @@ const LINKS: ProductComponent[] = [
     productId: "prd_demo_bike",
     componentId: "cmp_demo_led",
     quantityPerProductUnit: 1,
+    scrapRate: 0.02,
     purchasePriceOverride: null,
   },
   {
@@ -551,6 +587,7 @@ const LINKS: ProductComponent[] = [
     productId: "prd_demo_bike",
     componentId: "cmp_demo_bell",
     quantityPerProductUnit: 1,
+    scrapRate: 0.01,
     purchasePriceOverride: null,
   },
   {
@@ -558,6 +595,7 @@ const LINKS: ProductComponent[] = [
     productId: "prd_demo_bike",
     componentId: "cmp_demo_mount",
     quantityPerProductUnit: 1,
+    scrapRate: 0.02,
     purchasePriceOverride: null,
   },
 ];
